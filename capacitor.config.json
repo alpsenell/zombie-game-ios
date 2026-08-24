@@ -1,0 +1,8 @@
+{
+  "appId": "com.alpsenel.laststanddeadzone",
+  "appName": "Last Stand: Deadzone",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "capacitor"
+  }
+}
