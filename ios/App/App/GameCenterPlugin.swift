@@ -84,6 +84,7 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
             call.reject("Not signed in to Game Center")
             return
         }
+        let start = max(1, call.getInt("start") ?? 1)
         let count = max(1, min(call.getInt("count") ?? 10, 100))
         let scope: GKLeaderboard.PlayerScope = call.getString("scope") == "friends" ? .friendsOnly : .global
         GKLeaderboard.loadLeaderboards(IDs: [leaderboardId]) { boards, error in
@@ -91,16 +92,23 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
                 call.reject(error?.localizedDescription ?? "Leaderboard not found")
                 return
             }
-            board.loadEntries(for: scope, timeScope: .allTime, range: NSRange(location: 1, length: count)) { local, entries, total, error in
+            board.loadEntries(for: scope, timeScope: .allTime, range: NSRange(location: start, length: count)) { local, entries, total, error in
                 if let error = error {
                     call.reject(error.localizedDescription)
                     return
                 }
                 var result: [String: Any] = [
                     "total": total,
+                    "start": start,
                     "entries": (entries ?? []).map(self.entryInfo)
                 ]
                 if let local = local { result["player"] = self.entryInfo(local) }
+                if board.type == .recurring {
+                    result["recurring"] = true
+                    result["duration"] = board.duration
+                    if let next = board.nextStartDate { result["nextStart"] = next.timeIntervalSince1970 * 1000 }
+                    if let current = board.startDate { result["startDate"] = current.timeIntervalSince1970 * 1000 }
+                }
                 call.resolve(result)
             }
         }
