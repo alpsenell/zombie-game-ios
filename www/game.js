@@ -1,8 +1,9 @@
 import * as THREE from './vendor/three.module.js';
+import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const ui = {
-  hud: $('#hud'), menu: $('#menu'), pauseMenu: $('#pausemenu'), settings: $('#settings'), perks: $('#perks'), over: $('#over'), board: $('#board'),
+  hud: $('#hud'), menu: $('#menu'), pauseMenu: $('#pausemenu'), settings: $('#settings'), perks: $('#perks'), over: $('#over'), board: $('#board'), locker: $('#locker'), inspect: $('#inspect'),
   hpNum: $('#hp-num'), hpFill: $('#hp-fill'), hpLag: $('#hp-lag'), waveNum: $('#wave-num'), alive: $('#alive'), waveFill: $('#wave-fill'),
   score: $('#score'), combo: $('#combo'), radar: $('#radar'), bossBar: $('#bossbar'), bossName: $('#boss-name'), bossFill: $('#boss-fill'),
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
@@ -35,6 +36,7 @@ const camera = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, .05, 14
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
+const preview = createPreview();
 const viewScene = new THREE.Scene();
 const viewCam = new THREE.PerspectiveCamera(54, innerWidth / innerHeight, .01, 10);
 viewScene.add(new THREE.HemisphereLight(0xb8dcea, 0x3a2c20, 2.6));
@@ -58,7 +60,7 @@ function resize() {
   viewCam.updateProjectionMatrix();
   placeStickHome();
 }
-addEventListener('resize', resize);
+addEventListener('resize', () => { resize(); placePreview(); });
 
 const matCache = new Map();
 function mat(color, o = {}) {
@@ -809,8 +811,8 @@ const WEAPONS = [
 
 const guns = WEAPONS.map(w => {
   const g = new THREE.Group();
-  const metal = mat(0x3a464b, { roughness: .35, metalness: .7 }), dark = mat(0x1a2024, { roughness: .5, metalness: .5 });
-  const poly = mat(0x33392f, { roughness: .8 }), wood = mat(0x8a5428, { roughness: .55 }), tan = mat(0xa38b62, { roughness: .75 });
+  const metal = new THREE.MeshStandardMaterial(), dark = new THREE.MeshStandardMaterial(), base = new THREE.MeshStandardMaterial();
+  const poly = mat(0x33392f, { roughness: .8 }), wood = base, tan = base;
   const add = (geo, m, x, y, z, rx = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx; g.add(o); return o; };
   if (w.id === 'rifle') {
     add(new THREE.BoxGeometry(.08, .1, .4), metal, 0, 0, -.08);
@@ -836,7 +838,8 @@ const guns = WEAPONS.map(w => {
     add(new THREE.BoxGeometry(.065, .09, .3), wood, 0, -.06, .3, -.12);
     add(new THREE.SphereGeometry(.01, 6, 6), mat(0xffc34d, { emissive: 0xffc34d, emissiveIntensity: 1 }), 0, .05, -.9);
   }
-  const sleeve = mat(0x2d3b2a, { roughness: 1, flatShading: true }), glove = mat(0x161a1c, { roughness: .9 });
+  const sleeve = new THREE.MeshStandardMaterial({ color: 0x2d3b2a, roughness: 1, flatShading: true }), glove = new THREE.MeshStandardMaterial({ color: 0x161a1c, roughness: .9 });
+  g.userData.mats = { base, metal, dark, sleeve, glove };
   const armR = add(new THREE.CapsuleGeometry(.055, .38, 4, 8), sleeve, .06, -.2, .28, -1.1); armR.rotation.z = .25;
   add(new THREE.BoxGeometry(.07, .08, .1), glove, .02, -.12, .05);
   const armL = add(new THREE.CapsuleGeometry(.05, .5, 4, 8), sleeve, -.14, -.2, -.2, -1.25); armL.rotation.z = -.6;
@@ -849,6 +852,54 @@ const guns = WEAPONS.map(w => {
   viewScene.add(g);
   return g;
 });
+
+function applyLoadoutToGuns() {
+  const l = profile.loadout, c = outfitColors(l);
+  guns.forEach((g, i) => {
+    const m = g.userData.mats;
+    paintGunMaterials(m, l.gun);
+    if (i === 1 && l.gun === 0) { m.base.color.setHex(0x8a5428); m.base.roughness = .55; }
+    m.sleeve.color.setHex(c.sleeve);
+    m.glove.color.setHex(c.glove);
+  });
+}
+
+const profile = Object.assign({ loadout: { ...DEFAULT_LOADOUT }, owned: {}, scrap: 300, xp: 0, kills: 0, heads: 0, bosses: {}, bestWave: 0, bestByDiff: {}, runs: 0, lastDaily: '', fresh: [] }, store.get('profile', {}));
+profile.loadout = { ...DEFAULT_LOADOUT, ...profile.loadout };
+function saveProfile() { store.set('profile', profile); }
+function levelInfo(xp = profile.xp) {
+  let level = 1, need = 1000, rest = xp;
+  while (rest >= need) { rest -= need; level++; need = Math.round(1000 * level ** 1.3); }
+  return { level, into: rest, need };
+}
+function myCode() { return encodeLoadout(profile.loadout, levelInfo().level); }
+function reqMet(req) {
+  if (!req) return true;
+  const [k, v] = req.split(':'), n = +v;
+  if (k === 'level') return levelInfo().level >= n;
+  if (k === 'wave') return profile.bestWave >= n;
+  if (k === 'boss') return (profile.bosses[v] || 0) > 0;
+  if (k === 'heads') return profile.heads >= n;
+  if (k === 'kills') return profile.kills >= n;
+  if (k === 'nightmare') return (profile.bestByDiff.nightmare || 0) >= n;
+  if (k === 'veteran') return Math.max(profile.bestByDiff.veteran || 0, profile.bestByDiff.nightmare || 0) >= n;
+  return false;
+}
+function reqText(req) {
+  const [k, v] = req.split(':'), n = (+v).toLocaleString();
+  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+' }[k] || req;
+}
+function isOwned(slotId, i) {
+  const it = SLOTS.find(s => s.id === slotId).items[i];
+  if (!it) return false;
+  if (it.req) return reqMet(it.req);
+  return !it.cost || !!profile.owned[slotId + ':' + i];
+}
+function unlockedSet() {
+  const set = new Set();
+  for (const s of SLOTS) s.items.forEach((it, i) => { if (it.req && reqMet(it.req)) set.add(s.id + ':' + i); });
+  return set;
+}
 
 const stats = {};
 const player = {};
@@ -865,7 +916,7 @@ function resetRun() {
   Object.assign(player, { hp: 100, lagHp: 100, nades: 2, weapon: 0, reloading: 0, swapT: 0, nextShot: 0, lastHurt: -9, unlocked: 1, pumpT: 0, lastBeat: 0,
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
-    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), seen: new Set(), queue: [], difficulty: settings.difficulty });
+    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -1041,7 +1092,7 @@ function killZombie(z, head, noScore) {
       ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
       const drops = T.boss ? 4 : Math.random() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
       for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
-      if (T.boss) { message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
+      if (T.boss) { state.bossKinds.push(u.kind); message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
     }
   }
   sfx.kill();
@@ -1452,13 +1503,14 @@ function gameOver() {
   state.mode = 'dead';
   firing = false;
   saveRun();
+  grantRewards();
   const rankEl = $('#over-rank');
   if (!state.score) rankEl.textContent = '';
   else if (!gameCenter.available()) rankEl.textContent = 'GLOBAL RANKINGS ARE AVAILABLE IN THE iOS APP';
   else {
     rankEl.textContent = 'SUBMITTING TO GLOBAL LEADERBOARD…';
     const run = state.startedAt;
-    gameCenter.submit(state.score, state.wave).then(p => {
+    gameCenter.submit(state.score, state.wave, myCode()).then(p => {
       if (state.startedAt !== run) return;
       if (p) { records.rank = p.rank; store.set('records', records); }
       rankEl.textContent = p ? 'GLOBAL RANK #' + p.rank.toLocaleString() : 'SIGN IN TO GAME CENTER TO RANK GLOBALLY';
@@ -1479,6 +1531,37 @@ function gameOver() {
   $('#st-time').textContent = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
   haptic('HEAVY');
   setTimeout(() => { ui.hud.classList.remove('on'); showScreen(ui.over); }, 900);
+}
+
+function grantRewards() {
+  const box = $('#over-rewards');
+  box.innerHTML = '';
+  const chip = (text, cls = '') => { const e = document.createElement('span'); e.textContent = text; if (cls) e.className = cls; box.appendChild(e); };
+  const before = unlockedSet(), lvlBefore = levelInfo().level;
+  const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
+  const scrap = Math.round((state.score / 150 + state.wave * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1));
+  const xp = Math.round(state.score / 10 + state.wave * 50);
+  profile.scrap += scrap;
+  profile.xp += xp;
+  profile.kills += state.kills;
+  profile.heads += state.heads;
+  profile.runs++;
+  for (const k of state.bossKinds) profile.bosses[k] = (profile.bosses[k] || 0) + 1;
+  profile.bestWave = Math.max(profile.bestWave, state.wave);
+  profile.bestByDiff[settings.difficulty] = Math.max(profile.bestByDiff[settings.difficulty] || 0, state.wave);
+  if (daily) profile.lastDaily = today;
+  const lvlAfter = levelInfo().level;
+  const fresh = [...unlockedSet()].filter(k => !before.has(k));
+  profile.fresh = [...new Set([...profile.fresh, ...fresh])];
+  saveProfile();
+  chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : ''), 'gold');
+  chip('+' + xp.toLocaleString() + ' XP');
+  if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
+  if (fresh.length === 1) {
+    const [slot, i] = fresh[0].split(':');
+    chip('🔓 UNLOCKED: ' + SLOTS.find(s => s.id === slot).items[i].name, 'hot');
+  } else if (fresh.length) chip('🔓 ' + fresh.length + ' NEW ITEMS IN LOCKER', 'hot');
+  refreshProfileUI();
 }
 
 function toMenu() {
@@ -1510,8 +1593,16 @@ function resume() {
 
 let activeScreen = ui.menu;
 function showScreen(el) {
-  for (const s of [ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over, ui.board]) s.classList.toggle('hidden', s !== el);
+  for (const s of [ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over, ui.board, ui.locker, ui.inspect]) s.classList.toggle('hidden', s !== el);
   activeScreen = el;
+  placePreview();
+}
+function placePreview() {
+  const el = activeScreen;
+  if (el === ui.menu && getComputedStyle($('#menu-char')).display !== 'none') { preview.show(profile.loadout); preview.attach($('#menu-char'), 'full', true); }
+  else if (el === ui.locker) preview.attach($('#locker-stage'), 'full', false);
+  else if (el === ui.inspect) preview.attach($('#inspect-stage'), 'full', true);
+  else preview.detach();
 }
 
 const floaterPool = Array.from({ length: 24 }, () => { const e = document.createElement('div'); e.className = 'floater'; ui.floaters.appendChild(e); return { e, t: 0, p: new THREE.Vector3() }; });
@@ -1876,6 +1967,7 @@ function frame() {
   else if (state.mode === 'dead') { state.clock += dt; updateZombies(dt, false, camera.position); }
   if (state.mode !== 'paused' && state.mode !== 'perk') updateEffects(dt);
   if (state.mode === 'playing' || state.mode === 'perk' || state.mode === 'paused') updateFloaters(dt);
+  if (activeScreen === ui.menu || activeScreen === ui.locker || activeScreen === ui.inspect) preview.render(dt);
   sky.position.copy(camera.position);
   renderer.clear();
   renderer.render(scene, camera);
@@ -2024,11 +2116,11 @@ const gameCenter = {
     if (!this.player) return null;
     try { return (await this.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 1 })).player || null; } catch { return null; }
   },
-  async submit(score, wave) {
+  async submit(score, wave, context) {
     if (!this.player && !(await this.signIn())) return null;
     await Promise.allSettled([
-      this.call('submitScore', { leaderboardId: LEADERBOARDS.score, score }),
-      this.call('submitScore', { leaderboardId: LEADERBOARDS.wave, score: wave }),
+      this.call('submitScore', { leaderboardId: LEADERBOARDS.score, score, context }),
+      this.call('submitScore', { leaderboardId: LEADERBOARDS.wave, score: wave, context }),
     ]);
     return this.rank();
   },
@@ -2037,26 +2129,59 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: settings.difficulty, date: Date.now() });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: settings.difficulty, date: Date.now(), code: myCode() });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }
 
 let boardTab = 'global', boardReturn = null, boardToken = 0;
-function boardRow(rank, title, sub, score, me) {
+const avatarCache = new Map();
+function avatarFor(code) {
+  const d = decodeLoadout(code), key = d ? encodeLoadout(d.loadout) : 0;
+  if (!avatarCache.has(key)) avatarCache.set(key, preview.thumbnail(d ? d.loadout : DEFAULT_LOADOUT, 96));
+  return avatarCache.get(key);
+}
+function boardRow(rank, title, sub, score, me, code, extra = {}) {
   const li = document.createElement('li');
   if (me) li.className = 'me';
   const r = document.createElement('b'); r.textContent = '#' + rank;
+  const img = document.createElement('img'); img.alt = ''; img.src = avatarFor(code);
+  const d = decodeLoadout(code);
   const name = document.createElement('span'); name.textContent = title;
-  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; name.appendChild(sm); }
+  const sm = document.createElement('small');
+  sm.textContent = [d ? TITLES[d.loadout.title] + ' · LV ' + d.level : '', sub].filter(Boolean).join(' · ');
+  name.appendChild(sm);
   const sc = document.createElement('span'); sc.textContent = score.toLocaleString();
-  li.append(r, name, sc);
+  li.append(r, img, name, sc);
+  li.onclick = () => openInspect({ rank, name: title, score, code, ...extra });
   return li;
 }
+let inspectReturn = null;
+function openInspect(p) {
+  const d = decodeLoadout(p.code);
+  const l = d ? d.loadout : DEFAULT_LOADOUT;
+  inspectReturn = activeScreen;
+  $('#in-rank').textContent = p.rankLabel || 'GLOBAL RANK #' + p.rank.toLocaleString();
+  $('#in-name').textContent = p.name;
+  $('#in-title').textContent = d ? TITLES[l.title] : 'NO LOADOUT ON RECORD';
+  $('#in-score').textContent = p.score.toLocaleString();
+  $('#in-level').textContent = d ? d.level : '—';
+  const gear = $('#in-gear');
+  gear.innerHTML = '';
+  for (const [k, v] of describeLoadout(l)) {
+    const li = document.createElement('li'), b = document.createElement('b');
+    b.textContent = k; li.append(b, document.createTextNode(v));
+    gear.appendChild(li);
+  }
+  preview.show(l);
+  showScreen(ui.inspect);
+}
+$('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
+
 function renderLocalRuns(list) {
   const runs = store.get('runs', []);
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
-  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false)));
+  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
 }
 async function renderBoard() {
   const token = ++boardToken, list = $('#board-list'), status = $('#board-status');
@@ -2077,10 +2202,10 @@ async function renderBoard() {
     const r = await gameCenter.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 25, scope: boardTab });
     if (token !== boardToken) return;
     status.textContent = r.total ? r.total.toLocaleString() + ' SURVIVORS RANKED' : 'No scores yet — be the first.';
-    for (const e of r.entries || []) list.appendChild(boardRow(e.rank, e.name, '', e.score, e.isLocal));
+    for (const e of r.entries || []) list.appendChild(boardRow(e.rank, e.name, '', e.score, e.isLocal, e.context));
     if (r.player && !(r.entries || []).some(e => e.isLocal)) {
       const gap = document.createElement('li'); gap.className = 'gap'; gap.textContent = '···'; list.appendChild(gap);
-      list.appendChild(boardRow(r.player.rank, r.player.name + ' (YOU)', '', r.player.score, true));
+      list.appendChild(boardRow(r.player.rank, r.player.name + ' (YOU)', '', r.player.score, true, r.player.context));
     }
     if (r.player) { records.rank = r.player.rank; store.set('records', records); refreshRecords(); }
   } catch (e) {
@@ -2091,6 +2216,98 @@ document.querySelectorAll('[data-open="board"]').forEach(b => (b.onclick = () =>
 document.querySelectorAll('.tabs button').forEach(b => (b.onclick = () => { boardTab = b.dataset.tab; renderBoard(); }));
 $('#board-close').onclick = () => showScreen(boardReturn || ui.menu);
 $('#gc-open').onclick = () => gameCenter.call('showLeaderboard', {}).catch(() => {});
+
+let lockerSlot = 'top', pendingBuy = null, tryOn = null;
+function refreshProfileUI() {
+  const lv = levelInfo(), l = profile.loadout;
+  $('#menu-level').textContent = 'LV ' + lv.level;
+  $('#menu-title').textContent = TITLES[l.title];
+  $('#lk-level').textContent = 'LEVEL ' + lv.level;
+  $('#lk-xp').style.width = (lv.into / lv.need * 100).toFixed(1) + '%';
+  $('#lk-xptext').textContent = TITLES[l.title] + ' · ' + lv.into.toLocaleString() + ' / ' + lv.need.toLocaleString() + ' XP';
+  $('#lk-scrap').textContent = profile.scrap.toLocaleString();
+  const affordable = SLOTS.some(s => s.items.some((it, i) => !isOwned(s.id, i) && it.cost && !it.req && it.cost <= profile.scrap));
+  $('#locker-badge').textContent = profile.fresh.length ? profile.fresh.length : affordable ? '!' : '';
+  applyLoadoutToGuns();
+}
+function renderLocker() {
+  const tabs = $('#slot-tabs'), grid = $('#item-grid');
+  tabs.innerHTML = ''; grid.innerHTML = '';
+  for (const s of SLOTS) {
+    const b = document.createElement('button');
+    b.textContent = s.label;
+    b.className = (s.id === lockerSlot ? 'on' : '') + (profile.fresh.some(k => k.startsWith(s.id + ':')) ? ' new' : '');
+    b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
+    tabs.appendChild(b);
+  }
+  const slot = SLOTS.find(s => s.id === lockerSlot);
+  slot.items.forEach((it, i) => {
+    const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
+    const b = document.createElement('button');
+    b.className = 'item ' + (equipped ? 'equipped' : owned ? 'owned' : it.req ? 'locked' : 'cost') + (tryOn?.[slot.id] === i && !equipped ? ' trying' : '') + (pendingBuy === key ? ' confirm' : '') + (profile.fresh.includes(key) ? ' fresh' : '');
+    if (it.swatch !== undefined) { const sw = document.createElement('i'); sw.style.background = '#' + it.swatch.toString(16).padStart(6, '0'); b.appendChild(sw); }
+    const name = document.createElement('b'); name.textContent = it.name;
+    const st = document.createElement('small');
+    st.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : it.req ? '🔒 ' + reqText(it.req) : pendingBuy === key ? 'TAP AGAIN TO BUY' : '🔩 ' + it.cost.toLocaleString();
+    b.append(name, st);
+    b.onclick = () => lockerPick(slot, i);
+    grid.appendChild(b);
+  });
+}
+function lockerPick(slot, i) {
+  const key = slot.id + ':' + i, it = slot.items[i];
+  tryOn = { ...profile.loadout, [slot.id]: i };
+  preview.show(tryOn);
+  haptic('LIGHT');
+  if (isOwned(slot.id, i)) {
+    profile.loadout[slot.id] = i;
+    tryOn = null; pendingBuy = null;
+    saveProfile();
+    $('#lk-hint').textContent = it.name + ' equipped.';
+  } else if (it.req) {
+    pendingBuy = null;
+    $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
+  } else if (pendingBuy === key) {
+    if (profile.scrap >= it.cost) {
+      profile.scrap -= it.cost;
+      profile.owned[key] = true;
+      profile.loadout[slot.id] = i;
+      tryOn = null; pendingBuy = null;
+      saveProfile();
+      sfx.pickup(); haptic('MEDIUM');
+      $('#lk-hint').textContent = 'Bought and equipped ' + it.name + '!';
+    } else {
+      pendingBuy = null;
+      $('#lk-hint').textContent = 'Need ' + (it.cost - profile.scrap).toLocaleString() + ' more scrap — survive longer runs to earn it.';
+    }
+  } else {
+    pendingBuy = key;
+    $('#lk-hint').textContent = profile.scrap >= it.cost ? 'Tap again to buy for ' + it.cost.toLocaleString() + ' scrap.' : 'Costs ' + it.cost.toLocaleString() + ' scrap — you have ' + profile.scrap.toLocaleString() + '.';
+  }
+  refreshProfileUI();
+  renderLocker();
+}
+function openLocker() {
+  sfx.init();
+  tryOn = null; pendingBuy = null;
+  showScreen(ui.locker);
+  preview.show(profile.loadout);
+  const firstFresh = profile.fresh[0];
+  if (firstFresh) lockerSlot = firstFresh.split(':')[0];
+  $('#lk-hint').textContent = 'Tap an item to try it on. Earn scrap and XP every run.';
+  refreshProfileUI();
+  renderLocker();
+}
+document.querySelectorAll('[data-open="locker"]').forEach(b => (b.onclick = openLocker));
+$('#menu-char').onclick = openLocker;
+$('#locker-done').onclick = () => {
+  profile.fresh = [];
+  saveProfile();
+  tryOn = null;
+  preview.show(profile.loadout);
+  refreshProfileUI();
+  showScreen(ui.menu);
+};
 
 function syncDifficultyUI() {
   document.querySelectorAll('#diff button').forEach(b => b.classList.toggle('on', b.dataset.diff === settings.difficulty));
@@ -2125,6 +2342,8 @@ function refreshRecords() {
 
 resetRun();
 resize();
+refreshProfileUI();
+placePreview();
 refreshRecords();
 populateMenu();
 syncSettingsUI();

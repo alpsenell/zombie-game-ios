@@ -55,7 +55,8 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
             call.reject("Not signed in to Game Center")
             return
         }
-        GKLeaderboard.submitScore(score, context: 0, player: GKLocalPlayer.local, leaderboardIDs: [leaderboardId]) { error in
+        let context = max(0, call.getInt("context") ?? 0)
+        GKLeaderboard.submitScore(score, context: context, player: GKLocalPlayer.local, leaderboardIDs: [leaderboardId]) { error in
             if let error = error { call.reject(error.localizedDescription) } else { call.resolve() }
         }
     }
@@ -120,6 +121,7 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
         return [
             "rank": entry.rank,
             "score": entry.score,
+            "context": entry.context,
             "name": entry.player.displayName,
             "isLocal": entry.player.gamePlayerID == GKLocalPlayer.local.gamePlayerID
         ]

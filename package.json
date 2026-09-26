@@ -4,7 +4,7 @@
   "private": true,
   "description": "Single-player zombie survival FPS for iOS.",
   "scripts": {
-    "prepare:web": "mkdir -p www/assets www/vendor vendor && cp index.html game.js www/ && cp -R assets/. www/assets/ && cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js www/vendor/ && cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js vendor/",
+    "prepare:web": "mkdir -p www/assets www/vendor vendor && cp index.html game.js character.js www/ && cp -R assets/. www/assets/ && cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js www/vendor/ && cp node_modules/three/build/three.module.js node_modules/three/build/three.core.js vendor/",
     "sync:ios": "npm run prepare:web && npx cap sync ios",
     "open:ios": "npx cap open ios"
   },

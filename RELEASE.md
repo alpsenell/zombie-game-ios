@@ -12,6 +12,7 @@ The local iOS project is generated from `index.html` through Capacitor. The game
    - `deadzone.highscore` — "Top Survivors" (run score; harder difficulties multiply score)
    - `deadzone.bestwave` — "Deepest Wave"
    Add both leaderboards to the app version before submitting. The IDs must match `LEADERBOARDS` in `game.js`.
+   Each submitted score carries the player's character loadout packed into the Game Center score *context* (see `encodeLoadout` in `character.js`). This is how other players' outfits appear in the leaderboard without a server. Keep the order and bit widths of `SLOTS` stable; append new items to the end of an existing slot instead of reordering.
 6. The Xcode target already includes the Game Center entitlement (`App/App.entitlements`). If Xcode reports a provisioning mismatch, add **Game Center** under **Signing & Capabilities** so the profile is regenerated.
 7. In App Store Connect, complete store listing metadata, the privacy questionnaire, age rating, screenshots, and App Review notes. This game should generally be described as containing frequent cartoon/fantasy violence; use Apple’s current rating questionnaire to make the final selection.
 
