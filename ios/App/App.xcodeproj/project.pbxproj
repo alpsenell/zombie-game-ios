@@ -19,6 +19,9 @@
 		A1D0C0012F10000100DEAD01 /* GameCenterPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0022F10000100DEAD01 /* GameCenterPlugin.swift */; };
 		A1D0C0032F10000100DEAD01 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0042F10000100DEAD01 /* MainViewController.swift */; };
 		A1D0C0062F10000100DEAD01 /* StorePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0072F10000100DEAD01 /* StorePlugin.swift */; };
+		A1D0C0082F10000100DEAD01 /* AchievementsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */; };
+		A1D0C00A2F10000100DEAD01 /* SharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */; };
+		A1D0C00C2F10000100DEAD01 /* MatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +40,9 @@
 		A1D0C0042F10000100DEAD01 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A1D0C0052F10000100DEAD01 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		A1D0C0072F10000100DEAD01 /* StorePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorePlugin.swift; sourceTree = "<group>"; };
+		A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsPlugin.swift; sourceTree = "<group>"; };
+		A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlugin.swift; sourceTree = "<group>"; };
+		A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +81,9 @@
 				A1D0C0042F10000100DEAD01 /* MainViewController.swift */,
 				A1D0C0022F10000100DEAD01 /* GameCenterPlugin.swift */,
 				A1D0C0072F10000100DEAD01 /* StorePlugin.swift */,
+				A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */,
+				A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */,
+				A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */,
 				A1D0C0052F10000100DEAD01 /* App.entitlements */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -174,6 +183,9 @@
 				A1D0C0012F10000100DEAD01 /* GameCenterPlugin.swift in Sources */,
 				A1D0C0032F10000100DEAD01 /* MainViewController.swift in Sources */,
 				A1D0C0062F10000100DEAD01 /* StorePlugin.swift in Sources */,
+				A1D0C0082F10000100DEAD01 /* AchievementsPlugin.swift in Sources */,
+				A1D0C00A2F10000100DEAD01 /* SharePlugin.swift in Sources */,
+				A1D0C00C2F10000100DEAD01 /* MatchPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
