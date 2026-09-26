@@ -887,11 +887,12 @@ function reqMet(req) {
   if (k === 'kills') return profile.kills >= n;
   if (k === 'nightmare') return (profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'veteran') return Math.max(profile.bestByDiff.veteran || 0, profile.bestByDiff.nightmare || 0) >= n;
+  if (k === 'season') return !!profile.season?.suits?.[v];
   return false;
 }
 function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
-  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+' }[k] || req;
+  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
 }
 function isOwned(slotId, i) {
   const it = SLOTS.find(s => s.id === slotId).items[i];
@@ -2565,7 +2566,13 @@ const storeKit = {
   pending: false,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'Store')); },
   call(method, opts = {}) { return window.Capacitor.nativePromise('Store', method, opts); },
-  ids() { return [...WEAPONS.filter(w => w.productId).map(w => w.productId), ...SLOTS.find(s => s.id === 'suit').items.filter(it => it.premium).map(it => STORE_PREFIX + it.premium)]; },
+  extra: [],
+  ids() { return [...WEAPONS.filter(w => w.productId).map(w => w.productId), ...SLOTS.find(s => s.id === 'suit').items.filter(it => it.premium).map(it => STORE_PREFIX + it.premium), ...this.extra]; },
+  async register(ids) {
+    this.extra.push(...ids);
+    if (!this.available()) return;
+    try { for (const p of (await this.call('getProducts', { ids })).products || []) this.products[p.id] = p; } catch {}
+  },
   apply(owned) {
     profile.iap = Object.fromEntries((owned || []).map(id => [id, true]));
     saveProfile();

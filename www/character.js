@@ -33,6 +33,8 @@ export const SUITS = [
   { id: 'knight', name: 'INFERNAL KNIGHT', premium: 'outfit.knight', desc: 'Black iron plate cracked with molten embers. Horned helm.', base: { top: 4, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x1c1c20, glove: 0x2a2a2e, accent: 0xff5a1a },
   { id: 'spectre', name: 'SPECTRE', premium: 'outfit.spectre', desc: 'A floor-length shadow cloak. Only the eyes remain.', base: { top: 1, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x100c18, glove: 0x100c18, accent: 0xb48cff },
   { id: 'wolf', name: 'ARCTIC WOLF', premium: 'outfit.wolf', desc: 'Fur parka with a wolf-head hood, snow goggles and fur boots.', base: { top: 1, topColor: 5, pants: 4, boots: 2, head: 0, face: 6, hair: 7, back: 1 }, sleeve: 0xe8e4d8, glove: 0x6a6258, accent: 0xffa040 },
+  { id: 'hollow', name: 'HOLLOW JACK', season: 1, desc: 'Season 1 exclusive. A carved pumpkin head that burns from within, patched scarecrow coat.', base: { top: 5, topColor: 15, pants: 2, boots: 2, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x3a2a1a, glove: 0xa8844a, accent: 0xff9a1a },
+  { id: 'diver', name: 'DEEP DIVER', season: 2, desc: 'Season 2 exclusive. Riveted brass dive helmet, canvas suit and twin air tanks.', base: { top: 4, topColor: 4, pants: 4, boots: 0, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x8a7a5a, glove: 0x1a1a1a, accent: 0x3ae0d0 },
 ];
 
 export const SLOTS = [
@@ -67,7 +69,7 @@ export const SLOTS = [
     { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' }]
     .map((it, i) => ({ ...it, name: TITLES[i] })) },
   { id: 'primary', label: 'PRIMARY', bits: 4, hidden: true, items: WEAPONS.map(w => ({ name: w.name })) },
-  { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, desc: x.desc, swatch: x.accent } : { name: 'NONE' }) },
+  { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, season: x.season, req: x.season ? 'season:' + x.season : undefined, desc: x.desc, swatch: x.accent } : { name: 'NONE' }) },
 ];
 const LEVEL_CAP = 63;
 
@@ -252,6 +254,53 @@ function suitParts(suit, { body, torso, head, arms, legs }) {
     }
     for (const { knee } of legs) part(knee, G.sphere, fur, [0, -.32, .01], [.1, .06, .12]);
     part(torso, G.box, grey, [0, .1, -.3], [.1, .5, .06], [.25, 0, 0]);
+  }
+  if (suit.id === 'hollow') {
+    const pumpkin = m(0xe06a10, { roughness: .7 }), rind = m(0xc2560c, { roughness: .8 }), stem = m(0x3a4a1a, { roughness: 1 });
+    const straw = m(0xd8b45a, { roughness: 1, flatShading: true }), burlap = m(0xa8844a, { roughness: 1 }), fire = m(0xffb02a, { emissive: suit.accent, emissiveIntensity: 2.2 });
+    part(head, G.sphere, pumpkin, [0, .15, 0], [.17, .15, .16]);
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; part(head, G.sphere, i % 2 ? rind : pumpkin, [Math.sin(a) * .07, .15, Math.cos(a) * .07], [.11, .145, .11]); }
+    part(head, G.cyl, stem, [.01, .31, 0], [.022, .06, .022], [0, 0, -.35]);
+    for (const s of [-1, 1]) part(head, G.box, fire, [s * .06, .19, .17], [.045, .045, .02], [0, s * .3, Math.PI / 4]);
+    part(head, G.box, fire, [0, .145, .186], [.03, .03, .02], [0, 0, Math.PI / 4]);
+    for (let i = -3; i <= 3; i++) part(head, G.box, fire, [i * .026, .09 + (i % 2 ? .012 : 0) + Math.abs(i) * .006, .17 - Math.abs(i) * .012], [.022, .03, .02], [0, i * .12, i % 2 ? Math.PI / 4 : 0]);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; part(torso, G.cone, straw, [Math.cos(a) * .12, .5, Math.sin(a) * .09], [.03, .1, .03], [Math.sin(a) * .9, 0, -Math.cos(a) * .9]); }
+    part(torso, G.box, m(0x7a5a2a, { roughness: 1 }), [0, .02, 0], [.44, .04, .27]);
+    part(torso, G.box, m(0x5a6a3a, { roughness: 1 }), [-.1, .3, .15], [.1, .1, .01], [0, 0, .2]);
+    part(torso, G.box, m(0x8a2a1a, { roughness: 1 }), [.11, .12, .15], [.08, .09, .01], [0, 0, -.3]);
+    for (let i = 0; i < 9; i++) part(torso, G.box, m(0x4a3222, { roughness: 1, side: THREE.DoubleSide }), [(i - 4) * .055, -.6 - (i % 3) * .03, (i % 2 ? .12 : -.12)], [.05, .1 + (i % 3) * .04, .012], [i % 2 ? .15 : -.15, 0, (i - 4) * .08]);
+    for (const s of [-1, 1]) {
+      part(arms[s].el, G.box, burlap, [0, -.28, .01], [.075, .11, .095]);
+      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; part(arms[s].el, G.cone, straw, [Math.cos(a) * .045, -.2, Math.sin(a) * .045], [.018, .07, .018], [Math.sin(a) * .5 + Math.PI, 0, -Math.cos(a) * .5]); }
+    }
+    for (let i = 0; i < 3; i++) part(body, G.sphere, glow, [Math.cos(i * 2.1) * .5, .4 + i * .35, Math.sin(i * 2.1) * .5], [.02, .02, .02]);
+  }
+  if (suit.id === 'diver') {
+    const brass = m(0xc08a2a, { metalness: .85, roughness: .28 }), copper = m(0x9a5a2a, { metalness: .8, roughness: .35 }), canvas = m(0x8a7a5a, { roughness: 1 });
+    const lead = m(0x4a4e52, { metalness: .6, roughness: .5 }), glass = m(0x1a3a40, { emissive: suit.accent, emissiveIntensity: .9, metalness: .4, roughness: .1 });
+    part(torso, G.taper, canvas, [0, .25, 0], [.48, .52, .29]);
+    part(torso, G.cyl, brass, [0, .5, 0], [.23, .07, .17]);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; part(torso, G.sphere, copper, [Math.cos(a) * .215, .54, Math.sin(a) * .16], [.014, .014, .014]); }
+    part(head, G.sphere, brass, [0, .15, 0], [.2, .2, .2]);
+    part(head, G.cyl, copper, [0, .01, 0], [.17, .05, .17]);
+    part(head, G.torus, copper, [0, .15, .185], [.085, .085, .1]);
+    part(head, G.sphere, glass, [0, .15, .178], [.075, .075, .03]);
+    for (const x of [-.03, 0, .03]) part(head, G.box, copper, [x, .15, .2], [.008, .15, .008]);
+    for (const s of [-1, 1]) {
+      part(head, G.torus, copper, [s * .185, .16, .02], [.05, .05, .07], [0, Math.PI / 2, 0]);
+      part(head, G.sphere, glass, [s * .18, .16, .02], [.02, .044, .044]);
+    }
+    part(head, G.cyl, copper, [0, .35, 0], [.03, .04, .03]);
+    part(head, G.cyl, copper, [.08, .28, -.12], [.022, .08, .022], [-.6, 0, -.4]);
+    for (const x of [-.075, .075]) {
+      part(torso, G.capsule, m(0xb8bcc0, { metalness: .8, roughness: .3 }), [x, .24, -.22], [.07, .17, .07]);
+      part(torso, G.cyl, brass, [x, .5, -.22], [.025, .05, .025]);
+    }
+    part(torso, G.torus, m(0x1a1a1a, { roughness: .8 }), [.06, .56, -.12], [.12, .12, .3], [0, Math.PI / 2, .4]);
+    for (let i = -2; i <= 2; i++) part(torso, G.box, lead, [i * .085, .03, .15], [.07, .07, .03]);
+    part(torso, G.box, m(0x2a2418), [0, .03, 0], [.44, .04, .28]);
+    for (const { knee } of legs) { part(knee, G.box, lead, [0, -.4, .045], [.15, .14, .29]); part(knee, G.box, brass, [0, -.36, .19], [.12, .05, .02]); }
+    for (const s of [-1, 1]) part(arms[s].el, G.cyl, brass, [0, -.2, 0], [.06, .025, .06]);
   }
 }
 function solveArm(upper, el, shoulder, target, pole, l1, l2) {
