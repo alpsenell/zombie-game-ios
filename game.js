@@ -1,5 +1,6 @@
 import * as THREE from './vendor/three.module.js';
-import { createBus, rng, R, hashSeed } from './core.js';
+import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
+import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
 import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
@@ -116,7 +117,7 @@ function mergeGeos(items) {
   out.computeBoundingSphere();
   return out;
 }
-function bakeStatic(roots) {
+function bakeStatic(roots, parent = scene) {
   scene.updateMatrixWorld(true);
   const groups = new Map();
   for (const root of roots) root.traverse(o => {
@@ -129,7 +130,7 @@ function bakeStatic(roots) {
   for (const { material, shadow, items } of groups.values()) {
     const m = new THREE.Mesh(mergeGeos(items), material);
     m.castShadow = shadow; m.receiveShadow = true;
-    scene.add(m);
+    parent.add(m);
   }
 }
 function canvasTexture(w, h, draw, repeat) {
@@ -186,25 +187,26 @@ const splatTex = canvasTexture(128, 128, (cx) => {
   }
 });
 
-const sky = new THREE.Mesh(new THREE.SphereGeometry(95, 24, 16), new THREE.MeshBasicMaterial({
-  side: THREE.BackSide, fog: false, depthWrite: false,
-  map: canvasTexture(8, 256, (cx) => {
-    const g = cx.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, '#020409'); g.addColorStop(.3, '#081624'); g.addColorStop(.46, '#1b2c38');
-    g.addColorStop(.5, '#4a2c1e'); g.addColorStop(.53, '#0b1820'); g.addColorStop(1, '#0b1820');
-    cx.fillStyle = g; cx.fillRect(0, 0, 8, 256);
-  }),
-}));
+const sky = new THREE.Mesh(new THREE.SphereGeometry(95, 24, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false }));
 scene.add(sky);
-{
+function skyTexture(stops) {
+  return canvasTexture(8, 256, (cx) => {
+    const g = cx.createLinearGradient(0, 0, 0, 256);
+    for (const [t, c] of stops) g.addColorStop(t, c);
+    cx.fillStyle = g; cx.fillRect(0, 0, 8, 256);
+  });
+}
+const stars = (() => {
   const n = 350, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, e = .15 + Math.random() * 1.3;
     pos.set([Math.cos(a) * Math.cos(e) * 88, Math.sin(e) * 88, Math.sin(a) * Math.cos(e) * 88], i * 3);
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfe6ff, size: 1.4, sizeAttenuation: false, fog: false, transparent: true, opacity: .7 })));
-}
+  const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xcfe6ff, size: 1.4, sizeAttenuation: false, fog: false, transparent: true, opacity: .7 }));
+  scene.add(p);
+  return p;
+})();
 const moonDisc = new THREE.Mesh(new THREE.SphereGeometry(3.4, 20, 14), new THREE.MeshBasicMaterial({ color: 0xd6efff, fog: false }));
 moonDisc.position.set(-24, 34, -70);
 scene.add(moonDisc);
@@ -217,165 +219,79 @@ moon.castShadow = true;
 moon.shadow.mapSize.set(1024, 1024);
 Object.assign(moon.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, far: 90 });
 scene.add(moon);
-scene.add(new THREE.HemisphereLight(0x8bbfd2, 0x2a2016, 1.5));
-
-function buildWorld() {
-  const road = mesh(new THREE.PlaneGeometry(18, 96), new THREE.MeshStandardMaterial({ map: gritTexture('#2f3c43', '#a8c0be', 4, 20), roughness: .9, metalness: .1 }), 0, 0, 0);
-  road.rotation.x = -Math.PI / 2;
-  const ground = mesh(new THREE.PlaneGeometry(110, 110), new THREE.MeshStandardMaterial({ map: gritTexture('#2b3136', '#899499', 16, 16), roughness: .98 }), 0, -.03, 0);
-  ground.rotation.x = -Math.PI / 2;
-  for (const sx of [-1, 1]) {
-    const curb = mesh(new THREE.BoxGeometry(.4, .16, 96), mat(0x5b6468, { roughness: .9 }), sx * 9.1, .08, 0);
-    curb.castShadow = false;
-    const walk = mesh(new THREE.BoxGeometry(2.4, .14, 96), mat(0x3a4246, { roughness: .95 }), sx * 10.5, .07, 0);
-    walk.castShadow = false;
-  }
-  const lineMat = mat(0x9c8a5a, { roughness: .9 });
-  for (let z = -44; z < 46; z += 6) mesh(new THREE.BoxGeometry(.18, .02, 2.4), lineMat, 0, .012, z).castShadow = false;
-
-  const windowGeo = new THREE.BoxGeometry(.6, .9, .05);
-  const winDark = new THREE.MeshStandardMaterial({ color: 0x0a1418, roughness: .3, metalness: .6 });
-  const winLit = new THREE.MeshStandardMaterial({ color: 0x331a08, emissive: 0xff8a2a, emissiveIntensity: 1.3 });
-  const winBlue = new THREE.MeshStandardMaterial({ color: 0x0a1822, emissive: 0x3aa0ff, emissiveIntensity: .7 });
-  function building(x, z, w, d, h, c) {
-    const b = mesh(new THREE.BoxGeometry(w, h, d), mat(c, { roughness: .88 }), x, h / 2, z);
-    solids.push(b);
-    obstacles.push({ x, z, w: w + .5, d: d + .5 });
-    mesh(new THREE.BoxGeometry(w + .4, .35, d + .4), mat(0x121a1f), x, h + .17, z);
-    const face = x < 0 ? 1 : -1;
-    for (let y = 2.2; y < h - 1; y += 2.6) {
-      for (let zz = -d * .36; zz <= d * .37; zz += d * .24) {
-        const r = Math.random();
-        const m = r > .82 ? winLit : r > .76 ? winBlue : winDark;
-        const win = new THREE.Mesh(windowGeo, m);
-        win.rotation.y = Math.PI / 2;
-        win.position.set(x + face * (w / 2 + .03), y, z + zz);
-        scene.add(win);
-      }
-    }
-    mesh(new THREE.BoxGeometry(.06, 2.2, 1.4), mat(0x0b0f12), x + face * (w / 2 + .03), 1.1, z);
-  }
-  [[-15, -18, 9, 10, 16], [15, -17, 8, 11, 19], [-15, 3, 10, 9, 21], [15, 7, 9, 12, 17], [-16, 27, 8, 11, 20], [16, 28, 11, 10, 23], [-9, -36, 5, 8, 13], [10, -36, 6, 7, 15]]
-    .forEach((v, i) => building(v[0], v[1], v[2], v[3], v[4], [0x252b31, 0x1b262d, 0x2d2628][i % 3]));
-
-  const far = new THREE.MeshBasicMaterial({ color: 0x060b10, fog: false });
-  for (let i = 0; i < 26; i++) {
-    const a = i / 26 * Math.PI * 2 + Math.random() * .1, r = 70 + Math.random() * 10, h = 12 + Math.random() * 26, w = 6 + Math.random() * 8;
-    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), far);
-    b.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r);
-    b.lookAt(0, h / 2, 0);
-    scene.add(b);
-  }
-
-  const carColors = [0x6b1f1c, 0x2d4a5c, 0x3c3f41, 0x7a6a3a, 0x1f3a2b];
-  function car(x, z, rot, color, tilt = 0) {
-    const o = new THREE.Group();
-    const paint = mat(color, { roughness: .45, metalness: .55 });
-    mesh(new THREE.BoxGeometry(2.1, .6, 4.3), paint, 0, .62, 0, o);
-    mesh(new THREE.BoxGeometry(1.9, .55, 2.1), paint, 0, 1.18, -.2, o);
-    mesh(new THREE.BoxGeometry(1.94, .44, 2.14), mat(0x0c1418, { roughness: .1, metalness: .9 }), 0, 1.2, -.2, o);
-    mesh(new THREE.BoxGeometry(2.14, .2, .2), mat(0x1a1d1f), 0, .45, 2.15, o);
-    mesh(new THREE.BoxGeometry(2.14, .2, .2), mat(0x1a1d1f), 0, .45, -2.15, o);
-    for (const sx of [-.7, .7]) {
-      mesh(new THREE.BoxGeometry(.4, .14, .05), mat(0x331b0a, { emissive: 0xffc27a, emissiveIntensity: Math.random() > .5 ? .8 : 0 }), sx, .72, 2.16, o);
-      mesh(new THREE.BoxGeometry(.4, .14, .05), mat(0x330808, { emissive: 0xff2a1a, emissiveIntensity: .6 }), sx, .72, -2.16, o);
-    }
-    for (const sx of [-.98, .98]) for (const sz of [-1.35, 1.35]) {
-      const wh = mesh(new THREE.CylinderGeometry(.38, .38, .26, 14), mat(0x0a0c0d, { roughness: .9 }), sx, .38, sz, o);
-      wh.rotation.z = Math.PI / 2;
-    }
-    o.position.set(x, 0, z); o.rotation.set(0, rot, tilt);
-    scene.add(o);
-    solids.push(o);
-    obstacles.push({ x, z, w: 2.9, d: 4.7 });
-  }
-  car(-4, -10, .3, carColors[0]); car(5, 8, -.25, carColors[1]); car(-5, 34, 2.8, carColors[2]); car(6.5, -24, 1.4, carColors[3], .05);
-
-  const sandMat = mat(0x6d624a, { roughness: 1, flatShading: true });
-  const bagGeo = lumpy(new THREE.CapsuleGeometry(.22, .5, 3, 6), .2);
-  function sandbags(x, z, rot, len = 5) {
-    const g = new THREE.Group();
-    for (let row = 0; row < 3; row++) for (let i = 0; i < len - row % 2; i++) {
-      const b = mesh(bagGeo, sandMat, (i - (len - 1) / 2 + (row % 2) * .5) * .78, .2 + row * .34, 0, g);
-      b.rotation.z = Math.PI / 2; b.scale.set(1, 1, .75); b.rotation.y = (Math.random() - .5) * .2;
-    }
-    g.position.set(x, 0, z); g.rotation.y = rot;
-    scene.add(g); solids.push(g);
-    const ww = Math.abs(Math.cos(rot)) * len * .8 + .7, dd = Math.abs(Math.sin(rot)) * len * .8 + .7;
-    obstacles.push({ x, z, w: ww, d: dd });
-  }
-  sandbags(-5, 18, 0); sandbags(4.5, 25, .4, 4); sandbags(-2, -30, -.2, 4);
-
-  const concrete = mat(0x8b8f88, { roughness: .95 });
-  function jersey(x, z) {
-    const g = new THREE.Group();
-    mesh(new THREE.BoxGeometry(2.2, .35, .7), concrete, 0, .17, 0, g);
-    mesh(new THREE.BoxGeometry(2.2, .6, .32), concrete, 0, .63, 0, g);
-    mesh(new THREE.BoxGeometry(2.21, .18, .33), mat(0xc2402c), 0, .78, 0, g);
-    g.position.set(x, 0, z); g.rotation.y = (Math.random() - .5) * .3;
-    scene.add(g); solids.push(g);
-  }
-  for (let x = -8; x <= 8; x += 2.4) { jersey(x, 43); jersey(x + 1, -44); }
-
-  const crateMat = mat(0x5a4630, { roughness: .9 });
-  for (const [x, z] of [[6, 25], [-6.2, 20.5], [5, -28]]) {
-    const c = mesh(new THREE.BoxGeometry(1.2, 1.1, 1.2), crateMat, x, .55, z);
-    c.rotation.y = Math.random(); solids.push(c);
-    obstacles.push({ x, z, w: 1.6, d: 1.6 });
-  }
-
-  const poleMat = mat(0x22292c, { metalness: .6, roughness: .5 });
-  const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: .07, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-  for (const [x, z] of [[-8.6, -6], [8.6, 16], [-8.6, 40], [8.6, -32]]) {
-    const s = Math.sign(x);
-    mesh(new THREE.CylinderGeometry(.08, .12, 6, 8), poleMat, x, 3, z);
-    mesh(new THREE.BoxGeometry(1.6, .08, .08), poleMat, x - s * .8, 6, z);
-    mesh(new THREE.BoxGeometry(.5, .12, .3), mat(0x2a2a20, { emissive: 0xffd08a, emissiveIntensity: 2 }), x - s * 1.5, 5.93, z);
-    const beam = new THREE.Mesh(new THREE.ConeGeometry(2.2, 5.8, 20, 1, true), beamMat);
-    beam.position.set(x - s * 1.5, 3, z);
-    scene.add(beam);
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(2.4, 24), new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffc080, transparent: true, opacity: .25, depthWrite: false, blending: THREE.AdditiveBlending }));
-    pool.rotation.x = -Math.PI / 2; pool.position.set(x - s * 1.5, .03, z);
-    scene.add(pool);
-    obstacles.push({ x, z, w: .5, d: .5 });
-  }
-}
-const beforeWorld = new Set(scene.children);
-buildWorld();
+const hemi = new THREE.HemisphereLight(0x8bbfd2, 0x2a2016, 1.5);
+scene.add(hemi);
 
 const fires = [];
-function barrel(x, z) {
-  const g = new THREE.Group();
-  const drum = mesh(new THREE.CylinderGeometry(.34, .32, .9, 14, 1, true), mat(0x3b2a1e, { metalness: .6, roughness: .6, side: THREE.DoubleSide }), 0, .45, 0, g);
-  for (const y of [.2, .7]) mesh(new THREE.TorusGeometry(.345, .025, 5, 16), mat(0x2a1a10, { metalness: .7 }), 0, y, 0, g).rotation.x = Math.PI / 2;
-  const coals = new THREE.Mesh(new THREE.CircleGeometry(.3, 14), new THREE.MeshBasicMaterial({ color: 0xff6a1a }));
-  coals.rotation.x = -Math.PI / 2; coals.position.y = .84; g.add(coals);
-  const flames = [];
-  for (let i = 0; i < 3; i++) {
-    const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: i ? 0xff7a26 : 0xffd27a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    f.position.set((Math.random() - .5) * .2, 1.1 + i * .15, (Math.random() - .5) * .2);
-    g.add(f); flames.push(f);
-  }
-  g.position.set(x, 0, z); scene.add(g); solids.push(drum);
-  obstacles.push({ x, z, w: .9, d: .9 });
-  const light = new THREE.PointLight(0xff7026, 22, 14, 2);
-  light.position.set(x, 1.8, z); scene.add(light);
-  fires.push({ light, flames, seed: Math.random() * 10 });
+const world = { group: null, map: null, tex: [] };
+let bounds = MAPS[0].bounds;
+function worldCtx(group) {
+  const track = t => (world.tex.push(t), t);
+  return {
+    THREE, mat, lumpy, glowTex,
+    mesh: (geo, material, x, y, z, parent = group) => mesh(geo, material, x, y, z, parent),
+    grit: (...a) => track(gritTexture(...a)), canvas: (...a) => track(canvasTexture(...a)),
+    add: o => (group.add(o), o), solid: o => (solids.push(o), o), block: (x, z, w, d) => obstacles.push({ x, z, w, d }),
+    animate: f => fires.push(f),
+  };
 }
-[[-6, -4], [6.5, 21], [-4, 30], [4, -17]].forEach(p => barrel(...p));
-bakeStatic(scene.children.filter(c => !beforeWorld.has(c)));
+function clearWorld() {
+  if (!world.group) return;
+  scene.remove(world.group);
+  const cached = new Set(matCache.values());
+  world.group.traverse(o => {
+    if (!o.isSprite) o.geometry?.dispose();
+    if (o.material && !cached.has(o.material)) o.material.dispose();
+  });
+  for (const t of world.tex) t.dispose();
+  world.tex.length = obstacles.length = solids.length = fires.length = 0;
+  world.group = null;
+}
+function applyEnv(map) {
+  const E = map.env;
+  sky.material.map?.dispose();
+  sky.material.map = skyTexture(map.sky); sky.material.needsUpdate = true;
+  stars.visible = E.stars > 0; stars.material.opacity = E.stars;
+  moonDisc.position.set(...E.moon.pos); moonDisc.material.color.setHex(E.moon.color); moonDisc.scale.setScalar(E.moon.size);
+  moonHalo.position.copy(moonDisc.position); moonHalo.material.color.setHex(E.moon.halo); moonHalo.material.opacity = E.moon.opacity; moonHalo.scale.setScalar(E.moon.haloSize);
+  moon.color.setHex(E.key); moon.intensity = E.keyI; moon.position.set(...E.keyPos);
+  hemi.color.setHex(E.hemi[0]); hemi.groundColor.setHex(E.hemi[1]); hemi.intensity = E.hemi[2];
+  renderer.toneMappingExposure = E.exposure;
+  embers.points.material.color.setHex(E.embers);
+  scene.fog.color.setHex(map.fog.color); scene.fog.density = map.fog.density;
+}
+function loadMap(id) {
+  const map = MAPS.find(m => m.id === id) || world.map || MAPS[0];
+  if (map === world.map) return false;
+  clearWorld();
+  for (const d of decals) d.visible = false;
+  world.map = map; bounds = map.bounds;
+  world.group = new THREE.Group(); world.group.name = 'world';
+  scene.add(world.group);
+  applyEnv(map);
+  map.build(worldCtx(world.group));
+  bakeStatic([world.group], world.group);
+  buildNav();
+  return true;
+}
 
 function blocked(x, z, r = .32) {
-  if (Math.abs(x) > 42 || Math.abs(z) > 42.5) return true;
+  if (x < bounds.minX || x > bounds.maxX || z < bounds.minZ || z > bounds.maxZ) return true;
   for (const o of obstacles) if (Math.abs(x - o.x) < o.w / 2 + r && Math.abs(z - o.z) < o.d / 2 + r) return true;
   return false;
 }
 
-const NAV = { minX: -42, minZ: -42, w: 85, h: 86, cell: -1, t: 0 };
-NAV.solid = new Uint8Array(NAV.w * NAV.h);
-NAV.dist = new Int32Array(NAV.w * NAV.h).fill(-1);
-NAV.queue = new Int32Array(NAV.w * NAV.h);
-for (let j = 0; j < NAV.h; j++) for (let i = 0; i < NAV.w; i++) NAV.solid[j * NAV.w + i] = blocked(NAV.minX + i, NAV.minZ + j, .5) ? 1 : 0;
+const NAV = { minX: 0, minZ: 0, w: 0, h: 0, cell: -1, t: 0, builds: 0 };
+function buildNav() {
+  NAV.minX = Math.round(bounds.minX); NAV.minZ = Math.round(bounds.minZ);
+  NAV.w = Math.round(bounds.maxX) - NAV.minX + 1; NAV.h = Math.round(bounds.maxZ) - NAV.minZ + 1;
+  const n = NAV.w * NAV.h;
+  NAV.solid = new Uint8Array(n);
+  NAV.dist = new Int32Array(n).fill(-1);
+  NAV.queue = new Int32Array(n);
+  NAV.cell = -1; NAV.builds++;
+  for (let j = 0; j < NAV.h; j++) for (let i = 0; i < NAV.w; i++) NAV.solid[j * NAV.w + i] = blocked(NAV.minX + i, NAV.minZ + j, .5) ? 1 : 0;
+}
 function navCell(x, z) {
   const i = Math.round(x - NAV.minX), j = Math.round(z - NAV.minZ);
   return i < 0 || j < 0 || i >= NAV.w || j >= NAV.h ? -1 : j * NAV.w + i;
@@ -563,6 +479,7 @@ const embers = (() => {
   const p = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xff9a4a, size: .07, map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   p.frustumCulled = false; scene.add(p);
   return {
+    points: p,
     update(dt, t) {
       for (let i = 0; i < n; i++) {
         pos[i * 3 + 1] += vel[i] * dt;
@@ -918,12 +835,14 @@ let firing = false, aimTarget = null, menuAngle = 0, menuTarget = new THREE.Vect
 function schedule(delay, fn) { scheduled.push({ at: state.clock + delay, fn }); }
 
 function resetRun() {
-  Object.assign(stats, { damage: 1, fireRate: 1, reload: 1, speed: 1, maxHp: 100, mag: 1, headMul: 1, leech: 0, nadeMax: 3, armor: 1, luck: 1, secondWind: false });
+  Object.assign(stats, { damage: 1, fireRate: 1, reload: 1, speed: 1, maxHp: 100, mag: 1, headMul: 1, leech: 0, nadeMax: 3, armor: 1, luck: 1, secondWind: false,
+    pierce: 0, explosive: 0, adrenaline: 0, berserk: 0, magnet: 1, refund: 0, frost: 0, incendiary: 0, nadeRegen: 0, secondMag: false, fortune: 1, phoenix: 0, timeWarp: false, chain: 0, overclock: false });
   const slots = loadoutWeapons();
-  Object.assign(player, { hp: 100, lagHp: 100, nades: 2, weapon: slots[0], slots, reloading: 0, swapT: 0, nextShot: 0, lastHurt: -9, pumpT: 0, lastBeat: 0, spin: 0,
+  Object.assign(player, { hp: 100, lagHp: 100, nades: 2, weapon: slots[0], slots, reloading: 0, swapT: 0, nextShot: 0, lastHurt: -9, pumpT: 0, lastBeat: 0, spin: 0, shotN: 0, adrenT: 0, invulnUntil: 0,
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
-    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty });
+    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty,
+    warpT: 0, killTimes: [], perks: [] });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -951,6 +870,8 @@ function magSize(i) { return Math.round(WEAPONS[i].mag * stats.mag); }
 
 function startGame(opts = {}) {
   sfx.init();
+  loadMap(opts.map || world.map.id);
+  store.set('map', world.map.id);
   state.runType = opts.type || 'normal';
   state.runDifficulty = opts.difficulty || null;
   rng.set(opts.seed ?? null);
@@ -960,8 +881,9 @@ function startGame(opts = {}) {
   state.seed = opts.seed ?? null;
   state.runOpts = opts;
   if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
-  camera.position.set(0, 1.64, 30);
-  look.yaw = 0; look.pitch = 0; look.recoil = 0;
+  const S = world.map.start;
+  camera.position.set(S.x, 1.64, S.z);
+  look.yaw = S.yaw; look.pitch = 0; look.recoil = 0;
   camera.fov = 74; camera.updateProjectionMatrix();
   state.mode = 'playing';
   showScreen(null);
@@ -972,7 +894,7 @@ function startGame(opts = {}) {
   schedule(.8, nextWave);
   if (!tutorialDone) schedule(.3, () => hint('Drag anywhere on the left to move'));
   haptic('MEDIUM');
-  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], opts });
+  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], map: world.map.id, opts });
 }
 
 function waveComposition(w) {
@@ -1001,8 +923,8 @@ function waveComposition(w) {
 
 function applyMod(id) {
   const M = MODS[id] || {};
-  scene.fog.color.setHex(M.fog ?? 0x0b1820);
-  scene.fog.density = M.fogDensity ?? .03;
+  scene.fog.color.setHex(M.fog ?? world.map.fog.color);
+  scene.fog.density = M.fogDensity ?? world.map.fog.density;
 }
 
 function nextWave() {
@@ -1035,7 +957,13 @@ function findSpawn(minD = 16, maxD = 32) {
     if (!best || facing > best.facing) best = { x, z, facing };
     if (facing > .2 && R() > .4) break;
   }
-  return best || { x: 0, z: -30 };
+  if (best) return best;
+  let far = null, fd = -1;
+  for (const [x, z] of world.map.spawns) {
+    const c = navCell(x, z), d = Math.hypot(x - camera.position.x, z - camera.position.z);
+    if (c >= 0 && NAV.dist[c] >= 0 && d > fd) { fd = d; far = { x, z }; }
+  }
+  return far || { x: world.map.spawns[0][0], z: world.map.spawns[0][1] };
 }
 
 function spawnTick(dt) {
@@ -1062,7 +990,7 @@ function spawnTick(dt) {
 }
 
 function hurtPlayer(amount, from, quiet) {
-  if (state.mode !== 'playing') return;
+  if (state.mode !== 'playing' || state.clock < player.invulnUntil) return;
   amount *= stats.armor * diff().dmg;
   player.hp = Math.max(0, player.hp - amount);
   player.lastHurt = state.clock;
@@ -1079,7 +1007,15 @@ function hurtPlayer(amount, from, quiet) {
       explode(camera.position.x, camera.position.z, { friendly: true });
       return;
     }
+    if (stats.phoenix > 0) {
+      stats.phoenix--;
+      player.hp = stats.maxHp;
+      message('PHOENIX', 'RISEN FROM THE ASHES', 2);
+      nova(10);
+      return;
+    }
     bus.emit('player:death', { from, amount });
+    if (deathGuards.some(g => g())) return;
     gameOver();
   }
 }
@@ -1115,6 +1051,7 @@ function killZombie(z, head, noScore) {
       if (head) toast('HEADSHOT', .8);
       else if (u.elite) toast('ELITE DOWN', .8);
       if (stats.leech) player.hp = Math.min(stats.maxHp, player.hp + stats.leech);
+      perkOnKill(z);
       ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
       const drops = T.boss ? 4 : R() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
       for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
@@ -1126,6 +1063,31 @@ function killZombie(z, head, noScore) {
 }
 
 function comboMult() { return state.combo > 1 ? Math.min(4, 1 + (state.combo - 1) * .25) : 1; }
+function dmgMul() { return stats.damage * (1 + stats.berserk * Math.max(0, 1 - player.hp / stats.maxHp)); }
+function perkOnKill(z) {
+  if (stats.adrenaline) player.adrenT = 2.5;
+  if (stats.timeWarp) {
+    state.killTimes = state.killTimes.filter(t => state.clock - t < 1.2);
+    state.killTimes.push(state.clock);
+    if (state.killTimes.length >= 3 && !(state.warpT > 0)) { state.warpT = 3; state.killTimes.length = 0; toast('TIME WARP', 1.2); }
+  }
+  if (stats.chain && !z.userData.T.explode && R() < stats.chain) {
+    const x = z.position.x, zz = z.position.z;
+    schedule(.15, () => explode(x, zz, { radius: 3.8, zdmg: 220 * stats.damage, color: 0xff6a2a, small: true }));
+  }
+}
+function nova(r = 9) {
+  const x = camera.position.x, z = camera.position.z;
+  explode(x, z, { friendly: true, radius: r, zdmg: 800 * stats.damage, color: 0xffd27a });
+  for (const zb of [...zombies]) {
+    const u = zb.userData;
+    if (!u.dead && !u.T.boss && Math.hypot(zb.position.x - x, zb.position.z - z) < r) damageZombie(zb, u.hp + 1, null, false, null);
+  }
+  for (const p of projectiles) scene.remove(p.mesh);
+  projectiles.length = 0;
+  player.invulnUntil = state.clock + 1.5;
+}
+const deathGuards = [];
 
 function damageZombie(z, amount, point, head, dir) {
   const u = z.userData, T = u.T;
@@ -1155,6 +1117,8 @@ function damageZombie(z, amount, point, head, dir) {
 function otherSlot() { return player.weapon === player.slots[0] ? player.slots[1] : player.slots[0]; }
 function selectWeapon(i, instant) {
   if (!player.slots.includes(i)) return;
+  const prev = player.weapon, n = Math.min(magSize(prev) - player.ammo[prev], player.reserve[prev]);
+  if (!instant && stats.secondMag && prev !== i && n > 0) { player.ammo[prev] += n; player.reserve[prev] -= n; }
   player.spin = 0;
   player.weapon = i;
   player.reloading = 0;
@@ -1242,6 +1206,8 @@ function shoot() {
   if (w.pump) { player.pumpT = .55; setTimeout(() => sfx.pump(), 260); }
 
   camera.updateMatrixWorld();
+  const sd = dmgMul();
+  let impact = null;
   const origin = camera.getWorldPosition(tmp).clone();
   const muzzle = camera.localToWorld(tmp3.set(.22, -.2, -.9)).clone();
   const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
@@ -1262,10 +1228,11 @@ function shoot() {
     const h = raycaster.intersectObjects([...targets, ...solids], true)[0];
     const end = h ? h.point.clone() : origin.clone().addScaledVector(fwd, w.range);
     bolt(muzzle, end);
+    if (h) impact = end;
     let z = h?.object.userData.zroot;
     if (z) {
       const head = !!h.object.userData.head;
-      let dmg = w.damage * stats.damage * (head ? w.head * stats.headMul : 1);
+      let dmg = w.damage * sd * (head ? w.head * stats.headMul : 1);
       addHit(z, dmg, head, h.point, fwd);
       const chained = new Set([z]);
       let from = end;
@@ -1290,7 +1257,7 @@ function shoot() {
       const dir = fwd.clone().addScaledVector(right, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r).normalize();
       raycaster.set(origin, dir); raycaster.far = w.range;
       const hits = raycaster.intersectObjects([...targets, ...solids], true);
-      let end = origin.clone().addScaledVector(dir, w.range), pierce = w.pierce || 0, mult = 1;
+      let end = origin.clone().addScaledVector(dir, w.range), pierce = (w.pierce || 0) + stats.pierce, mult = 1;
       const seen = new Set();
       for (const h of hits) {
         const z = h.object.userData.zroot;
@@ -1303,11 +1270,12 @@ function shoot() {
         seen.add(z);
         const head = !!h.object.userData.head;
         const falloff = w.pellets > 1 ? Math.max(.35, 1 - h.distance / w.range) : 1;
-        addHit(z, w.damage * stats.damage * falloff * mult * (head ? w.head * stats.headMul : 1), head, h.point, dir);
+        addHit(z, w.damage * sd * falloff * mult * (head ? w.head * stats.headMul : 1), head, h.point, dir);
         end = h.point.clone();
         if (pierce-- <= 0) break;
         mult *= .8;
       }
+      if (p === 0 && hits.length) impact = end;
       if (w.flame) {
         if (p === 0) sparks.emit(muzzle.x, muzzle.y, muzzle.z, 7, { dir, speed: 10, spread: .35, life: .45, grav: -3, drag: 1.5, colors: [0xffd27a, 0xff8a2a, 0xff4a1a, 0xffffff] });
       } else if (p < 3) tracer(muzzle, end, w.freeze ? 0xbff6ff : w.burn ? 0xffa050 : w.pierce ? 0xfff4d0 : 0xffe3a8, w.freeze ? .03 : w.pierce ? .026 : .018, w.freeze ? .07 : .045);
@@ -1317,8 +1285,10 @@ function shoot() {
   let killed = false, headHit = false, anyHit = false;
   for (const [z, e] of hitMap) {
     anyHit = true;
-    if (w.burn) ignite(z, w.burn * stats.damage);
+    if (w.burn) ignite(z, w.burn * sd);
     if (w.freeze) chill(z, w.freeze);
+    if (stats.frost && R() < stats.frost) chill(z, .55);
+    if (stats.incendiary && R() < stats.incendiary) ignite(z, 24 * sd);
     damageZombie(z, e.dmg, e.point, e.head, w.knock && e.dir ? tmp2.set(e.dir.x * w.knock, 0, e.dir.z * w.knock) : null);
     if (w.freeze && !z.userData.dead) gore.emit(e.point.x, e.point.y, e.point.z, 3, { speed: 2, spread: 1.5, life: .5, colors: [0xdff8ff, 0x9fd8f0] });
     killed ||= z.userData.dead; headHit ||= e.head;
@@ -1331,6 +1301,8 @@ function shoot() {
     ui.hit.classList.add('show');
     clearTimeout(ui.hit._t); ui.hit._t = setTimeout(() => ui.hit.classList.remove('show'), 110);
   }
+  if (headHit && stats.refund) player.ammo[i] = Math.min(magSize(i), player.ammo[i] + stats.refund);
+  if (stats.explosive && impact && ++player.shotN % [10, 7, 5][Math.min(2, stats.explosive - 1)] === 0) explode(impact.x, impact.z, { radius: 2.8, zdmg: 110 * sd, color: 0xffb040, small: true });
   if (player.ammo[i] === 0 && player.reserve[i] > 0) schedule(.2, reload);
 }
 
@@ -1443,8 +1415,8 @@ function explode(x, z, o = {}) {
   gore.emit(x, .4, z, 40, { speed: 4, spread: 2, life: 1.6, grav: -1.2, drag: 1.5, dir: { x: 0, y: 1, z: 0 }, colors: o.hostile ? [0x3a4a1a, 0x5a6a20, 0x2a2a1a] : [0x2a2a2a, 0x3a3632, 0x1a1a1a] });
   decal(x, z, R * .5, o.hostile ? 0x8aff4a : 0x222222);
   const d = Math.hypot(camera.position.x - x, camera.position.z - z);
-  look.shake = Math.max(look.shake, Math.max(.15, 1 - d / 18));
-  sfx.boom(); haptic('HEAVY');
+  look.shake = Math.max(look.shake, o.small ? .06 : Math.max(.15, 1 - d / 18));
+  sfx.boom(); haptic(o.small ? 'MEDIUM' : 'HEAVY');
   if (o.hostile && d < R) hurtPlayer(o.pdmg * (1 - d / R * .6), { x, z });
   for (const zb of [...zombies]) {
     const u = zb.userData;
@@ -1663,17 +1635,24 @@ const PERKS = [
 function offerPerks() {
   state.mode = 'perk';
   ui.perkTitle.textContent = 'WAVE ' + state.wave + ' CLEARED';
-  const pool = PERKS.filter(p => (!p.when || p.when()) && (!p.rare || R() < .3));
+  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave));
+  const ok = p => !p.when || p.when();
+  const pool = PERKS.filter(p => !p.legendary && ok(p) && (!p.rare || r() < .3));
   const picks = [];
-  while (picks.length < 3 && pool.length) picks.push(pool.splice((R() * pool.length) | 0, 1)[0]);
+  while (picks.length < 3 && pool.length) picks.push(pool.splice((r() * pool.length) | 0, 1)[0]);
+  const legends = PERKS.filter(p => p.legendary && ok(p));
+  if (state.wave >= 10 && legends.length && r() < .08) picks.splice(Math.min(1, picks.length), picks.length > 1 ? 1 : 0, legends[(r() * legends.length) | 0]);
+  state.perkOffer = picks.map(p => p.name);
   ui.perkList.innerHTML = '';
   for (const p of picks) {
     const b = document.createElement('button');
-    b.className = 'perk' + (p.rare ? ' rare' : '');
+    b.className = 'perk' + (p.legendary ? ' legendary' : p.rare ? ' rare' : '');
     b.innerHTML = `<div class="ico">${p.icon}</div><b>${p.name}</b><span>${p.desc}</span>`;
     b.onclick = () => {
-      p.apply(); sfx.perk(); haptic('MEDIUM');
-      bus.emit('perk', { name: p.name, rare: !!p.rare, wave: state.wave });
+      if (state.mode !== 'perk') return;
+      p.apply(); sfx.perk(); haptic(p.legendary ? 'HEAVY' : 'MEDIUM');
+      state.perks.push(p.name);
+      bus.emit('perk', { name: p.name, icon: p.icon, rare: !!p.rare, legendary: !!p.legendary, wave: state.wave });
       showScreen(null);
       state.mode = 'playing';
       toast(p.name, 1.4);
@@ -1690,6 +1669,7 @@ function waveCleared() {
   state.score += bonus;
   player.hp = Math.min(stats.maxHp, player.hp + stats.maxHp * .2);
   player.slots.forEach(i => (player.reserve[i] = Math.min(WEAPONS[i].maxReserve, player.reserve[i] + magSize(i))));
+  if (stats.nadeRegen) player.nades = Math.min(stats.nadeMax, player.nades + stats.nadeRegen);
   message('SECTOR CLEAR', 'BONUS +' + bonus, 2);
   bus.emit('wave:clear', { wave: state.wave, bonus, hp: player.hp });
   sfx.clear(); haptic('MEDIUM');
@@ -1701,7 +1681,7 @@ function runSummary() {
     type: state.runType || 'normal', seed: state.seed, difficultyId: state.runDifficulty || settings.difficulty,
     score: state.score, wave: state.wave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
-    bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id,
+    bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
   };
 }
 
@@ -1729,7 +1709,7 @@ function gameOver() {
   records.score = Math.max(records.score, state.score);
   records.wave = Math.max(records.wave, state.wave);
   store.set('records', records);
-  $('#over-sub').textContent = 'WAVE ' + state.wave + ' · ' + diff().name;
+  $('#over-sub').textContent = 'WAVE ' + state.wave + ' · ' + diff().name + ' · ' + world.map.name;
   $('#newbest').classList.toggle('hidden', !best || state.score === 0);
   $('#st-score').textContent = state.score.toLocaleString();
   $('#st-kills').textContent = state.kills;
@@ -1747,7 +1727,7 @@ function grantRewards() {
   const chip = (text, cls = '') => { const e = document.createElement('span'); e.textContent = text; if (cls) e.className = cls; box.appendChild(e); };
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
-  const scrap = Math.round((state.score / 150 + state.wave * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1));
+  const scrap = Math.round((state.score / 150 + state.wave * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
   const xp = Math.round(state.score / 10 + state.wave * 50);
   profile.scrap += scrap;
   profile.xp += xp;
@@ -1785,8 +1765,27 @@ function toMenu() {
 
 function populateMenu() {
   state.wave = 1;
-  ['walker', 'crawler', 'bloater', 'riot', 'spitter', 'brute', 'runner', 'walker'].forEach(k => makeZombie(k, (Math.random() - .5) * 12, -4 + (Math.random() - .5) * 16, false));
-  menuTarget.set(0, 0, 0);
+  const [hx, hz, sx, sz] = world.map.menu.horde;
+  ['walker', 'crawler', 'bloater', 'riot', 'spitter', 'brute', 'runner', 'walker'].forEach(k => {
+    let x = hx, z = hz;
+    for (let t = 0; t < 12; t++) { x = hx + (Math.random() - .5) * sx; z = hz + (Math.random() - .5) * sz; if (!blocked(x, z, .6)) break; }
+    makeZombie(k, x, z, false);
+  });
+  menuTarget.set(hx, 0, hz + 4);
+}
+function menuWander() {
+  const [tx, tz, sx, sz] = world.map.menu.target;
+  menuTarget.set(tx + (Math.random() - .5) * sx, 0, tz + (Math.random() - .5) * sz);
+}
+function selectMap(id) {
+  if (loadMap(id) && state.mode === 'menu') {
+    for (const z of zombies) scene.remove(z);
+    zombies.length = 0;
+    populateMenu();
+  }
+  store.set('map', world.map.id);
+  bus.emit('map', { id: world.map.id });
+  return world.map.id;
 }
 
 function pause() {
@@ -1947,12 +1946,13 @@ function assistTarget() {
 
 function updatePlayer(dt) {
   const w = WEAPONS[player.weapon];
+  if (player.adrenT > 0) player.adrenT = Math.max(0, player.adrenT - dt);
   let mx = move.x + (keys.d ? 1 : 0) - (keys.a ? 1 : 0), my = move.y + (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
   const mag = Math.min(1, Math.hypot(mx, my));
   const sprint = (move.sprint || keys.shift) && my > .5 && player.reloading <= 0;
   if (mag > .05) {
     const l = Math.hypot(mx, my); mx /= l; my /= l;
-    const speed = (sprint ? 6.2 : 3.6) * stats.speed * (w.mobility ?? 1) * mag * dt;
+    const speed = (sprint ? 6.2 : 3.6) * stats.speed * (w.mobility ?? 1) * (player.adrenT > 0 ? 1 + .3 * stats.adrenaline : 1) * mag * dt;
     const sy = Math.sin(look.yaw), cy = Math.cos(look.yaw);
     const fx = -sy * my + cy * mx, fz = -cy * my - sy * mx;
     const nx = camera.position.x + fx * speed, nz = camera.position.z + fz * speed;
@@ -2005,7 +2005,7 @@ function updatePlayer(dt) {
     u.inner.rotation.y += dt * 2; u.inner.position.y = Math.sin(state.clock * 3 + k) * .08;
     p.visible = u.t > 5 || Math.sin(state.clock * 16) > 0;
     const dx = camera.position.x - p.position.x, dz = camera.position.z - p.position.z, d = Math.hypot(dx, dz);
-    if (d < 3.5) { p.position.x += dx / d * dt * 6; p.position.z += dz / d * dt * 6; }
+    if (d < 3.5 * stats.magnet) { p.position.x += dx / d * dt * 6 * stats.magnet; p.position.z += dz / d * dt * 6 * stats.magnet; }
     if (d < 1.1) { collect(p); scene.remove(p); pickups.splice(k, 1); }
     else if (u.t <= 0) { scene.remove(p); pickups.splice(k, 1); }
   }
@@ -2025,7 +2025,7 @@ function updatePlayer(dt) {
 }
 
 function updateZombies(dt, playing, target = menuTarget) {
-  if (target === menuTarget && Math.hypot(zombies[0]?.position.x - menuTarget.x, zombies[0]?.position.z - menuTarget.z) < 3) menuTarget.set((Math.random() - .5) * 10, 0, -6 + (Math.random() - .5) * 20);
+  if (target === menuTarget && Math.hypot(zombies[0]?.position.x - menuTarget.x, zombies[0]?.position.z - menuTarget.z) < 3) menuWander();
   let nearestGroan = null, ng = 14;
   for (let k = zombies.length - 1; k >= 0; k--) {
     const z = zombies[k], u = z.userData, T = u.T;
@@ -2154,8 +2154,9 @@ function updateEffects(dt) {
   blastLight.intensity = Math.max(0, blastLight.intensity - dt * 220);
   const now = performance.now() / 1000;
   for (const f of fires) {
+    if (f.tick) { f.tick(now); continue; }
     f.light.intensity = 18 + Math.sin(now * 9 + f.seed) * 3 + Math.sin(now * 23 + f.seed) * 2;
-    f.flames.forEach((s, i) => { const k = .55 + Math.sin(now * (10 + i * 3) + f.seed + i) * .12; s.scale.set(k * (1 - i * .2), k * 1.4 * (1 - i * .15), 1); });
+    f.flames.forEach((s, i) => { const k = (.55 + Math.sin(now * (10 + i * 3) + f.seed + i) * .12) * (f.s ?? 1); s.scale.set(k * (1 - i * .2), k * 1.4 * (1 - i * .15), 1); });
   }
 }
 
@@ -2163,12 +2164,15 @@ function update(dt) {
   state.clock += dt;
   for (let k = scheduled.length - 1; k >= 0; k--) if (state.clock >= scheduled[k].at) { const s = scheduled.splice(k, 1)[0]; s.fn(); }
   updateNav(camera.position.x, camera.position.z);
+  const warp = state.warpT > 0 ? .35 : 1;
+  if (state.warpT > 0) state.warpT = Math.max(0, state.warpT - dt);
+  ui.hud.classList.toggle('warp', state.warpT > 0);
   spawnTick(dt);
   updatePlayer(dt);
-  updateHazards(dt);
+  updateHazards(dt * warp);
   updateShells(dt);
   updateSingularities(dt);
-  updateZombies(dt, true, camera.position);
+  updateZombies(dt * warp, true, camera.position);
   if (!state.between && !state.queue?.length && zombies.every(z => z.userData.dead) && state.waveTotal > 0 && state.mode === 'playing') waveCleared();
   if (!tutorialDone && state.moved && state.looked && state.clock > 4) { tutorialDone = true; store.set('tutorial', true); hint(''); bus.emit('tutorial:done', {}); }
   updateView(dt);
@@ -2178,8 +2182,9 @@ function update(dt) {
 function updateMenu(dt) {
   state.clock += dt;
   menuAngle += dt * .07;
-  camera.position.set(Math.sin(menuAngle) * 13, 3.2, 4 + Math.cos(menuAngle) * 13);
-  camera.lookAt(0, 1.4, -2);
+  const M = world.map.menu;
+  camera.position.set(M.orbit[0] + Math.sin(menuAngle) * M.r, M.y, M.orbit[1] + Math.cos(menuAngle) * M.r);
+  camera.lookAt(...M.look);
   updateZombies(dt, false);
 }
 
@@ -2761,6 +2766,7 @@ function refreshRecords() {
   $('#best-rank').textContent = records.rank ? '#' + records.rank.toLocaleString() : '—';
 }
 
+loadMap(store.get('map', 'street'));
 resetRun();
 resize();
 profile.loadout.primary = loadoutWeapons()[0];
@@ -2789,9 +2795,11 @@ const api = {
   saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
+  MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
+  offerPerks, nova, deathGuards, gameOver,
 };
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
-if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver };
+if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };
 bus.emit('app:ready', {});
 refreshRecords();
 populateMenu();
