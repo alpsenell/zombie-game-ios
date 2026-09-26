@@ -6,8 +6,14 @@ public class SharePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "SharePlugin"
     public let jsName = "Share"
     public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "share", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "shareImage", returnType: CAPPluginReturnPromise)
     ]
+
+    /// `Share.share` and `Share.shareImage` are the same call; `features/runcard.js` uses `shareImage`.
+    @objc func share(_ call: CAPPluginCall) {
+        shareImage(call)
+    }
 
     @objc func shareImage(_ call: CAPPluginCall) {
         guard let raw = call.getString("base64"), !raw.isEmpty else {

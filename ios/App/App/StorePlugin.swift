@@ -94,11 +94,19 @@ public class StorePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func restore(_ call: CAPPluginCall) {
         Task { @MainActor in
+            var syncError: Error?
             do {
                 try await AppStore.sync()
-                call.resolve(["owned": await self.ownedProductIDs()])
             } catch {
+                syncError = error
+            }
+            // Current entitlements are the source of truth in StoreKit 2; a failed sync
+            // (offline, cancelled sign-in, StoreKit test environment) must not hide them.
+            let owned = await self.ownedProductIDs()
+            if let error = syncError, owned.isEmpty {
                 call.reject(error.localizedDescription)
+            } else {
+                call.resolve(["owned": owned])
             }
         }
     }
