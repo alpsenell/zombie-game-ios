@@ -12,6 +12,8 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - `run:end` — `api.runSummary()`: `{ type, seed, difficultyId, score, wave, kills, heads, shots, hits, accuracy, bestCombo, time, bosses, slots, weapon }`
 - `purchase` `{ kind: 'iap' | 'scrap', productId | item, cost }`
 - `screen` `{ id }`
+- `player:death` `{ from, amount }` (before `run:end`; `from` is the attacker's position or `null`) · `tutorial:done` `{}`
+- Analytics: `api.analytics.track(type, payload)`; allowlisted events (`mission:complete`, `share`, `revive`, `season:*`, `coop:*`, `daily:*`, `ranked:*`) are forwarded automatically — see `ANALYTICS.md`. Never put names or free text in event data.
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
