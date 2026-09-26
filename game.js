@@ -2816,6 +2816,7 @@ const api = {
 };
 Object.assign(api, { netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
+if ($('#cm-league')) $('#menu .records').appendChild($('#cm-league'));
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };
 bus.emit('app:ready', {});
 refreshRecords();

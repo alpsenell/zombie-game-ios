@@ -20,7 +20,7 @@ function initScript({ now = T0, profile = null, nativeMock = true } = {}) {
     window.__calls = [];
     ${nativeMock ? `window.Capacitor = { PluginHeaders: [{ name: 'Achievements' }], nativePromise: (plugin, method, opts) => {
       window.__calls.push({ plugin, method, opts });
-      return Promise.resolve(method === 'load' ? { achievements: [{ id: 'deadzone.ach.wave_10', percent: 100, completed: true }] } : {});
+      return Promise.resolve(method === 'loadProgress' ? { achievements: [{ id: 'deadzone.ach.wave_10', percent: 100, completed: true }] } : {});
     } };` : ''}
     ${profile ? `if (!localStorage.getItem('deadzone.profile')) localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(profile))});` : ''}
   `;
@@ -293,7 +293,7 @@ async function overRun(size, name) {
   const land = await open({ now: T0 });
   await land.evaluate(() => document.querySelector('.pg-card .ghost')?.click());
   await shot(land, 'menu-landscape');
-  const menuFit = await land.evaluate(() => { const r = document.querySelector('#menu-extras').getBoundingClientRect(); return r.bottom <= innerHeight && r.height > 0; });
+  const menuFit = await land.evaluate(() => { const b = [...document.querySelectorAll('#menu-extras > button')]; return b.length > 0 && b.every(e => { const r = e.getBoundingClientRect(); return r.height > 0 && r.top >= 0 && r.bottom <= innerHeight; }); });
   check(menuFit, 'menu extras visible in landscape');
   await land.close();
 }

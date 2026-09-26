@@ -7,7 +7,7 @@ public class AchievementsPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterContro
     public let jsName = "Achievements"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "report", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "load", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "loadProgress", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "show", returnType: CAPPluginReturnPromise)
     ]
 
@@ -33,7 +33,7 @@ public class AchievementsPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterContro
         }
     }
 
-    @objc func load(_ call: CAPPluginCall) {
+    @objc func loadProgress(_ call: CAPPluginCall) {
         guard GKLocalPlayer.local.isAuthenticated else {
             call.reject("Not signed in to Game Center")
             return

@@ -170,7 +170,7 @@ function init(api) {
     if (!native.ok()) return;
     if (!loaded) {
       try {
-        const r = await native.call('load');
+        const r = await native.call('loadProgress');
         loaded = true;
         for (const x of r?.achievements || []) {
           const slug = String(x.id || '').replace(D.ACH_PREFIX, '');
