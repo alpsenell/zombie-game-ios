@@ -79,6 +79,7 @@
     .floater{position:absolute;left:0;top:0;font:900 16px var(--display);letter-spacing:.5px;color:#fff;opacity:0;will-change:transform,opacity;text-shadow:0 2px 3px #000}
     .floater.head{color:var(--amber);font-size:22px}
     .floater.pick{color:var(--green);font-size:15px}
+    .floater.armor{color:#9fb4c4;font-size:13px}
 
     #damage{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(205,27,20,.75));transition:opacity .15s}
     #lowhp{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,rgba(120,0,0,.8));transition:opacity .4s}
@@ -136,11 +137,36 @@
     @keyframes glow{50%{box-shadow:0 5px 0 #6f1f18,0 0 34px #ff4a2f88}}
     .ghost{border:1px solid var(--line);border-radius:12px;padding:15px 20px;background:#ffffff0d;font:800 13px var(--ui);letter-spacing:2px}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .diff{display:flex;gap:6px;flex-wrap:wrap}
+    .diff button{padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:#ffffff0a;font:800 11px var(--ui);letter-spacing:1.4px;color:var(--dim)}
+    .diff button.on{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 16px #e5483a55}
+    .diff button[data-diff=nightmare].on{background:#6d0f1c;border-color:#ff3a4a;box-shadow:0 0 18px #ff2a3a77}
+    .diff-desc{margin:7px 0 clamp(10px,3vh,18px);font:600 11px var(--ui);color:var(--dim);letter-spacing:.3px}
+    #menu .row .ghost{padding:15px 16px}
+    .board{width:min(94vw,540px);text-align:left}
+    .board h2{text-align:center}
+    .tabs{display:flex;gap:6px;margin-bottom:10px}
+    .tabs button{flex:1;padding:10px 6px;border-radius:9px;border:1px solid var(--line);background:#ffffff08;font:800 11px var(--ui);letter-spacing:1.5px;color:var(--dim)}
+    .tabs button.on{background:#ffffff1c;color:#fff;border-color:#ffffff40}
+    #board-status{min-height:16px;margin:0 0 8px;color:var(--dim);font:600 12px var(--ui);text-align:center}
+    #board-list{list-style:none;margin:0 0 14px;padding:0;max-height:44vh;overflow:auto;touch-action:pan-y}
+    #board-list li{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;font:700 13px var(--ui)}
+    #board-list li:nth-child(odd){background:#ffffff08}
+    #board-list li b{font:900 17px var(--display);color:var(--dim)}
+    #board-list li:nth-child(-n+3) b{color:var(--amber)}
+    #board-list li small{display:block;color:var(--dim);font-weight:600;font-size:10px;letter-spacing:1px;margin-top:2px}
+    #board-list li span:last-child{font:900 17px var(--display);letter-spacing:.5px}
+    #board-list li.me{background:#e5483a2e;outline:1px solid #e5483a88}
+    #board-list li.gap{display:block;text-align:center;color:var(--dim);background:none;padding:2px}
+    .board .row{justify-content:center}
+    #over .panel{width:min(94vw,560px)}
+    #over .row .cta{padding:16px 30px}
+    #over-rank{margin:-6px 0 16px;font:900 13px var(--ui);letter-spacing:2px;color:var(--amber)}
     .tips{margin-top:18px;color:var(--dim);font:600 11px/1.6 var(--ui);letter-spacing:.4px}
 
     .panel{width:min(94vw,440px);margin:auto;padding:24px;border-radius:18px;background:#081115ee;border:1px solid var(--line);box-shadow:0 20px 60px #000}
     .panel h2{margin:0 0 16px;font:900 32px var(--display);letter-spacing:2px}
-    #pausemenu,#settings,#over,#perks{background:#010406c4;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+    #pausemenu,#settings,#over,#perks,#board{background:#010406c4;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
     .stack{display:grid;gap:10px}
     #settings .panel{width:min(94vw,680px)}
     .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));column-gap:28px}
@@ -171,7 +197,7 @@
     .perk span{color:#b8c6c6;font:600 12px/1.4 var(--ui)}
     .perk.rare{border-color:#ffc34d88;box-shadow:0 0 22px #ffc34d33}
     .perk.rare b{color:var(--amber)}
-    @media (max-height:430px){.panel{padding:16px}.panel h2{font-size:26px;margin-bottom:8px}#over h2{font-size:38px}.stats b{font-size:18px}.opt{padding:7px 0}.perk{padding:12px 10px}.perk .ico{font-size:26px;margin-bottom:6px}}
+    @media (max-height:430px){.tips{display:none}.stats{margin-bottom:10px}.stats div{padding:6px}#over .sub{margin-bottom:8px}#newbest{margin-bottom:8px}#over-rank{margin:-2px 0 10px}.rec{padding:6px 12px}.rec b{font-size:18px}.panel{padding:16px}.panel h2{font-size:26px;margin-bottom:8px}#over h2{font-size:38px}.stats b{font-size:18px}.opt{padding:7px 0}.perk{padding:12px 10px}.perk .ico{font-size:26px;margin-bottom:6px}}
     @media (orientation:portrait){#menu{background:linear-gradient(0deg,#020608f5 0%,#02060899 60%,#02060833 100%)}#menu .wrap{justify-self:center;text-align:center;margin:0}.records{justify-content:center}.row{justify-content:center}#stick-zone{width:50%;top:45%}#hint{bottom:auto;top:36%;white-space:normal;width:max-content;max-width:86vw;text-align:center}#weapon{right:max(20px,var(--sr));bottom:calc(max(12px,var(--sb)) + 230px)}}
   </style>
 </head>
@@ -219,8 +245,11 @@
       <div class="records">
         <div class="rec"><b id="best-score">0</b><small>BEST SCORE</small></div>
         <div class="rec"><b id="best-wave">0</b><small>BEST WAVE</small></div>
+        <div class="rec"><b id="best-rank">—</b><small>GLOBAL RANK</small></div>
       </div>
-      <div class="row"><button id="start" class="cta">DEPLOY</button><button class="ghost" data-open="settings">SETTINGS</button></div>
+      <div class="diff" id="diff"><button data-diff="recruit">RECRUIT</button><button data-diff="survivor">SURVIVOR</button><button data-diff="veteran">VETERAN</button><button data-diff="nightmare">NIGHTMARE</button></div>
+      <div class="diff-desc" id="diff-desc"></div>
+      <div class="row"><button id="start" class="cta">DEPLOY</button><button class="ghost" data-open="board">🏆 RANKS</button><button class="ghost" data-open="settings">SETTINGS</button></div>
       <div class="tips">Survive endless waves. Pick a perk after every wave.<br>Every fifth wave, something big comes.</div>
     </div>
   </section>
@@ -248,6 +277,16 @@
     <div><h2 id="perk-title">WAVE CLEARED</h2><div class="sub">CHOOSE AN UPGRADE</div><div id="perk-list"></div></div>
   </section>
 
+  <section id="board" class="screen hidden">
+    <div class="panel board">
+      <h2>LEADERBOARD</h2>
+      <div class="tabs"><button data-tab="global" class="on">GLOBAL</button><button data-tab="friends">FRIENDS</button><button data-tab="local">MY RUNS</button></div>
+      <div id="board-status"></div>
+      <ol id="board-list"></ol>
+      <div class="row"><button class="ghost hidden" id="gc-open">GAME CENTER</button><button class="cta" id="board-close">BACK</button></div>
+    </div>
+  </section>
+
   <section id="over" class="screen hidden">
     <div class="panel">
       <h2>YOU DIED</h2>
@@ -261,7 +300,8 @@
         <div><b id="st-combo">0</b><small>BEST STREAK</small></div>
         <div><b id="st-time">0:00</b><small>SURVIVED</small></div>
       </div>
-      <div class="row" style="justify-content:center"><button class="cta" id="again">REDEPLOY</button><button class="ghost" id="to-menu">MENU</button></div>
+      <div id="over-rank"></div>
+      <div class="row" style="justify-content:center"><button class="cta" id="again">REDEPLOY</button><button class="ghost" data-open="board">🏆 RANKS</button><button class="ghost" id="to-menu">MENU</button></div>
     </div>
   </section>
 

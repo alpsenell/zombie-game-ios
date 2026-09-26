@@ -2,7 +2,7 @@ import * as THREE from './vendor/three.module.js';
 
 const $ = s => document.querySelector(s);
 const ui = {
-  hud: $('#hud'), menu: $('#menu'), pauseMenu: $('#pausemenu'), settings: $('#settings'), perks: $('#perks'), over: $('#over'),
+  hud: $('#hud'), menu: $('#menu'), pauseMenu: $('#pausemenu'), settings: $('#settings'), perks: $('#perks'), over: $('#over'), board: $('#board'),
   hpNum: $('#hp-num'), hpFill: $('#hp-fill'), hpLag: $('#hp-lag'), waveNum: $('#wave-num'), alive: $('#alive'), waveFill: $('#wave-fill'),
   score: $('#score'), combo: $('#combo'), radar: $('#radar'), bossBar: $('#bossbar'), bossName: $('#boss-name'), bossFill: $('#boss-fill'),
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
@@ -15,8 +15,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('deadzone.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('deadzone.' + k, JSON.stringify(v)); } catch {} },
 };
-const settings = Object.assign({ sensitivity: 1, aimAssist: true, autoFire: false, invert: false, sound: true, haptics: true }, store.get('settings', {}));
-const records = Object.assign({ score: 0, wave: 0 }, store.get('records', {}));
+const settings = Object.assign({ sensitivity: 1, aimAssist: true, autoFire: false, invert: false, sound: true, haptics: true, difficulty: 'survivor' }, store.get('settings', {}));
+const records = Object.assign({ score: 0, wave: 0, rank: 0 }, store.get('records', {}));
 let tutorialDone = store.get('tutorial', false);
 
 const canvas = $('#game');
@@ -365,6 +365,57 @@ function blocked(x, z, r = .32) {
   return false;
 }
 
+const NAV = { minX: -42, minZ: -42, w: 85, h: 86, cell: -1, t: 0 };
+NAV.solid = new Uint8Array(NAV.w * NAV.h);
+NAV.dist = new Int32Array(NAV.w * NAV.h).fill(-1);
+NAV.queue = new Int32Array(NAV.w * NAV.h);
+for (let j = 0; j < NAV.h; j++) for (let i = 0; i < NAV.w; i++) NAV.solid[j * NAV.w + i] = blocked(NAV.minX + i, NAV.minZ + j, .5) ? 1 : 0;
+function navCell(x, z) {
+  const i = Math.round(x - NAV.minX), j = Math.round(z - NAV.minZ);
+  return i < 0 || j < 0 || i >= NAV.w || j >= NAV.h ? -1 : j * NAV.w + i;
+}
+function updateNav(x, z) {
+  const start = navCell(x, z);
+  if (start < 0 || start === NAV.cell) return;
+  NAV.cell = start;
+  const { w, h, solid, dist, queue } = NAV;
+  dist.fill(-1);
+  dist[start] = 0;
+  let head = 0, tail = 0;
+  queue[tail++] = start;
+  while (head < tail) {
+    const c = queue[head++], ci = c % w, cj = (c - ci) / w, nd = dist[c] + 1;
+    if (ci > 0 && !solid[c - 1] && dist[c - 1] < 0) { dist[c - 1] = nd; queue[tail++] = c - 1; }
+    if (ci < w - 1 && !solid[c + 1] && dist[c + 1] < 0) { dist[c + 1] = nd; queue[tail++] = c + 1; }
+    if (cj > 0 && !solid[c - w] && dist[c - w] < 0) { dist[c - w] = nd; queue[tail++] = c - w; }
+    if (cj < h - 1 && !solid[c + w] && dist[c + w] < 0) { dist[c + w] = nd; queue[tail++] = c + w; }
+  }
+}
+function navStep(x, z) {
+  const c = navCell(x, z);
+  if (c < 0) return null;
+  const { w, dist } = NAV;
+  let best = -1, bd = dist[c] < 0 ? 1e9 : dist[c];
+  const ci = c % w;
+  for (const [di, dj] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const ni = ci + di;
+    if (ni < 0 || ni >= w) continue;
+    const n = c + dj * w + di;
+    if (n < 0 || n >= dist.length || dist[n] < 0) continue;
+    if (di && dj && (dist[c + di] < 0 || dist[c + dj * w] < 0)) continue;
+    const nd = dist[n] + (di && dj ? .4 : 0);
+    if (nd < bd) { bd = nd; best = n; }
+  }
+  if (best < 0) return null;
+  const bi = best % w;
+  return { x: NAV.minX + bi, z: NAV.minZ + (best - bi) / w };
+}
+function lineClear(x0, z0, x1, z1, r = .3) {
+  const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / .7);
+  for (let k = 1; k < n; k++) if (blocked(x0 + (x1 - x0) * k / n, z0 + (z1 - z0) * k / n, r)) return false;
+  return true;
+}
+
 const sfx = (() => {
   let ctx, master, noiseBuf;
   function init() {
@@ -422,6 +473,8 @@ const sfx = (() => {
     swap() { noise(.1, 2500, .15, 'highpass', 1); },
     pickup() { tone(660, .08, 'triangle', .1); setTimeout(() => tone(990, .12, 'triangle', .1), 70); },
     throw() { noise(.2, 900, .15, 'bandpass', 1, 2400); },
+    spit() { noise(.25, 700, .35, 'bandpass', 3, 1800); tone(220, .2, 'sawtooth', .06, 90); },
+    sizzle() { noise(.2, 3200, .12, 'highpass', 1); },
     boom() { noise(1.2, 900, 1.1, 'lowpass', .5, 60); tone(55, .8, 'sine', .5, 28); },
     wave() { tone(110, 1.2, 'sawtooth', .12, 104, .2); tone(165, 1.2, 'sawtooth', .08, 160, .2); },
     clear() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, .25, 'triangle', .09), i * 90)); },
@@ -532,11 +585,31 @@ const blastLight = new THREE.PointLight(0xff8a30, 0, 22, 2); scene.add(blastLigh
 const muzzleWorld = new THREE.PointLight(0xffb060, 0, 9, 2); camera.add(muzzleWorld); muzzleWorld.position.set(.3, -.1, -1);
 
 const ZT = {
-  walker: { hp: 80, speed: 1.15, dmg: 7, scale: 1, bulk: 1, score: 100, lean: .22, stride: 6.5, eye: 0xffb23f, drop: .12 },
-  runner: { hp: 48, speed: 3.1, dmg: 5, scale: .94, bulk: .85, score: 150, lean: .6, stride: 11, eye: 0xff2a1a, drop: .12 },
-  brute: { hp: 420, speed: .9, dmg: 17, scale: 1.4, bulk: 1.35, score: 450, lean: .12, stride: 4.4, eye: 0x7dff5a, drop: .55 },
-  boss: { hp: 2600, speed: 1.15, dmg: 30, scale: 2.3, bulk: 1.3, score: 3000, lean: .18, stride: 3.6, eye: 0xd35bff, drop: 1 },
+  walker: { name: 'WALKER', hp: 80, speed: 1.15, dmg: 7, scale: 1, bulk: 1, score: 100, lean: .22, stride: 6.5, eye: 0xffb23f, drop: .12 },
+  runner: { name: 'RUNNER', hp: 48, speed: 3.1, dmg: 5, scale: .94, bulk: .85, score: 150, lean: .6, stride: 11, eye: 0xff2a1a, drop: .12, intro: 'Fast and fragile' },
+  crawler: { name: 'CRAWLER', hp: 60, speed: 1.8, dmg: 6, scale: 1, bulk: 1, score: 175, lean: 1.35, stride: 7, eye: 0xffe14a, drop: .15, crawl: true, aimY: .4, intro: 'Low to the ground — aim down' },
+  spitter: { name: 'SPITTER', hp: 70, speed: 1.3, dmg: 6, scale: 1.02, bulk: .9, score: 250, lean: .35, stride: 6, eye: 0x7dff3a, drop: .25, ranged: true, sacs: 3, skin: 0x7f9a62, intro: 'Spits acid from range — keep moving' },
+  bloater: { name: 'BLOATER', hp: 140, speed: .95, dmg: 0, scale: 1.1, bulk: 1.65, score: 300, lean: .05, stride: 4.5, eye: 0xff8a1a, drop: .3, explode: true, sacs: 7, skin: 0x9a8a6a, intro: 'Explodes — shoot it from a distance' },
+  riot: { name: 'RIOT', hp: 150, speed: 1.2, dmg: 10, scale: 1.05, bulk: 1.1, score: 350, lean: .15, stride: 6, eye: 0x6ad8ff, drop: .3, armor: .3, helmet: true, intro: 'Armored body — go for the head' },
+  brute: { name: 'BRUTE', hp: 420, speed: .9, dmg: 17, scale: 1.4, bulk: 1.35, score: 450, lean: .12, stride: 4.4, eye: 0x7dff5a, drop: .55, spikes: 3, intro: 'Tough as nails — save a grenade' },
+  abomination: { boss: true, name: 'ABOMINATION', hp: 2600, speed: 1.15, dmg: 30, scale: 2.3, bulk: 1.3, score: 3000, lean: .18, stride: 3.6, eye: 0xd35bff, drop: 1, spikes: 5, slam: true, intro: 'Ground slam — back off when the ring appears' },
+  butcher: { boss: true, name: 'THE BUTCHER', hp: 2400, speed: 1.35, dmg: 34, scale: 2.1, bulk: 1.2, score: 3500, lean: .25, stride: 4.2, eye: 0xff2a1a, drop: 1, charge: true, cleaver: true, cloth: 0x6a1410, intro: 'Charges — sidestep, then punish while stunned' },
+  plague: { boss: true, name: 'PLAGUE KING', hp: 2800, speed: 1, dmg: 26, scale: 2.2, bulk: 1.25, score: 4000, lean: .2, stride: 3.4, eye: 0x7dff3a, drop: 1, ranged: true, volley: 3, summon: true, crown: true, sacs: 8, skin: 0x6f8f4a, intro: 'Spits acid volleys and raises the dead' },
+  goliath: { boss: true, name: 'GOLIATH', hp: 3800, speed: 1.1, dmg: 38, scale: 2.7, bulk: 1.35, score: 6000, lean: .15, stride: 3.2, eye: 0xffffff, drop: 1, slam: true, charge: true, armor: .6, helmet: true, spikes: 7, intro: 'Armored, slams and charges — aim for the head' },
 };
+const BOSS_ORDER = ['abomination', 'butcher', 'plague', 'goliath'];
+const DIFFICULTIES = {
+  recruit: { name: 'RECRUIT', desc: 'Weaker, slower infected. Score x0.5', hp: .7, dmg: .55, speed: .9, count: .8, elite: 0, score: .5, drops: 1.3, shift: 0 },
+  survivor: { name: 'SURVIVOR', desc: 'The intended experience. Score x1', hp: 1, dmg: 1, speed: 1, count: 1, elite: .02, score: 1, drops: 1, shift: 0 },
+  veteran: { name: 'VETERAN', desc: 'Bigger hordes, more elites. Score x1.75', hp: 1.3, dmg: 1.35, speed: 1.08, count: 1.2, elite: .06, score: 1.75, drops: .85, shift: 1 },
+  nightmare: { name: 'NIGHTMARE', desc: 'Brutal, scarce supplies. Score x3', hp: 1.65, dmg: 1.8, speed: 1.15, count: 1.4, elite: .12, score: 3, drops: .6, shift: 2 },
+};
+const MODS = {
+  horde: { name: 'HORDE', desc: 'TWICE THE DEAD, SLIGHTLY WEAKER', count: 1.7, hp: .75, score: 1.2 },
+  bloodmoon: { name: 'BLOOD MOON', desc: 'THEY MOVE FASTER', speed: 1.25, score: 1.3, fog: 0x2a0b0b },
+  blackout: { name: 'BLACKOUT', desc: 'VISIBILITY IS LOW', fogDensity: .065, score: 1.3, fog: 0x05080a },
+};
+const diff = () => DIFFICULTIES[settings.difficulty] || DIFFICULTIES.survivor;
 const SKINS = [0x7f8f76, 0x8d9a82, 0x6e7e6a, 0x9a9178, 0x7a8a86];
 const CLOTHES = [0x1e292a, 0x2c2a3a, 0x3a3224, 0x4a1f1c, 0x24323c, 0x3d4a2a];
 const PANTS = [0x1a2226, 0x2a241c, 0x1c1e2a];
@@ -559,6 +632,12 @@ const ZG = {
   rib: new THREE.BoxGeometry(.13, .018, .02),
   strip: new THREE.BoxGeometry(.1, .26, .01),
   spike: new THREE.ConeGeometry(.06, .3, 5),
+  sac: lumpy(new THREE.IcosahedronGeometry(.09, 1), .3),
+  helmet: new THREE.SphereGeometry(.235, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+  visor: new THREE.BoxGeometry(.4, .05, .12),
+  vest: new THREE.BoxGeometry(.62, .52, .38),
+  pad: new THREE.BoxGeometry(.2, .1, .22),
+  blade: new THREE.BoxGeometry(.03, .38, .22),
 };
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xff5540 });
 const zombieMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, flatShading: true });
@@ -566,10 +645,11 @@ const pick = a => a[(Math.random() * a.length) | 0];
 
 const zombieVariants = new Map();
 function zombieVariant(kind) {
+  const T = ZT[kind];
   const list = zombieVariants.get(kind) || [];
   zombieVariants.set(kind, list);
-  if (list.length >= 4) return pick(list);
-  const skin = pick(SKINS), cloth = pick(CLOTHES), pants = pick(PANTS), blood = 0x5a0a08, bone = 0xd9d0b4;
+  if (list.length >= (T.boss ? 1 : 4)) return pick(list);
+  const skin = T.skin ?? pick(SKINS), cloth = T.cloth ?? pick(CLOTHES), pants = pick(PANTS), blood = 0x5a0a08, bone = 0xd9d0b4, armor = 0x2a3440;
   const piece = (geo, color, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => ({ geo, color, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)) });
   const spine = [
     piece(ZG.belly, Math.random() > .5 ? skin : cloth, 0, .12, 0),
@@ -578,35 +658,50 @@ function zombieVariant(kind) {
   ];
   if (Math.random() > .4) for (let i = 0; i < 3; i++) spine.push(piece(ZG.rib, bone, .1, .3 + i * .04, .17));
   for (let i = 0; i < 3; i++) spine.push(piece(ZG.strip, cloth, (Math.random() - .5) * .4, .1, .16, .1, 0, (Math.random() - .5) * .5));
-  const spikes = kind === 'boss' ? 5 : kind === 'brute' ? 3 : 0;
-  for (let i = 0; i < spikes; i++) spine.push(piece(ZG.spike, bone, (i - (spikes - 1) / 2) * .12, .55, -.18, -.6));
+  const spikes = T.spikes || 0;
+  for (let i = 0; i < spikes; i++) spine.push(piece(ZG.spike, bone, (i - (spikes - 1) / 2) * .1, .55, -.18, -.6));
+  if (T.helmet) spine.push(piece(ZG.vest, armor, 0, .4, 0));
   const head = [piece(ZG.head, skin, 0, .19, 0, 0, 0, 0, 1, 1.12, 1.05)];
-  if (Math.random() > .35) head.push(piece(ZG.hair, pick(HAIR), 0, .27, -.03, 0, 0, 0, 1, .55, 1));
+  if (T.helmet) head.push(piece(ZG.helmet, armor, 0, .22, -.01), piece(ZG.visor, 0x0a0f14, 0, .27, .17));
+  else if (Math.random() > .35 && !T.crown) head.push(piece(ZG.hair, pick(HAIR), 0, .27, -.03, 0, 0, 0, 1, .55, 1));
+  if (T.crown) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; head.push(piece(ZG.spike, bone, Math.sin(a) * .14, .42, Math.cos(a) * .14, Math.cos(a) * .3, 0, -Math.sin(a) * .3)); }
+  const sacs = [];
+  for (let i = 0; i < (T.sacs || 0); i++) {
+    const a = (i / (T.sacs || 1)) * Math.PI * 2;
+    sacs.push(T.explode
+      ? piece(ZG.sac, 0, Math.sin(a) * .26, .15 + (i % 3) * .14, Math.cos(a) * .17, 0, 0, 0, 1.2, 1.2, 1.2)
+      : piece(ZG.sac, 0, (i - (T.sacs - 1) / 2) * .13, .35 + (i % 2) * .12, -.17));
+  }
   const arm = () => Math.random() > .5 ? cloth : skin;
   const shin = () => Math.random() > .7 ? skin : pants;
+  const upper = () => mergeGeos([piece(ZG.upper, T.helmet ? armor : arm(), 0, -.16, 0), ...(T.helmet ? [piece(ZG.pad, armor, 0, -.02, 0)] : [])]);
   const v = {
     pelvis: mergeGeos([piece(ZG.pelvis, pants, 0, 0, 0)]),
     thigh: mergeGeos([piece(ZG.thigh, pants, 0, -.2, 0)]),
     shinL: mergeGeos([piece(ZG.shin, shin(), 0, -.2, 0), piece(ZG.foot, 0x15191b, 0, -.42, .05)]),
     shinR: mergeGeos([piece(ZG.shin, shin(), 0, -.2, 0), piece(ZG.foot, 0x15191b, 0, -.42, .05)]),
     spine: mergeGeos(spine),
+    sacs: sacs.length ? mergeGeos(sacs) : null,
     head: mergeGeos(head),
     eyes: mergeGeos([piece(ZG.eye, 0, -.07, .21, .17), piece(ZG.eye, 0, .07, .21, .17)]),
-    jaw: mergeGeos([piece(ZG.jaw, skin, 0, -.03, .06)]),
-    upperL: mergeGeos([piece(ZG.upper, arm(), 0, -.16, 0)]),
-    upperR: mergeGeos([piece(ZG.upper, arm(), 0, -.16, 0)]),
-    fore: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01)]),
+    jaw: mergeGeos([piece(ZG.jaw, T.ranged ? 0x5f8a3a : skin, 0, -.03, .06)]),
+    upperL: upper(),
+    upperR: upper(),
+    foreL: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01)]),
+    foreR: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01), ...(T.cleaver ? [piece(ZG.blade, 0x9aa4a8, 0, -.5, .12), piece(ZG.blade, blood, 0, -.62, .12, 0, 0, 0, 1.1, .3, 1.02)] : [])]),
   };
   list.push(v);
   return v;
 }
 
-function makeZombie(kind, x, z, rise = true) {
-  const T = ZT[kind], V = zombieVariant(kind);
-  const eyeMat = mat(T.eye, { emissive: T.eye, emissiveIntensity: 5 });
+function makeZombie(kind, x, z, rise = true, elite = false) {
+  const T = ZT[kind], V = zombieVariant(kind), D = diff(), M = MODS[state.mod] || {};
+  const glow = elite ? 0x9ff4ff : T.eye;
+  const eyeMat = mat(glow, { emissive: glow, emissiveIntensity: 5 });
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
-  body.scale.set(T.scale * T.bulk, T.scale, T.scale * T.bulk);
+  const sc = T.scale * (elite ? 1.12 : 1);
+  body.scale.set(sc * T.bulk, sc, sc * T.bulk);
   const P = {}, meshes = [];
   const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
   const part = (geo, parent, shadow, material = zombieMat) => {
@@ -614,9 +709,9 @@ function makeZombie(kind, x, z, rise = true) {
     m.castShadow = shadow; m.userData.zroot = root; m.userData.base = material;
     parent.add(m); meshes.push(m); return m;
   };
-  P.hips = joint(body, 0, .92, 0);
+  P.hips = joint(body, 0, T.crawl ? .3 : .92, 0);
   part(V.pelvis, P.hips, true);
-  for (const s of [-1, 1]) {
+  if (!T.crawl) for (const s of [-1, 1]) {
     const leg = joint(P.hips, s * .13, -.06, 0), knee = joint(leg, 0, -.42, 0);
     part(V.thigh, leg, true);
     part(s < 0 ? V.shinL : V.shinR, knee, false);
@@ -624,6 +719,7 @@ function makeZombie(kind, x, z, rise = true) {
   }
   P.spine = joint(P.hips, 0, .1, 0); P.spine.rotation.x = T.lean;
   part(V.spine, P.spine, true);
+  if (V.sacs) part(V.sacs, P.spine, false, eyeMat).userData.glow = true;
   P.head = joint(P.spine, 0, .7, .02);
   part(V.head, P.head, true).userData.head = true;
   const eyes = part(V.eyes, P.head, false, eyeMat); eyes.userData.head = true; eyes.userData.glow = true;
@@ -632,16 +728,25 @@ function makeZombie(kind, x, z, rise = true) {
   for (const s of [-1, 1]) {
     const sh = joint(P.spine, s * .33, .6, 0), el = joint(sh, 0, -.34, 0);
     part(s < 0 ? V.upperL : V.upperR, sh, false);
-    part(V.fore, el, false);
+    part(s < 0 ? V.foreL : V.foreR, el, false);
     P[s < 0 ? 'armL' : 'armR'] = sh; P[s < 0 ? 'elbowL' : 'elbowR'] = el;
   }
-  const hp = T.hp * (1 + (state.wave - 1) * .14);
+  if (elite) {
+    const aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x6fe3ff, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    aura.position.y = (T.crawl ? .5 : 1.2) * sc; aura.scale.setScalar(2.4 * sc);
+    root.add(aura);
+  }
+  const bossTier = T.boss ? 1 + Math.floor((state.wave - 1) / 20) * .6 : 1;
+  const hp = T.hp * (1 + (state.wave - 1) * (T.boss ? .08 : .12)) * D.hp * (M.hp ?? 1) * (elite ? 2.2 : 1) * bossTier;
+  const now = state.clock;
   root.userData = {
-    zombie: true, kind, T, P, meshes, hp, maxHp: hp, speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * (.9 + Math.random() * .2),
+    zombie: true, kind, T, P, meshes, hp, maxHp: hp, elite, sc,
+    speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + Math.random() * .2),
     walk: Math.random() * 6, phase: Math.random() * 6, flash: 0, nextAttack: 0, swing: 0, dead: false, deathT: 0, rise: rise ? 1 : 0,
-    side: Math.random() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * T.scale * T.bulk, groanAt: Math.random() * 5,
+    side: Math.random() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * sc * T.bulk, groanAt: Math.random() * 5,
+    nextSpit: now + 2 + Math.random() * 2, spitWind: 0, nextSlam: now + 3, slamT: 0, nextCharge: now + 2, cs: '', ct: 0, nextSummon: now + 8, enraged: false,
   };
-  root.position.set(x, rise ? -1.9 * T.scale : 0, z);
+  root.position.set(x, rise ? -1.9 * sc : 0, z);
   scene.add(root);
   zombies.push(root);
   return root;
@@ -659,23 +764,38 @@ function animateZombie(z, dt) {
   if (u.dead) {
     u.deathT += dt;
     const k = Math.min(1, u.deathT / .55), e = 1 - (1 - k) * (1 - k);
-    z.children[0].rotation.x = -e * 1.5;
+    if (T.crawl) z.children[0].rotation.z = e * .4;
+    else {
+      z.children[0].rotation.x = -e * 1.5;
+      P.legL.rotation.x = P.legR.rotation.x = 0;
+    }
     P.armL.rotation.x = P.armR.rotation.x = -2.6 * e;
-    P.legL.rotation.x = P.legR.rotation.x = 0;
     if (u.deathT > 2.8) z.position.y -= dt * .45;
     return u.deathT > 5;
   }
   const s = Math.sin(u.walk), c = Math.cos(u.walk), amp = u.moving ? 1 : .25;
+  P.head.rotation.z = Math.sin(state.clock * 1.3 + u.phase) * .28;
+  P.head.rotation.x = Math.sin(state.clock * .9 + u.phase) * .12;
+  P.jaw.rotation.x = .15 + Math.abs(Math.sin(state.clock * 3 + u.phase)) * .35;
+  if (T.crawl) {
+    P.head.rotation.x = -1.15;
+    P.armL.rotation.x = -2.1 + s * .8; P.armR.rotation.x = -2.1 - s * .8;
+    P.armL.rotation.z = -.35; P.armR.rotation.z = .35;
+    P.elbowL.rotation.x = P.elbowR.rotation.x = -.5;
+    P.hips.position.y = .3 + Math.abs(s) * .05 * amp;
+    P.hips.rotation.y = s * .2 * amp;
+    return false;
+  }
   P.legL.rotation.x = s * .55 * amp; P.legR.rotation.x = -s * .55 * amp;
   P.kneeL.rotation.x = Math.max(0, c) * .9 * amp; P.kneeR.rotation.x = Math.max(0, -c) * .9 * amp;
   P.hips.position.y = .92 + Math.abs(s) * .04 * amp;
   P.hips.rotation.y = s * .12 * amp;
-  P.head.rotation.z = Math.sin(state.clock * 1.3 + u.phase) * .28;
-  P.head.rotation.x = Math.sin(state.clock * .9 + u.phase) * .12;
-  P.jaw.rotation.x = .15 + Math.abs(Math.sin(state.clock * 3 + u.phase)) * .35;
   let armX = -1.3, armSway = Math.sin(u.walk * .5 + u.phase) * .18;
-  if (u.kind === 'runner') { armX = -.4; armSway = s * 1.1; }
+  if (u.kind === 'runner' || u.cs === 'run') { armX = -.4; armSway = s * 1.1; }
   if (u.swing > 0) { const k = u.swing / .45; armX = -1.3 - Math.sin(k * Math.PI) * 1.4; }
+  if (u.slamT > 0 || u.cs === 'wind') { armX = -2.9; armSway = 0; }
+  if (u.spitWind > 0) { P.head.rotation.x = -.7 + (1 - u.spitWind / .5) * .9; P.jaw.rotation.x = .7; }
+  if (u.cs === 'stun') { P.head.rotation.x = .6; armX = -.2; }
   P.armL.rotation.x = armX + armSway; P.armR.rotation.x = armX - armSway;
   P.armL.rotation.z = -.15; P.armR.rotation.z = .15;
   P.elbowL.rotation.x = P.elbowR.rotation.x = u.kind === 'runner' ? -.9 : -.25;
@@ -745,8 +865,14 @@ function resetRun() {
   Object.assign(player, { hp: 100, lagHp: 100, nades: 2, weapon: 0, reloading: 0, swapT: 0, nextShot: 0, lastHurt: -9, unlocked: 1, pumpT: 0, lastBeat: 0,
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
-    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false });
+    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), seen: new Set(), queue: [], difficulty: settings.difficulty });
   scheduled.length = 0;
+  applyMod(null);
+  for (const p of projectiles) scene.remove(p.mesh);
+  projectiles.length = 0;
+  for (const h of hazards) h.mesh.visible = false;
+  hazards.length = 0;
+  slamRing.visible = false;
   ui.bossBar.classList.add('hidden');
   ui.swap.classList.add('hidden');
   ui.lowhp.classList.remove('on');
@@ -777,20 +903,39 @@ function startGame() {
 }
 
 function waveComposition(w) {
+  const D = diff(), M = MODS[state.mod] || {}, e = w + D.shift, bossWave = w % 5 === 0;
+  const weights = {
+    walker: 10,
+    runner: e >= 2 ? Math.min(6, (e - 1) * 1.2) : 0,
+    crawler: e >= 3 ? Math.min(4, e - 2) : 0,
+    spitter: e >= 4 ? Math.min(3, (e - 3) * .6) : 0,
+    bloater: e >= 6 ? Math.min(3, (e - 5) * .6) : 0,
+    riot: e >= 7 ? Math.min(3, (e - 6) * .5) : 0,
+    brute: e >= 8 ? Math.min(2.5, (e - 7) * .4) : 0,
+  };
+  const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+  const total = Math.min(70, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * (bossWave ? .6 : 1)));
+  const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 : 0;
   const list = [];
-  const total = 4 + w * 2 + Math.floor(w * w * .12);
   for (let i = 0; i < total; i++) {
-    const r = Math.random();
-    if (w >= 4 && r < Math.min(.18, (w - 3) * .04)) list.push('brute');
-    else if (w >= 2 && r < Math.min(.4, (w - 1) * .08) + .18) list.push('runner');
-    else list.push('walker');
+    let r = Math.random() * sum, kind = 'walker';
+    for (const k in weights) { r -= weights[k]; if (r <= 0) { kind = k; break; } }
+    list.push({ kind, elite: Math.random() < eliteChance });
   }
-  if (w % 5 === 0) list.splice(Math.floor(list.length / 3), 0, 'boss');
+  if (bossWave) list.splice(Math.floor(list.length / 3), 0, { kind: BOSS_ORDER[(w / 5 - 1) % BOSS_ORDER.length], elite: false });
   return list;
+}
+
+function applyMod(id) {
+  const M = MODS[id] || {};
+  scene.fog.color.setHex(M.fog ?? 0x0b1820);
+  scene.fog.density = M.fogDensity ?? .03;
 }
 
 function nextWave() {
   state.wave++;
+  state.mod = state.wave >= 6 && state.wave % 5 !== 0 && Math.random() < .35 ? pick(Object.keys(MODS)) : null;
+  applyMod(state.mod);
   state.queue = waveComposition(state.wave);
   state.waveTotal = state.queue.length;
   state.waveDone = 0;
@@ -801,8 +946,8 @@ function nextWave() {
     ui.swap.classList.remove('hidden');
     schedule(2.2, () => toast('NEW WEAPON: R-870 SHOTGUN — TAP ⇄ TO SWAP', 3));
   }
-  const boss = state.wave % 5 === 0;
-  message('WAVE ' + state.wave, boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.2);
+  const boss = state.wave % 5 === 0, M = MODS[state.mod];
+  message('WAVE ' + state.wave, M ? M.name + ' — ' + M.desc : boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.4);
   sfx.wave();
   haptic('MEDIUM');
 }
@@ -814,6 +959,8 @@ function findSpawn(minD = 16, maxD = 32) {
     const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
     const x = camera.position.x + Math.cos(a) * d, z = camera.position.z + Math.sin(a) * d;
     if (blocked(x, z, 1)) continue;
+    const c = navCell(x, z);
+    if (c < 0 || NAV.dist[c] < 0 || NAV.dist[c] > d * 1.8) continue;
     const facing = (Math.cos(a) * fwdX + Math.sin(a) * fwdZ);
     if (!best || facing > best.facing) best = { x, z, facing };
     if (facing > .2 && Math.random() > .4) break;
@@ -826,63 +973,76 @@ function spawnTick(dt) {
   state.spawnGap -= dt;
   const alive = zombies.filter(z => !z.userData.dead).length;
   if (state.spawnGap > 0 || alive >= Math.min(5 + state.wave, 16)) return;
-  const kind = state.queue.shift();
-  const p = findSpawn();
-  const z = makeZombie(kind, p.x, p.z);
-  state.spawnGap = kind === 'boss' ? 1.5 : Math.max(.35, 1.1 - state.wave * .06);
-  if (kind === 'boss') {
+  const { kind, elite } = state.queue.shift();
+  const T = ZT[kind];
+  const p = findSpawn(T.boss ? 20 : 16);
+  const z = makeZombie(kind, p.x, p.z, true, elite);
+  state.spawnGap = T.boss ? 1.5 : Math.max(.35, 1.1 - state.wave * .06);
+  if (!state.seen.has(kind)) {
+    state.seen.add(kind);
+    if (T.intro && !T.boss) schedule(.6, () => toast('NEW THREAT: ' + T.name + ' — ' + T.intro, 3.2));
+  }
+  if (T.boss) {
     state.boss = z;
     ui.bossBar.classList.remove('hidden');
-    ui.bossName.textContent = ['ABOMINATION', 'THE BUTCHER', 'GOLIATH', 'PLAGUE KING'][Math.floor(state.wave / 5 - 1) % 4];
+    ui.bossName.textContent = T.name;
+    message(T.name, T.intro.toUpperCase(), 3);
     sfx.roar(); look.shake = .6; haptic('HEAVY');
   }
 }
 
-function hurtPlayer(amount, from) {
+function hurtPlayer(amount, from, quiet) {
   if (state.mode !== 'playing') return;
-  amount *= stats.armor;
+  amount *= stats.armor * diff().dmg;
   player.hp = Math.max(0, player.hp - amount);
   player.lastHurt = state.clock;
   look.shake = Math.min(.5, look.shake + amount * .02);
   ui.damage.style.opacity = Math.min(1, .35 + amount / 20);
   setTimeout(() => (ui.damage.style.opacity = 0), 140);
-  sfx.hurt();
-  haptic(amount > 12 ? 'HEAVY' : 'MEDIUM');
+  if (!quiet) { sfx.hurt(); haptic(amount > 12 ? 'HEAVY' : 'MEDIUM'); }
   if (from) damageIndicator(from);
   if (player.hp <= 0) {
     if (stats.secondWind) {
       stats.secondWind = false;
       player.hp = stats.maxHp * .5;
       message('SECOND WIND', 'BACK ON YOUR FEET', 1.8);
-      explode(camera.position.x, camera.position.z, true);
+      explode(camera.position.x, camera.position.z, { friendly: true });
       return;
     }
     gameOver();
   }
 }
 
-function killZombie(z, head) {
-  const u = z.userData;
-  u.dead = true; u.deathT = 0;
-  if (head) { u.P.head.scale.setScalar(.001); gore.emit(z.position.x, 1.9 * u.T.scale, z.position.z, 26, { speed: 4, spread: 1.6, life: 1.2, colors: [0x6a0a08, 0x8a120e, 0x3a0605] }); }
-  decal(z.position.x, z.position.z, 1.2 + u.T.scale * .6);
+function killZombie(z, head, noScore) {
+  const u = z.userData, T = u.T;
+  u.dead = true; u.deathT = 0; u.cs = ''; u.slamT = 0;
+  if (head) { u.P.head.scale.setScalar(.001); gore.emit(z.position.x, 1.9 * u.sc, z.position.z, 26, { speed: 4, spread: 1.6, life: 1.2, colors: [0x6a0a08, 0x8a120e, 0x3a0605] }); }
+  decal(z.position.x, z.position.z, 1.2 + u.sc * .6);
+  if (T.explode) {
+    const x = z.position.x, zz = z.position.z;
+    z.visible = false; u.deathT = 4.9;
+    schedule(.08, () => explode(x, zz, { hostile: true, radius: 4.6, zdmg: 220, pdmg: 32, color: 0xb6ff4a }));
+  }
+  if (z === state.boss) { state.boss = null; ui.bossBar.classList.add('hidden'); slamRing.visible = false; }
   if (!state.between && state.mode === 'playing') {
-    state.kills++;
-    if (head) state.heads++;
-    state.combo = state.clock - state.lastKill < 3 ? state.combo + 1 : 1;
-    state.lastKill = state.clock;
-    state.bestCombo = Math.max(state.bestCombo, state.combo);
-    const mult = comboMult();
-    const pts = Math.round(u.T.score * (head ? 1.5 : 1) * mult);
-    state.score += pts;
     state.waveDone++;
-    floater(z.position.x, 2.2 * u.T.scale, z.position.z, '+' + pts, head ? 'head' : '');
-    if (head) toast('HEADSHOT', .8);
-    if (stats.leech) player.hp = Math.min(stats.maxHp, player.hp + stats.leech);
-    ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
-    const drops = u.kind === 'boss' ? 4 : Math.random() < u.T.drop * stats.luck ? 1 : 0;
-    for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, u.kind === 'boss' ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
-    if (z === state.boss) { state.boss = null; ui.bossBar.classList.add('hidden'); message('BOSS DOWN', '+' + pts, 2); look.shake = .5; }
+    if (!noScore) {
+      state.kills++;
+      if (head) state.heads++;
+      state.combo = state.clock - state.lastKill < 3 ? state.combo + 1 : 1;
+      state.lastKill = state.clock;
+      state.bestCombo = Math.max(state.bestCombo, state.combo);
+      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
+      state.score += pts;
+      floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
+      if (head) toast('HEADSHOT', .8);
+      else if (u.elite) toast('ELITE DOWN', .8);
+      if (stats.leech) player.hp = Math.min(stats.maxHp, player.hp + stats.leech);
+      ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
+      const drops = T.boss ? 4 : Math.random() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
+      for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
+      if (T.boss) { message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
+    }
   }
   sfx.kill();
   haptic(head ? 'MEDIUM' : 'LIGHT');
@@ -891,14 +1051,25 @@ function killZombie(z, head) {
 function comboMult() { return state.combo > 1 ? Math.min(4, 1 + (state.combo - 1) * .25) : 1; }
 
 function damageZombie(z, amount, point, head, dir) {
-  const u = z.userData;
+  const u = z.userData, T = u.T;
   if (u.dead) return;
+  const armored = point && !head && T.armor;
+  if (armored) amount *= T.armor;
+  if (u.cs === 'stun') amount *= 2;
   u.hp -= amount;
   flashZombie(z);
-  if (dir) { u.kx += dir.x * (u.T.scale > 1.3 ? .3 : 1); u.kz += dir.z * (u.T.scale > 1.3 ? .3 : 1); }
+  const heavy = u.sc > 1.3 ? .3 : 1;
+  if (dir) { u.kx += dir.x * heavy; u.kz += dir.z * heavy; }
   if (point) {
-    gore.emit(point.x, point.y, point.z, head ? 12 : 7, { dir: dir ? { x: dir.x, y: .5, z: dir.z } : null, speed: 3, spread: 1.4, life: .8, colors: [0x7a0c09, 0x4a0605, 0x9a1a10] });
-    floater(point.x, point.y + .2, point.z, Math.round(amount), head ? 'head' : '');
+    if (armored) sparks.emit(point.x, point.y, point.z, 6, { speed: 3, spread: 1.5, life: .3, grav: 10, colors: [0xcfe6ff, 0xffd080] });
+    else gore.emit(point.x, point.y, point.z, head ? 12 : 7, { dir: dir ? { x: dir.x, y: .5, z: dir.z } : null, speed: 3, spread: 1.4, life: .8, colors: [0x7a0c09, 0x4a0605, 0x9a1a10] });
+    floater(point.x, point.y + .2, point.z, Math.round(amount), head ? 'head' : armored ? 'armor' : '');
+  }
+  if (T.boss && !u.enraged && u.hp < u.maxHp * .5 && u.hp > 0) {
+    u.enraged = true; u.speed *= 1.3;
+    ui.bossName.textContent = T.name + ' · ENRAGED';
+    toast(T.name + ' IS ENRAGED', 1.6);
+    sfx.roar(); look.shake = .4; haptic('HEAVY');
   }
   if (u.hp <= 0) killZombie(z, head);
 }
@@ -1015,16 +1186,20 @@ function throwGrenade() {
   sfx.throw(); haptic('LIGHT');
 }
 
-function explode(x, z, friendly) {
-  blast.position.set(x, .6, z); blast.scale.setScalar(.2); blast.visible = true; blast.userData.t = 0;
+function explode(x, z, o = {}) {
+  const R = o.radius ?? 6.5;
+  blast.material.color.setHex(o.color ?? 0xffa040);
+  blast.position.set(x, .6, z); blast.scale.setScalar(.2); blast.visible = true; blast.userData.t = 0; blast.userData.r = R / 6.5;
+  blastLight.color.setHex(o.color ?? 0xff8a30);
   blastLight.position.set(x, 1.5, z); blastLight.intensity = 90;
-  sparks.emit(x, .5, z, 60, { speed: 11, spread: 2.2, life: .7, grav: 8, dir: { x: 0, y: .8, z: 0 }, colors: [0xffd080, 0xff8030, 0xff5010] });
-  gore.emit(x, .4, z, 40, { speed: 4, spread: 2, life: 1.6, grav: -1.2, drag: 1.5, dir: { x: 0, y: 1, z: 0 }, colors: [0x2a2a2a, 0x3a3632, 0x1a1a1a] });
-  decal(x, z, 3.2, 0x222222);
+  const fire = o.hostile ? [0xd8ff80, 0x9aff40, 0xffd060] : [0xffd080, 0xff8030, 0xff5010];
+  sparks.emit(x, .5, z, 60, { speed: 11, spread: 2.2, life: .7, grav: 8, dir: { x: 0, y: .8, z: 0 }, colors: fire });
+  gore.emit(x, .4, z, 40, { speed: 4, spread: 2, life: 1.6, grav: -1.2, drag: 1.5, dir: { x: 0, y: 1, z: 0 }, colors: o.hostile ? [0x3a4a1a, 0x5a6a20, 0x2a2a1a] : [0x2a2a2a, 0x3a3632, 0x1a1a1a] });
+  decal(x, z, R * .5, o.hostile ? 0x8aff4a : 0x222222);
   const d = Math.hypot(camera.position.x - x, camera.position.z - z);
   look.shake = Math.max(look.shake, Math.max(.15, 1 - d / 18));
   sfx.boom(); haptic('HEAVY');
-  const R = 6.5;
+  if (o.hostile && d < R) hurtPlayer(o.pdmg * (1 - d / R * .6), { x, z });
   for (const zb of [...zombies]) {
     const u = zb.userData;
     if (u.dead) continue;
@@ -1032,8 +1207,152 @@ function explode(x, z, friendly) {
     if (dd > R) continue;
     const k = 1 - dd / R;
     const dir = tmp2.set((zb.position.x - x) / (dd || 1) * 3 * k, 0, (zb.position.z - z) / (dd || 1) * 3 * k);
-    damageZombie(zb, (friendly ? 500 : 340) * stats.damage * (.35 + k * .65), null, false, dir);
+    const base = o.zdmg ?? (o.friendly ? 500 : 340) * stats.damage;
+    damageZombie(zb, base * (.35 + k * .65), null, false, dir);
   }
+}
+
+const acidGeo = new THREE.SphereGeometry(.15, 8, 6);
+const acidMat = new THREE.MeshBasicMaterial({ color: 0xa6ff3a });
+const projectiles = [];
+const hazards = [];
+const puddleMat = new THREE.MeshBasicMaterial({ map: glowTex, color: 0x7dff2a, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending });
+const puddlePool = Array.from({ length: 8 }, () => {
+  const m = new THREE.Mesh(new THREE.CircleGeometry(1.5, 20), puddleMat);
+  m.rotation.x = -Math.PI / 2; m.visible = false; scene.add(m); return m;
+});
+let puddleCursor = 0;
+const slamRing = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: .8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+slamRing.rotation.x = -Math.PI / 2; slamRing.visible = false; scene.add(slamRing);
+const SLAM_R = 5.6;
+
+function spit(z) {
+  const u = z.userData, count = u.T.volley || 1;
+  const fx = z.position.x, fy = 1.55 * u.sc, fz = z.position.z;
+  for (let i = 0; i < count; i++) {
+    const tx = camera.position.x + (i ? (Math.random() - .5) * 4 : move.x * 1.2), tz = camera.position.z + (i ? (Math.random() - .5) * 4 : 0);
+    const dist = Math.hypot(tx - fx, tz - fz), t = THREE.MathUtils.clamp(dist / 11, .7, 1.5), G = 14;
+    const m = new THREE.Mesh(acidGeo, acidMat);
+    m.position.set(fx, fy, fz);
+    scene.add(m);
+    projectiles.push({ mesh: m, vx: (tx - fx) / t, vy: (1.1 - fy + .5 * G * t * t) / t, vz: (tz - fz) / t, dmg: u.T.boss ? 16 : 11, from: { x: fx, z: fz } });
+  }
+  sfx.spit();
+}
+
+function acidPuddle(x, z) {
+  const m = puddlePool[puddleCursor = (puddleCursor + 1) % puddlePool.length];
+  m.position.set(x, .04, z); m.visible = true; m.scale.setScalar(.2);
+  const old = hazards.findIndex(h => h.mesh === m);
+  if (old >= 0) hazards.splice(old, 1);
+  hazards.push({ mesh: m, x, z, t: 5, tick: 0 });
+}
+
+function updateHazards(dt) {
+  for (let k = projectiles.length - 1; k >= 0; k--) {
+    const p = projectiles[k], m = p.mesh;
+    p.vy -= 14 * dt;
+    m.position.x += p.vx * dt; m.position.y += p.vy * dt; m.position.z += p.vz * dt;
+    if (Math.random() < .6) sparks.emit(m.position.x, m.position.y, m.position.z, 1, { speed: .3, spread: 1, life: .3, grav: 2, colors: [0x9aff3a, 0x5aff2a] });
+    const hitPlayer = m.position.distanceTo(tmp.set(camera.position.x, camera.position.y - .5, camera.position.z)) < .75;
+    if (hitPlayer || m.position.y < .06 || blocked(m.position.x, m.position.z, 0)) {
+      if (hitPlayer) hurtPlayer(p.dmg, p.from);
+      else acidPuddle(m.position.x, m.position.z);
+      sparks.emit(m.position.x, Math.max(.1, m.position.y), m.position.z, 10, { speed: 2.5, spread: 2, life: .4, grav: 8, colors: [0x9aff3a, 0xd8ff80] });
+      scene.remove(m); projectiles.splice(k, 1);
+    }
+  }
+  for (let k = hazards.length - 1; k >= 0; k--) {
+    const h = hazards[k];
+    h.t -= dt;
+    h.mesh.scale.setScalar(Math.min(1, h.mesh.scale.x + dt * 4) * (h.t < 1 ? h.t : 1));
+    if (h.t <= 0) { h.mesh.visible = false; hazards.splice(k, 1); continue; }
+    h.tick -= dt;
+    if (h.tick <= 0 && Math.hypot(camera.position.x - h.x, camera.position.z - h.z) < 1.5) { h.tick = .5; hurtPlayer(3.5, null, true); sfx.sizzle(); }
+  }
+}
+
+function bossAbilities(z, dt, d, dx, dz) {
+  const u = z.userData, T = u.T;
+  if (T.summon && state.clock > u.nextSummon) {
+    u.nextSummon = state.clock + (u.enraged ? 9 : 13);
+    let n = 0;
+    for (let i = 0; i < 4 && n < 3; i++) {
+      const a = Math.random() * Math.PI * 2, r = 2.5 + Math.random() * 2.5;
+      const x = z.position.x + Math.cos(a) * r, zz = z.position.z + Math.sin(a) * r;
+      if (blocked(x, zz, .6)) continue;
+      makeZombie(Math.random() < .5 ? 'crawler' : 'walker', x, zz, true);
+      n++;
+    }
+    state.waveTotal += n;
+    if (n) { toast(T.name + ' RAISES THE DEAD', 1.6); sfx.roar(); }
+  }
+  if (T.slam && !u.cs) {
+    if (u.slamT > 0) {
+      u.slamT -= dt;
+      slamRing.visible = true;
+      slamRing.position.set(z.position.x, .05, z.position.z);
+      const k = 1 - u.slamT / .9;
+      slamRing.scale.setScalar(SLAM_R * k);
+      slamRing.material.opacity = .4 + Math.sin(state.clock * 30) * .3;
+      if (u.slamT <= 0) {
+        slamRing.visible = false;
+        u.nextSlam = state.clock + (u.enraged ? 3.5 : 5);
+        look.shake = Math.max(look.shake, .45);
+        gore.emit(z.position.x, .2, z.position.z, 50, { speed: 7, spread: 2, life: .9, grav: 6, dir: { x: 0, y: .4, z: 0 }, colors: [0x3a3226, 0x2a241c, 0x4a4238] });
+        sfx.boom(); haptic('HEAVY');
+        if (d < SLAM_R) hurtPlayer(T.dmg * .8, z.position);
+      }
+      return true;
+    }
+    if (d < SLAM_R - .8 && state.clock > u.nextSlam) { u.slamT = .9; sfx.roar(); return true; }
+  }
+  if (T.charge) {
+    if (u.cs === 'wind') {
+      u.ct -= dt;
+      if (u.ct <= 0) {
+        u.cs = 'run'; u.ct = 2;
+        u.cdx = dx / d; u.cdz = dz / d;
+      }
+      return true;
+    }
+    if (u.cs === 'run') {
+      u.ct -= dt;
+      const step = 11 * dt;
+      const nx = z.position.x + u.cdx * step, nz = z.position.z + u.cdz * step;
+      u.walk += dt * T.stride * 3;
+      u.moving = true;
+      if (blocked(nx, nz, u.radius)) {
+        u.cs = 'stun'; u.ct = 2.4; look.shake = Math.max(look.shake, .3); sfx.boom();
+        toast(T.name + ' IS STUNNED — HIT HIM!', 1.6);
+      } else {
+        z.position.x = nx; z.position.z = nz;
+        gore.emit(nx, .1, nz, 2, { speed: 2, spread: 2, life: .5, colors: [0x3a3226] });
+      }
+      const pd = Math.hypot(camera.position.x - z.position.x, camera.position.z - z.position.z);
+      if (u.cs === 'run' && pd < .9 + u.sc * .5) {
+        hurtPlayer(T.dmg * 1.2, z.position);
+        for (let i = 0; i < 10; i++) {
+          const px = camera.position.x + u.cdx * .3, pz = camera.position.z + u.cdz * .3;
+          if (blocked(px, pz, .36)) break;
+          camera.position.x = px; camera.position.z = pz;
+        }
+        u.cs = ''; u.nextCharge = state.clock + 6;
+      } else if (u.cs === 'run' && u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + (u.enraged ? 4.5 : 6.5); }
+      return true;
+    }
+    if (u.cs === 'stun') {
+      u.ct -= dt; u.moving = false;
+      if (u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + 5; }
+      return true;
+    }
+    if (d > 5.5 && d < 28 && state.clock > u.nextCharge && u.slamT <= 0) {
+      u.cs = 'wind'; u.ct = .85; u.moving = false;
+      sfx.roar(); toast('CHARGE INCOMING — SIDESTEP!', 1.2); haptic('MEDIUM');
+      return true;
+    }
+  }
+  return false;
 }
 
 const PICKUP_KINDS = {
@@ -1132,12 +1451,25 @@ function waveCleared() {
 function gameOver() {
   state.mode = 'dead';
   firing = false;
+  saveRun();
+  const rankEl = $('#over-rank');
+  if (!state.score) rankEl.textContent = '';
+  else if (!gameCenter.available()) rankEl.textContent = 'GLOBAL RANKINGS ARE AVAILABLE IN THE iOS APP';
+  else {
+    rankEl.textContent = 'SUBMITTING TO GLOBAL LEADERBOARD…';
+    const run = state.startedAt;
+    gameCenter.submit(state.score, state.wave).then(p => {
+      if (state.startedAt !== run) return;
+      if (p) { records.rank = p.rank; store.set('records', records); }
+      rankEl.textContent = p ? 'GLOBAL RANK #' + p.rank.toLocaleString() : 'SIGN IN TO GAME CENTER TO RANK GLOBALLY';
+    });
+  }
   const secs = Math.round(state.clock);
   const best = state.score > records.score;
   records.score = Math.max(records.score, state.score);
   records.wave = Math.max(records.wave, state.wave);
   store.set('records', records);
-  $('#over-sub').textContent = 'THE HORDE GOT YOU ON WAVE ' + state.wave;
+  $('#over-sub').textContent = 'WAVE ' + state.wave + ' · ' + diff().name;
   $('#newbest').classList.toggle('hidden', !best || state.score === 0);
   $('#st-score').textContent = state.score.toLocaleString();
   $('#st-kills').textContent = state.kills;
@@ -1161,7 +1493,7 @@ function toMenu() {
 
 function populateMenu() {
   state.wave = 1;
-  for (let i = 0; i < 7; i++) makeZombie(i === 3 ? 'brute' : i === 5 ? 'runner' : 'walker', (Math.random() - .5) * 12, -4 + (Math.random() - .5) * 16, false);
+  ['walker', 'crawler', 'bloater', 'riot', 'spitter', 'brute', 'runner', 'walker'].forEach(k => makeZombie(k, (Math.random() - .5) * 12, -4 + (Math.random() - .5) * 16, false));
   menuTarget.set(0, 0, 0);
 }
 
@@ -1178,7 +1510,7 @@ function resume() {
 
 let activeScreen = ui.menu;
 function showScreen(el) {
-  for (const s of [ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over]) s.classList.toggle('hidden', s !== el);
+  for (const s of [ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over, ui.board]) s.classList.toggle('hidden', s !== el);
   activeScreen = el;
 }
 
@@ -1244,7 +1576,11 @@ function drawRadar() {
     c.fillStyle = color; c.beginPath(); c.arc(px, py, size, 0, 7); c.fill();
   };
   for (const p of pickups) plot(p.position.x, p.position.z, 5, '#6dff8a');
-  for (const z of zombies) if (!z.userData.dead) plot(z.position.x, z.position.z, z.userData.kind === 'boss' ? 11 : z.userData.kind === 'brute' ? 8 : 6, z.userData.kind === 'boss' ? '#d35bff' : '#ff4a3a');
+  for (const z of zombies) {
+    const u = z.userData;
+    if (u.dead) continue;
+    plot(z.position.x, z.position.z, u.T.boss ? 11 : u.sc > 1.3 ? 8 : 6, u.T.boss ? '#d35bff' : u.elite ? '#8ff0ff' : u.T.explode ? '#ff9a2a' : u.T.ranged ? '#9aff3a' : '#ff4a3a');
+  }
   c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, -9); c.lineTo(6, 6); c.lineTo(-6, 6); c.fill();
   c.restore();
 }
@@ -1263,7 +1599,7 @@ function updateHud(dt) {
   if (hpPct < .3 && state.clock - player.lastBeat > 1 && state.mode === 'playing') { player.lastBeat = state.clock; sfx.heartbeat(); }
   setText(ui.waveNum, 'WAVE ' + Math.max(1, state.wave));
   const left = state.waveTotal - state.waveDone;
-  setText(ui.alive, state.wave === 0 ? 'GET READY' : state.between ? 'SECTOR SECURE' : left + ' INFECTED LEFT');
+  setText(ui.alive, state.wave === 0 ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : '') + left + ' INFECTED LEFT');
   ui.waveFill.style.transform = `scaleX(${state.waveTotal ? 1 - state.waveDone / state.waveTotal : 0})`;
   setText(ui.score, state.score.toLocaleString());
   const comboOn = state.combo > 1 && state.clock - state.lastKill < 3;
@@ -1293,12 +1629,12 @@ function assistTarget() {
   for (const z of zombies) {
     const u = z.userData;
     if (u.dead || u.rise > .3) continue;
-    tmp.set(z.position.x, z.position.y + 1.3 * u.T.scale, z.position.z).sub(camera.position);
+    tmp.set(z.position.x, z.position.y + (u.T.aimY ?? 1.3) * u.sc, z.position.z).sub(camera.position);
     const d = tmp.length();
     if (d > 40) continue;
     tmp.divideScalar(d);
     const ang = Math.acos(Math.min(1, fwd.dot(tmp)));
-    const allow = .06 + Math.atan(.45 * u.T.scale * u.T.bulk / d);
+    const allow = .06 + Math.atan(.45 * u.sc * u.T.bulk / d);
     const s = ang / allow;
     if (s < bestScore) { bestScore = s; best = { z, dir: tmp.clone(), score: s }; }
   }
@@ -1392,20 +1728,35 @@ function updateZombies(dt, playing, target = menuTarget) {
     if (u.dead) continue;
     if (u.rise > 0) {
       u.rise = Math.max(0, u.rise - dt * .9);
-      z.position.y = -1.9 * T.scale * u.rise * u.rise;
+      z.position.y = -1.9 * u.sc * u.rise * u.rise;
       if (Math.random() < .5) gore.emit(z.position.x, .05, z.position.z, 2, { speed: 2, spread: 2, life: .6, colors: [0x3a3226, 0x2a241c] });
       z.rotation.y = Math.atan2(target.x - z.position.x, target.z - z.position.z);
       continue;
     }
-    const dx = target.x - z.position.x, dz = target.z - z.position.z, d = Math.hypot(dx, dz);
-    const reach = .75 + T.scale * .45;
+    const dx = target.x - z.position.x, dz = target.z - z.position.z, d = Math.hypot(dx, dz) || .001;
+    const reach = .75 + u.sc * .45;
     let vx = 0, vz = 0;
-    u.moving = d > reach;
-    if (u.moving) {
+    if (playing && T.explode && d < reach + .35) { killZombie(z, false, true); continue; }
+    const busy = playing && T.boss && bossAbilities(z, dt, d, dx, dz);
+    if (u.dead) continue;
+    u.pathT = (u.pathT || 0) - dt;
+    if (playing && u.pathT <= 0) { u.pathT = .3 + Math.random() * .15; u.clear = lineClear(z.position.x, z.position.z, target.x, target.z, Math.min(.6, u.radius)); }
+    const hold = playing && T.ranged && d > 4.5 && d < 13 && u.clear;
+    if (playing && T.ranged && hold) {
+      if (u.spitWind > 0) {
+        u.spitWind -= dt;
+        if (u.spitWind <= 0) { spit(z); u.nextSpit = state.clock + (T.boss ? (u.enraged ? 2.4 : 3.4) : 2.6 + Math.random()); }
+      } else if (state.clock > u.nextSpit) u.spitWind = .5;
+    } else u.spitWind = 0;
+    u.moving = d > reach && !hold && !busy;
+    if (busy && u.cs === 'run') u.moving = true;
+    if (u.moving && !busy) {
       let ax = dx / d, az = dz / d;
       const step = u.speed * (playing ? 1 : .6) * dt;
       const r = u.radius;
-      if (blocked(z.position.x + ax * step * 4, z.position.z + az * step * 4, r)) {
+      const wp = playing && !u.clear ? navStep(z.position.x, z.position.z) : null;
+      if (wp) { const wx = wp.x - z.position.x, wz = wp.z - z.position.z, wl = Math.hypot(wx, wz) || 1; ax = wx / wl; az = wz / wl; }
+      else if (blocked(z.position.x + ax * step * 4, z.position.z + az * step * 4, r)) {
         for (const off of [.7, 1.3, 1.9]) {
           const a = Math.atan2(ax, az) + off * u.side;
           const tx = Math.sin(a), tz = Math.cos(a);
@@ -1420,6 +1771,7 @@ function updateZombies(dt, playing, target = menuTarget) {
       const ox = z.position.x - o.position.x, oz = z.position.z - o.position.z, od = Math.hypot(ox, oz), min = u.radius + o.userData.radius + .15;
       if (od < min && od > 0.001) { vx += ox / od * (min - od) * .5; vz += oz / od * (min - od) * .5; }
     }
+    if (playing && d < reach * .85) { const push = (reach * .85 - d) * Math.min(1, dt * 8); vx -= dx / d * push; vz -= dz / d * push; }
     vx += u.kx * dt * 6; vz += u.kz * dt * 6;
     u.kx *= Math.max(0, 1 - dt * 7); u.kz *= Math.max(0, 1 - dt * 7);
     if (!blocked(z.position.x + vx, z.position.z, u.radius * .8)) z.position.x += vx;
@@ -1427,13 +1779,15 @@ function updateZombies(dt, playing, target = menuTarget) {
     const face = Math.atan2(dx, dz);
     let df = face - z.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df));
     z.rotation.y += df * Math.min(1, dt * 8);
-    if (playing) {
+    if (playing && !T.explode && !busy) {
       if (u.swing > 0) {
         const before = u.swing; u.swing -= dt;
-        if (before > .18 && u.swing <= .18 && d < reach + .5) hurtPlayer(T.dmg * (1 + (state.wave - 1) * .05), z.position);
-      } else if (!u.moving && state.clock > u.nextAttack) {
+        if (before > .18 && u.swing <= .18 && d < reach + .5) hurtPlayer(T.dmg * (1 + (state.wave - 1) * .05) * (u.elite ? 1.4 : 1), z.position);
+      } else if (!u.moving && d <= reach + .1 && state.clock > u.nextAttack) {
         u.swing = .45; u.nextAttack = state.clock + (u.kind === 'runner' ? .7 : 1.05);
       }
+    }
+    if (playing) {
       u.groanAt -= dt;
       if (d < ng && u.groanAt <= 0) { ng = d; nearestGroan = z; }
     }
@@ -1480,7 +1834,7 @@ function updateEffects(dt) {
   if (blast.visible) {
     blast.userData.t += dt;
     const t = blast.userData.t / .45;
-    blast.scale.setScalar(.3 + t * 4.2); blast.material.opacity = Math.max(0, 1 - t);
+    blast.scale.setScalar((.3 + t * 4.2) * (blast.userData.r ?? 1)); blast.material.opacity = Math.max(0, 1 - t);
     if (t >= 1) blast.visible = false;
   }
   blastLight.intensity = Math.max(0, blastLight.intensity - dt * 220);
@@ -1494,8 +1848,10 @@ function updateEffects(dt) {
 function update(dt) {
   state.clock += dt;
   for (let k = scheduled.length - 1; k >= 0; k--) if (state.clock >= scheduled[k].at) { const s = scheduled.splice(k, 1)[0]; s.fn(); }
+  updateNav(camera.position.x, camera.position.z);
   spawnTick(dt);
   updatePlayer(dt);
+  updateHazards(dt);
   updateZombies(dt, true, camera.position);
   if (!state.between && !state.queue?.length && zombies.every(z => z.userData.dead) && state.waveTotal > 0 && state.mode === 'playing') waveCleared();
   if (!tutorialDone && state.moved && state.looked && state.clock > 4) { tutorialDone = true; store.set('tutorial', true); hint(''); }
@@ -1654,6 +2010,98 @@ $('#quit').onclick = toMenu;
 
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
+
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave' };
+const gameCenter = {
+  player: null,
+  available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
+  call(method, opts = {}) { return this.available() ? window.Capacitor.nativePromise('GameCenter', method, opts) : Promise.reject(new Error('Game Center is only available in the iOS app')); },
+  async signIn() {
+    try { const r = await this.call('signIn'); this.player = r?.authenticated ? r : null; } catch { this.player = null; }
+    return this.player;
+  },
+  async rank() {
+    if (!this.player) return null;
+    try { return (await this.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 1 })).player || null; } catch { return null; }
+  },
+  async submit(score, wave) {
+    if (!this.player && !(await this.signIn())) return null;
+    await Promise.allSettled([
+      this.call('submitScore', { leaderboardId: LEADERBOARDS.score, score }),
+      this.call('submitScore', { leaderboardId: LEADERBOARDS.wave, score: wave }),
+    ]);
+    return this.rank();
+  },
+};
+
+function saveRun() {
+  if (!state.score) return;
+  const runs = store.get('runs', []);
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: settings.difficulty, date: Date.now() });
+  runs.sort((a, b) => b.score - a.score);
+  store.set('runs', runs.slice(0, 25));
+}
+
+let boardTab = 'global', boardReturn = null, boardToken = 0;
+function boardRow(rank, title, sub, score, me) {
+  const li = document.createElement('li');
+  if (me) li.className = 'me';
+  const r = document.createElement('b'); r.textContent = '#' + rank;
+  const name = document.createElement('span'); name.textContent = title;
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; name.appendChild(sm); }
+  const sc = document.createElement('span'); sc.textContent = score.toLocaleString();
+  li.append(r, name, sc);
+  return li;
+}
+function renderLocalRuns(list) {
+  const runs = store.get('runs', []);
+  if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
+  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false)));
+}
+async function renderBoard() {
+  const token = ++boardToken, list = $('#board-list'), status = $('#board-status');
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === boardTab));
+  list.innerHTML = ''; status.textContent = '';
+  $('#gc-open').classList.toggle('hidden', !gameCenter.available());
+  if (boardTab === 'local') { renderLocalRuns(list); return; }
+  if (!gameCenter.available()) {
+    status.textContent = 'Global and friends rankings use Game Center in the iOS app. Showing your runs on this device.';
+    renderLocalRuns(list);
+    return;
+  }
+  status.textContent = 'Loading rankings…';
+  if (!gameCenter.player) await gameCenter.signIn();
+  if (token !== boardToken) return;
+  if (!gameCenter.player) { status.textContent = 'Sign in to Game Center (Settings → Game Center) to compete globally.'; return; }
+  try {
+    const r = await gameCenter.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 25, scope: boardTab });
+    if (token !== boardToken) return;
+    status.textContent = r.total ? r.total.toLocaleString() + ' SURVIVORS RANKED' : 'No scores yet — be the first.';
+    for (const e of r.entries || []) list.appendChild(boardRow(e.rank, e.name, '', e.score, e.isLocal));
+    if (r.player && !(r.entries || []).some(e => e.isLocal)) {
+      const gap = document.createElement('li'); gap.className = 'gap'; gap.textContent = '···'; list.appendChild(gap);
+      list.appendChild(boardRow(r.player.rank, r.player.name + ' (YOU)', '', r.player.score, true));
+    }
+    if (r.player) { records.rank = r.player.rank; store.set('records', records); refreshRecords(); }
+  } catch (e) {
+    if (token === boardToken) status.textContent = 'Could not load rankings: ' + e.message;
+  }
+}
+document.querySelectorAll('[data-open="board"]').forEach(b => (b.onclick = () => { boardReturn = activeScreen; showScreen(ui.board); renderBoard(); }));
+document.querySelectorAll('.tabs button').forEach(b => (b.onclick = () => { boardTab = b.dataset.tab; renderBoard(); }));
+$('#board-close').onclick = () => showScreen(boardReturn || ui.menu);
+$('#gc-open').onclick = () => gameCenter.call('showLeaderboard', {}).catch(() => {});
+
+function syncDifficultyUI() {
+  document.querySelectorAll('#diff button').forEach(b => b.classList.toggle('on', b.dataset.diff === settings.difficulty));
+  $('#diff-desc').textContent = diff().desc;
+}
+document.querySelectorAll('#diff button').forEach(b => (b.onclick = () => {
+  settings.difficulty = b.dataset.diff;
+  store.set('settings', settings);
+  syncDifficultyUI();
+  haptic('LIGHT');
+}));
 $('#close-settings').onclick = () => { store.set('settings', settings); showScreen(settingsReturn); };
 const sens = $('#sens');
 sens.oninput = () => { settings.sensitivity = +sens.value; $('#sens-val').textContent = settings.sensitivity.toFixed(1) + 'x'; };
@@ -1672,6 +2120,7 @@ function syncSettingsUI() {
 function refreshRecords() {
   $('#best-score').textContent = records.score.toLocaleString();
   $('#best-wave').textContent = records.wave;
+  $('#best-rank').textContent = records.rank ? '#' + records.rank.toLocaleString() : '—';
 }
 
 resetRun();
@@ -1679,5 +2128,7 @@ resize();
 refreshRecords();
 populateMenu();
 syncSettingsUI();
+syncDifficultyUI();
 frame();
+if (gameCenter.available()) gameCenter.signIn().then(() => gameCenter.rank()).then(p => { if (p) { records.rank = p.rank; store.set('records', records); refreshRecords(); } });
 
