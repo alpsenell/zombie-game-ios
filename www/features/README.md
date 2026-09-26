@@ -12,6 +12,8 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - `run:end` — `api.runSummary()`: `{ type, seed, difficultyId, score, wave, kills, heads, shots, hits, accuracy, bestCombo, time, bosses, slots, weapon }`
 - `purchase` `{ kind: 'iap' | 'scrap', productId | item, cost }`
 - `screen` `{ id }`
+- `armory:render` `{ grid, weapon }` — after the Armory grid/detail is rebuilt (decorate cards in `grid`)
+- `mission:complete` `{ id, period: 'daily' | 'weekly', xp, scrap }` — a mission reward was claimed (progression)
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
