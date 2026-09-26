@@ -6,6 +6,7 @@ import * as runcard from './runcard.js';
 import perks from './perks.js';
 import revive from './revive.js';
 import mappick from './mappick.js';
+import * as coop from './coop.js';
 
 export const FEATURES = [
   analytics,
@@ -16,4 +17,5 @@ export const FEATURES = [
   perks,
   revive,
   mappick,
+  coop,
 ];
