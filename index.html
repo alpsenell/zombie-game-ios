@@ -1,16 +1,270 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><meta name="theme-color" content="#060c10">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#060c10">
   <title>Last Stand: Deadzone</title>
   <style>
-    :root{color-scheme:dark;font-family:Impact,Haettenschweiler,"Arial Narrow Bold",system-ui,sans-serif}*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03070a;touch-action:none}canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0}#hud{position:fixed;inset:0;z-index:2;pointer-events:none;padding:max(14px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));text-shadow:0 2px 5px #000}.top{display:flex;justify-content:space-between;align-items:flex-start}#wave{color:#eef6f1;font-size:clamp(22px,5vw,38px);letter-spacing:1px}#wave small,#score small{display:block;margin-top:2px;color:#d94d43;font:800 10px system-ui,sans-serif;letter-spacing:1.7px}#score{text-align:right;color:#fff;font-size:clamp(19px,4.5vw,32px)}#score small{color:#ffc653}.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}#crosshair{width:28px;height:28px}.line{position:absolute;background:#e7fff2;box-shadow:0 0 5px #000}.line.v{width:2px;height:28px;left:13px}.line.h{height:2px;width:28px;top:13px}#hit{width:44px;height:44px;opacity:0;transition:opacity .05s,transform .05s;transform:translate(-50%,-50%) scale(.3)}#hit.show{opacity:1;transform:translate(-50%,-50%) scale(1)}#hit:before,#hit:after{content:"";position:absolute;left:21px;width:2px;height:44px;background:#fff;transform:rotate(45deg)}#hit:after{transform:rotate(-45deg)}#health{position:absolute;left:50%;bottom:max(131px,calc(116px + env(safe-area-inset-bottom)));transform:translateX(-50%);width:min(43vw,210px);text-align:center;color:#fff;font-size:18px}.bar{height:7px;border:1px solid #697878;border-radius:6px;overflow:hidden;background:#080d0f}.bar i{display:block;width:100%;height:100%;background:linear-gradient(90deg,#bf2e2a,#ffc348);box-shadow:0 0 12px #e24937;transition:width .15s}#weapon{position:absolute;right:18px;bottom:max(19px,env(safe-area-inset-bottom));text-align:right}#gun-name{color:#d4ddda;font:800 10px system-ui,sans-serif;letter-spacing:1.7px;margin-bottom:2px}#ammo{color:#fff;line-height:.78;font-size:clamp(38px,10vw,62px)}#ammo span{font-size:.45em;color:#94a0a5}.control{pointer-events:auto;position:absolute;border-radius:50%;border:2px solid rgba(255,255,255,.2);background:rgba(6,16,20,.2)}#stick{width:112px;height:112px;bottom:max(18px,env(safe-area-inset-bottom));left:18px}#stick-dot{position:absolute;inset:31px;border-radius:50%;background:rgba(202,226,231,.3);border:1px solid rgba(255,255,255,.2)}#fire{width:92px;height:92px;right:17px;bottom:max(96px,calc(78px + env(safe-area-inset-bottom)));border-color:rgba(255,109,80,.8);background:radial-gradient(circle,rgba(237,74,51,.64),rgba(98,19,14,.12));box-shadow:inset 0 0 18px rgba(255,130,82,.5),0 0 20px rgba(194,41,25,.3);color:white;font:900 17px system-ui,sans-serif;letter-spacing:.5px}#reload{pointer-events:auto;position:absolute;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:11px 14px;border:1px solid rgba(255,255,255,.3);border-radius:5px;background:rgba(5,10,13,.78);box-shadow:0 3px 12px #0008;color:#eaf2ed;font:800 10px system-ui,sans-serif;letter-spacing:1px}#message{position:absolute;left:50%;top:29%;transform:translate(-50%,-50%);color:#fff;text-align:center;letter-spacing:2px;font-size:clamp(26px,8vw,52px);white-space:nowrap;opacity:0;transition:opacity .2s}#message strong{display:block;margin-top:8px;color:#ffbf4b;font:800 .42em system-ui,sans-serif;letter-spacing:3px}#damage{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse,transparent 42%,rgba(205,27,20,.72));mix-blend-mode:screen;transition:opacity .12s}#intro{position:fixed;z-index:5;inset:0;display:grid;place-items:center;text-align:center;padding:24px;background:linear-gradient(#03101875,#020507e8),url('assets/deadzone-street.png') center/cover}#intro.hidden{display:none}.logo{color:#e8efe9;font-size:clamp(42px,13vw,80px);line-height:.76;letter-spacing:2px;text-shadow:0 5px 0 #132326,0 10px 24px #000}.logo em{display:block;color:#d24a3d;font-style:normal;font-size:.52em;letter-spacing:8px;margin-top:18px}.brief{max-width:370px;margin:30px auto 20px;color:#c2cfcd;font:500 13px/1.55 system-ui,sans-serif}#start{border:0;border-radius:3px;padding:17px 33px;background:#d44d39;color:#fff;box-shadow:0 4px 0 #79251e,0 8px 22px #000;font:900 16px system-ui,sans-serif;letter-spacing:2px}.tips{margin-top:26px;color:#a2afb0;font:11px system-ui,sans-serif;letter-spacing:.5px}@media(hover:hover){#fire{cursor:pointer}}
+    :root{
+      color-scheme:dark;
+      --display:Impact,Haettenschweiler,"Arial Narrow Bold",system-ui,sans-serif;
+      --ui:system-ui,-apple-system,"SF Pro Text",sans-serif;
+      --red:#e5483a;--amber:#ffc34d;--green:#6dffa0;--ink:#eef6f1;--dim:#9aa9ab;
+      --glass:rgba(8,16,20,.55);--line:rgba(255,255,255,.16);
+      --st:env(safe-area-inset-top);--sr:env(safe-area-inset-right);--sb:env(safe-area-inset-bottom);--sl:env(safe-area-inset-left);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03070a;touch-action:none;font-family:var(--ui);color:var(--ink)}
+    button{font:inherit;color:inherit;cursor:pointer}
+    canvas#game{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+    .hidden{display:none!important}
+
+    #hud{position:fixed;inset:0;z-index:2;pointer-events:none;text-shadow:0 2px 6px #000c;opacity:0;transition:opacity .35s}
+    #hud.on{opacity:1}
+    #hud:not(.on){visibility:hidden}
+    .pad{position:absolute;top:max(12px,var(--st));left:max(14px,var(--sl));right:max(14px,var(--sr));bottom:max(12px,var(--sb))}
+
+    #vitals{position:absolute;left:0;top:0;width:min(34vw,230px)}
+    .hp-row{display:flex;align-items:center;gap:8px;font:900 20px var(--display);letter-spacing:.5px}
+    .hp-row svg{width:18px;height:18px;fill:var(--red);filter:drop-shadow(0 0 6px #e5483a88)}
+    .bar{position:relative;height:9px;margin-top:5px;border-radius:5px;background:#0a1114cc;border:1px solid #ffffff22;overflow:hidden}
+    .bar i{position:absolute;inset:0;transform-origin:left;transition:transform .15s}
+    #hp-lag{background:#fff6;transition:transform .6s .25s}
+    #hp-fill{background:linear-gradient(90deg,#c22b25,#ff7a45 70%,#ffc34d);box-shadow:0 0 12px #e2493799}
+    #wave-box{margin-top:12px;font:900 26px/1 var(--display);letter-spacing:1px}
+    #wave-box small{display:block;margin-top:4px;font:800 10px var(--ui);letter-spacing:1.6px;color:var(--red)}
+    #wave-bar{height:4px;margin-top:6px}
+    #wave-bar i{background:var(--red)}
+
+    #scorebox{position:absolute;left:50%;top:0;transform:translateX(-50%);text-align:center}
+    #score{font:900 clamp(24px,4.6vw,34px)/1 var(--display);letter-spacing:1px}
+    #combo{margin-top:3px;font:900 13px var(--ui);letter-spacing:1.5px;color:var(--amber);opacity:0;transform:scale(.8);transition:opacity .2s,transform .12s}
+    #combo.on{opacity:1;transform:scale(1)}
+    #combo.pop{transform:scale(1.35)}
+
+    #topright{position:absolute;right:0;top:0;display:flex;gap:10px;align-items:flex-start}
+    #radar{width:96px;height:96px;border-radius:50%;background:radial-gradient(circle,#0b1a1fcc 0,#050c10dd 70%);border:1px solid #ffffff2a;box-shadow:0 0 0 3px #0005,inset 0 0 18px #000}
+    #pause{pointer-events:auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--glass);display:grid;place-items:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    #pause svg{width:16px;height:16px;fill:#fff}
+
+    #bossbar{position:absolute;left:50%;top:54px;transform:translateX(-50%);width:min(52vw,420px);text-align:center;font:900 12px var(--ui);letter-spacing:3px;color:#ff8a6a}
+    #bossbar .bar{height:8px;margin-top:4px;border-color:#ff5a3c55}
+    #boss-fill{background:linear-gradient(90deg,#7d0f0a,#ff4b2b)}
+
+    .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+    #crosshair{width:0;height:0}
+    #crosshair i{position:absolute;background:#f2fff6;box-shadow:0 0 3px #000;border-radius:1px;transition:background .1s}
+    #crosshair .t,#crosshair .b{width:2px;height:9px;left:-1px}
+    #crosshair .l,#crosshair .r{height:2px;width:9px;top:-1px}
+    #crosshair .d{width:3px;height:3px;left:-1.5px;top:-1.5px;border-radius:50%}
+    #crosshair.target i{background:#ff4b3a}
+    #hit{width:36px;height:36px;opacity:0;transform:translate(-50%,-50%) scale(.4);transition:opacity .08s,transform .08s}
+    #hit.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    #hit i{position:absolute;left:17px;top:0;width:2px;height:11px;background:#fff;transform-origin:1px 18px}
+    #hit i:nth-child(2){transform:rotate(90deg)}#hit i:nth-child(3){transform:rotate(180deg)}#hit i:nth-child(4){transform:rotate(270deg)}
+    #hit{rotate:45deg}
+    #hit.kill i{background:#ff3b2f}
+    #hit.head i{background:var(--amber)}
+    #reticle-ring{width:64px;height:64px;border-radius:50%;border:2px solid transparent;border-top-color:var(--amber);opacity:0}
+    #reticle-ring.on{opacity:1;animation:spin .6s linear infinite}
+    @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+    #message{position:absolute;left:50%;top:27%;transform:translate(-50%,-50%) scale(.92);text-align:center;font:900 clamp(30px,8vw,58px)/1 var(--display);letter-spacing:3px;white-space:nowrap;opacity:0;transition:opacity .25s,transform .25s}
+    #message.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    #message strong{display:block;margin-top:8px;color:var(--amber);font:800 .26em var(--ui);letter-spacing:4px}
+    #toast{position:absolute;left:50%;top:62%;transform:translateX(-50%);font:900 15px var(--ui);letter-spacing:2px;color:var(--amber);opacity:0;transition:opacity .2s}
+    #toast.on{opacity:1}
+    #floaters{position:absolute;inset:0;overflow:hidden}
+    .floater{position:absolute;left:0;top:0;font:900 16px var(--display);letter-spacing:.5px;color:#fff;opacity:0;will-change:transform,opacity;text-shadow:0 2px 3px #000}
+    .floater.head{color:var(--amber);font-size:22px}
+    .floater.pick{color:var(--green);font-size:15px}
+
+    #damage{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 45%,rgba(205,27,20,.75));transition:opacity .15s}
+    #lowhp{position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,transparent 38%,rgba(120,0,0,.8));transition:opacity .4s}
+    #lowhp.on{animation:beat 1s infinite}
+    @keyframes beat{0%,100%{opacity:.35}15%{opacity:.85}35%{opacity:.45}50%{opacity:.75}}
+    #indicators{position:absolute;left:50%;top:50%;width:0;height:0}
+    .ind{position:absolute;left:-60px;top:-60px;width:120px;height:120px;opacity:0;transition:opacity .6s}
+    .ind:before{content:"";position:absolute;left:50%;top:-34px;width:46px;height:18px;transform:translateX(-50%);border-radius:50% 50% 0 0/100% 100% 0 0;background:radial-gradient(ellipse at 50% 100%,#ff2a1a 0,#ff2a1a00 70%);border-top:4px solid #ff3a2a}
+
+    #stick-zone{pointer-events:auto;position:absolute;left:0;top:30%;bottom:0;width:42%}
+    #stick{position:absolute;width:124px;height:124px;margin:-62px 0 0 -62px;border-radius:50%;border:2px solid #ffffff30;background:radial-gradient(circle,#ffffff10,#06101488 70%);opacity:.55;transition:opacity .2s}
+    #stick.active{opacity:1}
+    #stick.sprint{border-color:var(--amber);box-shadow:0 0 18px #ffc34d55}
+    #stick-dot{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffffffaa,#b7cfd455);border:1px solid #ffffff55;box-shadow:0 4px 12px #0008}
+    #sprint-tag{position:absolute;left:50%;top:-22px;transform:translateX(-50%);font:900 10px var(--ui);letter-spacing:2px;color:var(--amber);opacity:0}
+    #stick.sprint #sprint-tag{opacity:1}
+
+    .btn{pointer-events:auto;position:absolute;border-radius:50%;border:2px solid #ffffff2e;background:var(--glass);display:grid;place-items:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);touch-action:none;padding:0}
+    .btn svg{width:46%;height:46%;fill:#fff;pointer-events:none}
+    .btn.press{transform:scale(.92)}
+    #fire{width:104px;height:104px;right:max(20px,var(--sr));bottom:calc(max(12px,var(--sb)) + 36px);border-color:#ff6d50cc;background:radial-gradient(circle,#ed4a33b0,#62130e40);box-shadow:inset 0 0 20px #ff825266,0 0 24px #c2291955}
+    #fire svg{width:44%;height:44%}
+    #fire.press{background:radial-gradient(circle,#ff6a4dd0,#8a1c1480)}
+    #fire.auto{border-style:dashed}
+    #reload{width:58px;height:58px;right:calc(max(20px,var(--sr)) + 118px);bottom:calc(max(12px,var(--sb)) + 34px)}
+    #reload .ring{position:absolute;inset:-4px;width:auto;height:auto;fill:none}
+    #reload .ring circle{fill:none;stroke:var(--amber);stroke-width:4;stroke-dasharray:189;stroke-dashoffset:189;transform:rotate(-90deg);transform-origin:center}
+    #reload.warn{border-color:var(--amber);animation:pulse .8s infinite}
+    @keyframes pulse{50%{box-shadow:0 0 0 7px #ffc34d33}}
+    #grenade{width:58px;height:58px;right:calc(max(20px,var(--sr)) + 100px);bottom:calc(max(12px,var(--sb)) + 140px)}
+    #swap{width:58px;height:58px;right:calc(max(20px,var(--sr)) + 23px);bottom:calc(max(12px,var(--sb)) + 154px)}
+    .count{position:absolute;right:-4px;top:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--amber);color:#1a1206;font:900 11px/20px var(--ui);text-align:center;text-shadow:none}
+    .btn.off{opacity:.35}
+
+    #weapon{position:absolute;right:calc(max(20px,var(--sr)) + 190px);bottom:calc(max(12px,var(--sb)) + 34px);text-align:right}
+    #gun-name{font:800 10px var(--ui);letter-spacing:1.7px;color:#cfd9d6}
+    #ammo{font:900 clamp(28px,5vw,40px)/.9 var(--display)}
+    #ammo span{font-size:.45em;color:var(--dim)}
+    #ammo.low{color:var(--amber)}#ammo.empty{color:var(--red)}
+
+    #hint{position:absolute;left:50%;bottom:calc(max(12px,var(--sb)) + 12px);transform:translateX(-50%);padding:9px 14px;border-radius:10px;background:#050b0ecc;border:1px solid var(--line);font:700 12px var(--ui);letter-spacing:.4px;white-space:nowrap;opacity:0;transition:opacity .3s}
+    #hint.on{opacity:1}
+
+    .screen{position:fixed;inset:0;z-index:5;display:grid;place-items:center;touch-action:pan-y;padding:max(18px,var(--st)) max(18px,var(--sr)) max(18px,var(--sb)) max(18px,var(--sl));text-align:center;overflow:auto}
+    #menu{background:linear-gradient(90deg,#020608f0 0%,#02060899 55%,#02060800 100%)}
+    #menu .wrap{justify-self:start;text-align:left;max-width:440px;margin-left:clamp(0px,4vw,40px)}
+    .logo{font:900 clamp(40px,min(11vw,15vh),84px)/.8 var(--display);letter-spacing:2px;text-shadow:0 5px 0 #132326,0 10px 24px #000}
+    .logo em{display:block;color:var(--red);font-style:normal;font-size:.42em;letter-spacing:.55em;margin-top:14px}
+    .records{display:flex;gap:10px;margin:clamp(12px,4vh,22px) 0}
+    .rec{padding:9px 14px;border-radius:10px;background:#ffffff0c;border:1px solid var(--line)}
+    .rec b{display:block;font:900 22px var(--display);letter-spacing:1px}
+    .rec small{font:800 9px var(--ui);letter-spacing:1.6px;color:var(--dim)}
+    .cta{border:0;border-radius:12px;padding:17px 38px;background:linear-gradient(180deg,#ee5b43,#c53a2a);color:#fff;box-shadow:0 5px 0 #6f1f18,0 12px 28px #000c;font:900 17px var(--ui);letter-spacing:3px;animation:glow 2.2s ease-in-out infinite}
+    .cta:active{transform:translateY(3px);box-shadow:0 2px 0 #6f1f18}
+    @keyframes glow{50%{box-shadow:0 5px 0 #6f1f18,0 0 34px #ff4a2f88}}
+    .ghost{border:1px solid var(--line);border-radius:12px;padding:15px 20px;background:#ffffff0d;font:800 13px var(--ui);letter-spacing:2px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .tips{margin-top:18px;color:var(--dim);font:600 11px/1.6 var(--ui);letter-spacing:.4px}
+
+    .panel{width:min(94vw,440px);margin:auto;padding:24px;border-radius:18px;background:#081115ee;border:1px solid var(--line);box-shadow:0 20px 60px #000}
+    .panel h2{margin:0 0 16px;font:900 32px var(--display);letter-spacing:2px}
+    #pausemenu,#settings,#over,#perks{background:#010406c4;backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px)}
+    .stack{display:grid;gap:10px}
+    #settings .panel{width:min(94vw,680px)}
+    .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));column-gap:28px}
+    .opt{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid #ffffff12;font:700 13px var(--ui);text-align:left}
+    .opt small{display:block;color:var(--dim);font-weight:500;font-size:11px;margin-top:2px}
+    .toggle{width:50px;height:30px;flex:none;border-radius:15px;border:0;background:#2b3538;position:relative;transition:background .2s}
+    .toggle:after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s}
+    .toggle.on{background:#e5483a}.toggle.on:after{transform:translateX(20px)}
+    input[type=range]{width:130px;accent-color:var(--red)}
+
+    #over h2{color:var(--red);font-size:48px;margin-bottom:6px}
+    #over .sub{color:var(--dim);font:700 12px var(--ui);letter-spacing:2px;margin-bottom:16px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}
+    .stats div{padding:10px 6px;border-radius:10px;background:#ffffff0a}
+    .stats b{display:block;font:900 22px var(--display)}
+    .stats small{font:800 9px var(--ui);letter-spacing:1.4px;color:var(--dim)}
+    #newbest{display:inline-block;margin-bottom:12px;padding:5px 12px;border-radius:20px;background:var(--amber);color:#1b1305;font:900 11px var(--ui);letter-spacing:2px;animation:glow 1.4s infinite}
+
+    #perks h2{margin:0 0 4px;font:900 36px var(--display);letter-spacing:2px}
+    #perks .sub{color:var(--amber);font:800 11px var(--ui);letter-spacing:3px;margin-bottom:18px}
+    #perk-list{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .perk{width:min(28vw,170px);min-width:140px;padding:18px 12px;border-radius:16px;border:1px solid #ffffff22;background:linear-gradient(180deg,#14242a,#0a1418);text-align:center;transition:transform .15s,border-color .15s;animation:deal .35s both}
+    .perk:nth-child(2){animation-delay:.08s}.perk:nth-child(3){animation-delay:.16s}
+    @keyframes deal{from{opacity:0;transform:translateY(30px) scale(.9)}}
+    .perk:active{transform:scale(.95)}
+    .perk .ico{font-size:34px;line-height:1;margin-bottom:10px}
+    .perk b{display:block;font:900 17px var(--display);letter-spacing:1px;margin-bottom:6px}
+    .perk span{color:#b8c6c6;font:600 12px/1.4 var(--ui)}
+    .perk.rare{border-color:#ffc34d88;box-shadow:0 0 22px #ffc34d33}
+    .perk.rare b{color:var(--amber)}
+    @media (max-height:430px){.panel{padding:16px}.panel h2{font-size:26px;margin-bottom:8px}#over h2{font-size:38px}.stats b{font-size:18px}.opt{padding:7px 0}.perk{padding:12px 10px}.perk .ico{font-size:26px;margin-bottom:6px}}
+    @media (orientation:portrait){#menu{background:linear-gradient(0deg,#020608f5 0%,#02060899 60%,#02060833 100%)}#menu .wrap{justify-self:center;text-align:center;margin:0}.records{justify-content:center}.row{justify-content:center}#stick-zone{width:50%;top:45%}#hint{bottom:auto;top:36%;white-space:normal;width:max-content;max-width:86vw;text-align:center}#weapon{right:max(20px,var(--sr));bottom:calc(max(12px,var(--sb)) + 230px)}}
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
-  <div id="hud"><div class="top"><div id="wave">WAVE 01<small id="alive">ZOMBIES REMAINING: 0</small></div><div id="score">000000<small>SCORE</small></div></div><div id="message"></div><div id="damage"></div><div id="crosshair" class="center"><i class="line v"></i><i class="line h"></i></div><div id="hit" class="center"></div><div id="health"><span id="health-num">100</span><div class="bar"><i id="health-fill"></i></div></div><div id="stick" class="control"><div id="stick-dot"></div></div><button id="fire" class="control">FIRE</button><button id="reload">RELOAD</button><div id="weapon"><div id="gun-name">M4A1<br>ASSAULT RIFLE</div><div id="ammo">30<span>/120</span></div></div></div>
-  <section id="intro"><div><div class="logo">LAST STAND<em>DEADZONE</em></div><p class="brief">A fully 3D survival zone. Move freely, look around the city, and stop the infected before they close the distance.</p><button id="start">TAP TO DEPLOY</button><div class="tips">LEFT STICK: MOVE &nbsp;•&nbsp; DRAG: LOOK &nbsp;•&nbsp; HOLD FIRE: SHOOT</div></div></section>
+
+  <div id="hud">
+    <div id="damage"></div>
+    <div id="lowhp"></div>
+    <div id="floaters"></div>
+    <div class="pad">
+      <div id="vitals">
+        <div class="hp-row"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.2 3 4.5 6.6 4.5c2.1 0 3.6 1.1 4.4 2.5.8-1.4 2.3-2.5 4.4-2.5 3.6 0 5.7 3.7 4.2 7.2C19.5 16.4 12 21 12 21z"/></svg><span id="hp-num">100</span></div>
+        <div class="bar"><i id="hp-lag"></i><i id="hp-fill"></i></div>
+        <div id="wave-box"><span id="wave-num">WAVE 1</span><small id="alive">5 INFECTED LEFT</small></div>
+        <div id="wave-bar" class="bar"><i id="wave-fill"></i></div>
+      </div>
+      <div id="scorebox"><div id="score">0</div><div id="combo">x1.0</div></div>
+      <div id="topright">
+        <canvas id="radar" width="192" height="192"></canvas>
+        <button id="pause" aria-label="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+      </div>
+      <div id="bossbar" class="hidden"><span id="boss-name">ABOMINATION</span><div class="bar"><i id="boss-fill"></i></div></div>
+    </div>
+
+    <div id="indicators"></div>
+    <div id="crosshair" class="center"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="d"></i></div>
+    <div id="hit" class="center"><i></i><i></i><i></i><i></i></div>
+    <div id="reticle-ring" class="center"></div>
+    <div id="message"></div>
+    <div id="toast"></div>
+
+    <div id="stick-zone"><div id="stick"><span id="sprint-tag">SPRINT</span><div id="stick-dot"></div></div></div>
+    <div id="weapon"><div id="gun-name">M4A1</div><div id="ammo">30<span>/180</span></div></div>
+    <button id="swap" class="btn hidden" aria-label="Switch weapon"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3 1.4-1.4L21.8 8l-5.4 5.4L15 12l3-3H7zm10 10H6l3 3-1.4 1.4L2.2 16l5.4-5.4L9 12l-3 3h11z"/></svg></button>
+    <button id="grenade" class="btn" aria-label="Throw grenade"><svg viewBox="0 0 24 24"><path d="M10 2h4v2h2v2.2A7.5 7.5 0 1 1 8 6.2V4h2zm2 6a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/></svg><span id="nades" class="count">2</span></button>
+    <button id="reload" class="btn" aria-label="Reload"><svg class="ring" viewBox="0 0 66 66"><circle cx="33" cy="33" r="30"/></svg><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.7 5.9l2-.6V15h-5.6l1.7-1.5A6 6 0 1 0 17.5 16l1.7 1.1A8 8 0 1 1 12 4z"/></svg></button>
+    <button id="fire" class="btn" aria-label="Fire"><svg viewBox="0 0 24 24"><path d="M11 2h2v5h-2zm0 15h2v5h-2zM2 11h5v2H2zm15 0h5v2h-5zm-5-3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 2.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg></button>
+    <div id="hint"></div>
+  </div>
+
+  <section id="menu" class="screen">
+    <div class="wrap">
+      <div class="logo">LAST STAND<em>DEADZONE</em></div>
+      <div class="records">
+        <div class="rec"><b id="best-score">0</b><small>BEST SCORE</small></div>
+        <div class="rec"><b id="best-wave">0</b><small>BEST WAVE</small></div>
+      </div>
+      <div class="row"><button id="start" class="cta">DEPLOY</button><button class="ghost" data-open="settings">SETTINGS</button></div>
+      <div class="tips">Survive endless waves. Pick a perk after every wave.<br>Every fifth wave, something big comes.</div>
+    </div>
+  </section>
+
+  <section id="pausemenu" class="screen hidden">
+    <div class="panel stack"><h2>PAUSED</h2><button class="cta" id="resume">RESUME</button><button class="ghost" data-open="settings">SETTINGS</button><button class="ghost" id="quit">QUIT TO MENU</button></div>
+  </section>
+
+  <section id="settings" class="screen hidden">
+    <div class="panel">
+      <h2>SETTINGS</h2>
+      <div class="opts">
+      <div class="opt"><div>Look sensitivity<small id="sens-val">1.0x</small></div><input id="sens" type="range" min="0.4" max="2.2" step="0.1"></div>
+      <div class="opt"><div>Aim assist<small>Slows and nudges aim near targets</small></div><button class="toggle" data-key="aimAssist"></button></div>
+      <div class="opt"><div>Auto fire<small>Shoots when the crosshair is on a zombie</small></div><button class="toggle" data-key="autoFire"></button></div>
+      <div class="opt"><div>Invert look<small>Vertical axis</small></div><button class="toggle" data-key="invert"></button></div>
+      <div class="opt"><div>Sound</div><button class="toggle" data-key="sound"></button></div>
+      <div class="opt"><div>Haptics</div><button class="toggle" data-key="haptics"></button></div>
+      </div>
+      <div style="margin-top:16px"><button class="cta" id="close-settings">DONE</button></div>
+    </div>
+  </section>
+
+  <section id="perks" class="screen hidden">
+    <div><h2 id="perk-title">WAVE CLEARED</h2><div class="sub">CHOOSE AN UPGRADE</div><div id="perk-list"></div></div>
+  </section>
+
+  <section id="over" class="screen hidden">
+    <div class="panel">
+      <h2>YOU DIED</h2>
+      <div class="sub" id="over-sub">THE HORDE GOT YOU ON WAVE 1</div>
+      <div id="newbest" class="hidden">NEW PERSONAL BEST</div>
+      <div class="stats">
+        <div><b id="st-score">0</b><small>SCORE</small></div>
+        <div><b id="st-kills">0</b><small>KILLS</small></div>
+        <div><b id="st-heads">0</b><small>HEADSHOTS</small></div>
+        <div><b id="st-acc">0%</b><small>ACCURACY</small></div>
+        <div><b id="st-combo">0</b><small>BEST STREAK</small></div>
+        <div><b id="st-time">0:00</b><small>SURVIVED</small></div>
+      </div>
+      <div class="row" style="justify-content:center"><button class="cta" id="again">REDEPLOY</button><button class="ghost" id="to-menu">MENU</button></div>
+    </div>
+  </section>
+
   <script type="module" src="game.js"></script>
 </body>
 </html>
