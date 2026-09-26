@@ -1078,6 +1078,7 @@ function hurtPlayer(amount, from, quiet) {
       explode(camera.position.x, camera.position.z, { friendly: true });
       return;
     }
+    bus.emit('player:death', { from, amount });
     gameOver();
   }
 }
@@ -2166,7 +2167,7 @@ function update(dt) {
   updateSingularities(dt);
   updateZombies(dt, true, camera.position);
   if (!state.between && !state.queue?.length && zombies.every(z => z.userData.dead) && state.waveTotal > 0 && state.mode === 'playing') waveCleared();
-  if (!tutorialDone && state.moved && state.looked && state.clock > 4) { tutorialDone = true; store.set('tutorial', true); hint(''); }
+  if (!tutorialDone && state.moved && state.looked && state.clock > 4) { tutorialDone = true; store.set('tutorial', true); hint(''); bus.emit('tutorial:done', {}); }
   updateView(dt);
   updateHud(dt);
 }
