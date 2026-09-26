@@ -27,6 +27,14 @@ export const WEAPON_SKINS = [
 
 export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND'];
 
+export const SUITS = [
+  null,
+  { id: 'ronin', name: 'CYBER RONIN', premium: 'outfit.ronin', desc: 'Neon-lined tech suit, holo visor and a light-blade katana.', base: { top: 2, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 6, hairColor: 6, back: 0 }, sleeve: 0x121316, glove: 0x0b0c0e, accent: 0x19f0ff },
+  { id: 'knight', name: 'INFERNAL KNIGHT', premium: 'outfit.knight', desc: 'Black iron plate cracked with molten embers. Horned helm.', base: { top: 4, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x1c1c20, glove: 0x2a2a2e, accent: 0xff5a1a },
+  { id: 'spectre', name: 'SPECTRE', premium: 'outfit.spectre', desc: 'A floor-length shadow cloak. Only the eyes remain.', base: { top: 1, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0 }, sleeve: 0x100c18, glove: 0x100c18, accent: 0xb48cff },
+  { id: 'wolf', name: 'ARCTIC WOLF', premium: 'outfit.wolf', desc: 'Fur parka with a wolf-head hood, snow goggles and fur boots.', base: { top: 1, topColor: 5, pants: 4, boots: 2, head: 0, face: 6, hair: 7, back: 1 }, sleeve: 0xe8e4d8, glove: 0x6a6258, accent: 0xffa040 },
+];
+
 export const SLOTS = [
   { id: 'skin', label: 'SKIN', bits: 3, items: SKIN_TONES.map((c, i) => ({ name: 'TONE ' + (i + 1), swatch: c })) },
   { id: 'hair', label: 'HAIR', bits: 3, items: [
@@ -59,7 +67,9 @@ export const SLOTS = [
     { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' }]
     .map((it, i) => ({ ...it, name: TITLES[i] })) },
   { id: 'primary', label: 'PRIMARY', bits: 4, hidden: true, items: WEAPONS.map(w => ({ name: w.name })) },
+  { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, desc: x.desc, swatch: x.accent } : { name: 'NONE' }) },
 ];
+const LEVEL_CAP = 63;
 
 export const DEFAULT_LOADOUT = Object.fromEntries(SLOTS.map(s => [s.id, 0]));
 DEFAULT_LOADOUT.skin = 1;
@@ -73,7 +83,7 @@ export function encodeLoadout(loadout, level = 1) {
     code += (Math.max(0, Math.min(size - 1, loadout[s.id] | 0))) * base;
     base *= size;
   }
-  return code + Math.max(1, Math.min(255, level | 0)) * base;
+  return code + Math.max(1, Math.min(LEVEL_CAP, level | 0)) * base;
 }
 
 export function decodeLoadout(code) {
@@ -86,11 +96,13 @@ export function decodeLoadout(code) {
     rest = Math.floor(rest / size);
     loadout[s.id] = v < s.items.length ? v : 0;
   }
-  return { loadout, level: Math.max(1, rest % 256) };
+  return { loadout, level: Math.max(1, rest % (LEVEL_CAP + 1)) };
 }
 
 export function describeLoadout(l) {
   const n = id => SLOTS.find(s => s.id === id).items[l[id]]?.name || '';
+  const suit = SUITS[l.suit];
+  if (suit) return [['OUTFIT', suit.name + ' (EXCLUSIVE)'], ['WEAPON', (l.gun ? n('gun') + ' ' : '') + (WEAPONS[l.primary]?.name || 'M4A1')]];
   const parts = [
     ['OUTFIT', n('topColor') + ' ' + n('top')],
     ['HAIR', l.hair === 7 ? 'BALD' : n('hairColor') + ' ' + n('hair')],
@@ -152,6 +164,8 @@ export function paintGunMaterials(mats, skinIndex) {
   }
 }
 export function outfitColors(l) {
+  const suit = SUITS[l.suit];
+  if (suit) return { sleeve: suit.sleeve, glove: suit.glove };
   const topStyle = l.top, top = OUTFIT_COLORS[l.topColor] ?? OUTFIT_COLORS[0];
   const gloved = topStyle === 3 || topStyle === 4 || topStyle === 7 || topStyle === 2;
   return { sleeve: topStyle === 0 ? SKIN_TONES[l.skin] : top, glove: gloved ? 0x16181b : SKIN_TONES[l.skin] ?? SKIN_TONES[1] };
@@ -168,6 +182,78 @@ const G = {
   taper: new THREE.CylinderGeometry(.707, .6, 1, 4, 1).rotateY(Math.PI / 4),
 };
 const UP = new THREE.Vector3(0, -1, 0);
+
+function suitParts(suit, { body, torso, head, arms, legs }) {
+  const glow = m(suit.accent, { emissive: suit.accent, emissiveIntensity: 1.3, roughness: .3 });
+  const black = m(0x0b0c0e, { roughness: .5 });
+  if (suit.id === 'ronin') {
+    const plate = m(0x16181c, { metalness: .6, roughness: .3 });
+    for (const x of [-.1, .1]) part(torso, G.box, glow, [x, .25, .124], [.012, .42, .006]);
+    part(torso, G.box, glow, [0, .4, .124], [.26, .012, .006]);
+    part(torso, G.box, glow, [0, .05, .124], [.3, .012, .006]);
+    part(torso, G.cyl, plate, [0, .52, 0], [.12, .08, .1]);
+    part(arms[1].sh, G.box, plate, [.02, -.02, 0], [.15, .08, .16], [0, 0, -.3]);
+    for (const s of [-1, 1]) {
+      part(arms[s].upper, G.box, glow, [0, -.15, .058], [.01, .2, .006]);
+      part(arms[s].el, G.box, glow, [0, -.12, .052], [.01, .16, .006]);
+    }
+    for (const { hip, knee } of legs) { part(hip, G.box, glow, [0, -.21, .092], [.01, .3, .006]); part(knee, G.box, glow, [0, -.18, .078], [.01, .22, .006]); }
+    part(head, G.box, black, [0, .165, .112], [.22, .06, .04]);
+    part(head, G.box, glow, [0, .165, .133], [.2, .024, .01]);
+    part(torso, G.box, glow, [0, .2, -.15], [.02, .95, .035], [0, 0, .7]);
+    part(torso, G.box, black, [.28, .52, -.15], [.035, .22, .045], [0, 0, .7]);
+  }
+  if (suit.id === 'knight') {
+    const iron = m(0x1c1c20, { metalness: .85, roughness: .32 }), bone = m(0xd9d0b4, { roughness: .6 });
+    part(torso, G.taper, iron, [0, .27, 0], [.47, .48, .29]);
+    for (const [x, y, rz] of [[-.08, .34, .4], [-.02, .24, -.5], [.06, .3, .3], [.1, .16, -.6], [-.1, .12, .5]]) part(torso, G.box, glow, [x, y, .147], [.012, .1, .006], [0, 0, rz]);
+    for (const s of [-1, 1]) {
+      part(arms[s].sh, G.sphere, iron, [s * .02, .02, 0], [.12, .085, .12]);
+      part(arms[s].sh, G.cone, iron, [s * .06, .11, 0], [.025, .08, .025], [0, 0, -s * .5]);
+      part(arms[s].el, G.cyl, iron, [0, -.16, 0], [.065, .1, .065]);
+      part(arms[s].el, G.box, glow, [0, -.16, .066], [.02, .02, .005]);
+    }
+    for (const { knee } of legs) { part(knee, G.box, iron, [0, -.2, .03], [.105, .3, .1]); part(knee, G.sphere, iron, [0, 0, .05], [.07, .06, .06]); }
+    part(head, G.sphere, iron, [0, .15, 0], [.148, .168, .152]);
+    part(head, G.box, black, [0, .16, .142], [.16, .03, .02]);
+    part(head, G.box, glow, [0, .16, .152], [.14, .012, .005]);
+    for (const s of [-1, 1]) {
+      part(head, G.cone, bone, [s * .15, .27, 0], [.032, .14, .032], [0, 0, -s * .7]);
+      part(head, G.cone, bone, [s * .22, .36, 0], [.022, .09, .022], [0, 0, -s * .1]);
+    }
+    part(torso, G.box, m(0x3a0a08, { roughness: 1, side: THREE.DoubleSide }), [0, -.08, -.15], [.44, 1.05, .015], [.1, 0, 0]);
+  }
+  if (suit.id === 'spectre') {
+    const cloth = m(0x100c18, { roughness: 1 }), deep = m(0x000000, { roughness: 1 });
+    part(torso, G.taper, cloth, [0, -.5, 0], [.54, 1.02, .38], [Math.PI, 0, 0]);
+    part(torso, G.taper, cloth, [0, .26, 0], [.46, .54, .28]);
+    for (let i = 0; i < 7; i++) part(torso, G.box, cloth, [(i - 3) * .075, -1.0, .1 + (i % 2) * .05], [.06, .1 + (i % 3) * .05, .02], [.2, 0, (i - 3) * .1]);
+    part(head, G.sphere, cloth, [0, .17, -.06], [.18, .21, .17]);
+    part(head, G.sphere, deep, [0, .13, .09], [.12, .13, .075]);
+    for (const s of [-1, 1]) part(head, G.sphere, m(suit.accent, { emissive: suit.accent, emissiveIntensity: 3 }), [s * .045, .15, .158], [.03, .016, .012]);
+    for (const s of [-1, 1]) part(arms[s].el, G.cyl, cloth, [0, -.14, 0], [.085, .22, .085]);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      part(body, G.sphere, glow, [Math.cos(a) * .45, .1 + (i % 3) * .25, Math.sin(a) * .45], [.018, .018, .018]);
+    }
+  }
+  if (suit.id === 'wolf') {
+    const fur = m(0xe8e4d8, { roughness: 1, flatShading: true }), grey = m(0xa8acb0, { roughness: 1, flatShading: true }), amber = m(0xffb040, { emissive: 0xff8a1a, emissiveIntensity: 1.2 });
+    part(torso, G.taper, fur, [0, .24, 0], [.49, .56, .31]);
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; part(torso, G.sphere, fur, [Math.cos(a) * .22, -.02, Math.sin(a) * .14], [.07, .05, .07]); }
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; part(torso, G.sphere, fur, [Math.cos(a) * .13, .49, Math.sin(a) * .1], [.06, .05, .06]); }
+    part(head, G.sphere, grey, [0, .2, -.02], [.16, .15, .17]);
+    part(head, G.box, grey, [0, .27, .11], [.08, .06, .12]);
+    part(head, G.sphere, black, [0, .28, .175], [.02, .016, .015]);
+    for (const s of [-1, 1]) {
+      part(head, G.cone, grey, [s * .08, .35, -.02], [.035, .09, .03], [0, 0, -s * .2]);
+      part(head, G.sphere, amber, [s * .04, .3, .15], [.012, .01, .008]);
+      part(arms[s].el, G.sphere, fur, [0, -.2, 0], [.075, .05, .075]);
+    }
+    for (const { knee } of legs) part(knee, G.sphere, fur, [0, -.32, .01], [.1, .06, .12]);
+    part(torso, G.box, grey, [0, .1, -.3], [.1, .5, .06], [.25, 0, 0]);
+  }
+}
 function solveArm(upper, el, shoulder, target, pole, l1, l2) {
   const toT = target.clone().sub(shoulder);
   const d = Math.min(toT.length(), l1 + l2 - .002);
@@ -199,7 +285,10 @@ function limb(parent, material, len, r, pos, rot) {
   return j;
 }
 
-export function buildSurvivor(l) {
+export function buildSurvivor(l0) {
+  const suit = SUITS[l0.suit] || null;
+  const l = suit ? { ...l0, ...suit.base } : l0;
+  const legs = [];
   const root = new THREE.Group();
   const skinC = SKIN_TONES[l.skin] ?? SKIN_TONES[1], hairC = HAIR_COLORS[l.hairColor] ?? HAIR_COLORS[0];
   const topC = OUTFIT_COLORS[l.topColor] ?? OUTFIT_COLORS[0], pantsC = PANTS_COLORS[l.pants] ?? PANTS_COLORS[0];
@@ -225,6 +314,7 @@ export function buildSurvivor(l) {
     part(knee, G.box, hazmat ? black : m(bootC[0]), [0, -.41, .04], [.13, .11, .26]);
     part(knee, G.box, hazmat ? black : m(bootC[1]), [0, -.465, .04], [.136, .03, .27]);
     if (l.boots === 0 || l.boots === 2) part(knee, G.box, hazmat ? black : m(bootC[0]), [0, -.32, 0], [.125, .14, .15]);
+    legs.push({ hip, knee, s });
   }
   part(body, G.box, pants, [0, .93, 0], [.34, .18, .21]);
   part(body, G.box, m(0x1a1410), [0, 1.0, 0], [.35, .045, .22]);
@@ -324,6 +414,8 @@ export function buildSurvivor(l) {
   if (l.back === 5) part(torso, G.box, m(0x7a1a1a, { roughness: 1, side: THREE.DoubleSide }), [0, -.05, -.14], [.46, 1, .02], [.12, 0, 0]);
   if (l.back === 6) { const w = m(0x8a4a1a, { roughness: .4 }); part(torso, G.cyl, w, [-.05, .05, -.16], [.16, .06, .16], [Math.PI / 2, 0, 0]); part(torso, G.cyl, w, [.03, .22, -.16], [.12, .06, .12], [Math.PI / 2, 0, 0]); part(torso, G.box, m(0x2a1a0e), [.14, .5, -.16], [.04, .45, .02], [0, 0, -.35]); }
   if (l.back === 7) { part(torso, G.box, m(0x9aa4a8, { metalness: .9, roughness: .25 }), [0, .25, -.16], [.03, .5, .28], [0, 0, -.5]); part(torso, G.box, m(0x5a0a08), [.05, .12, -.16], [.032, .15, .282], [0, 0, -.5]); }
+
+  if (suit) suitParts(suit, { body, torso, head, arms, legs });
 
   const wdef = WEAPONS[l.primary] || WEAPONS[0];
   const gm = { base: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), dark: new THREE.MeshStandardMaterial() };

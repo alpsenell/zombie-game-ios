@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { WEAPONS, buildGun, weaponIndex, weaponStats } from './weapons.js';
+import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
 import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
@@ -893,6 +893,7 @@ function reqText(req) {
 function isOwned(slotId, i) {
   const it = SLOTS.find(s => s.id === slotId).items[i];
   if (!it) return false;
+  if (it.premium) return !!profile.iap[STORE_PREFIX + it.premium];
   if (it.req) return reqMet(it.req);
   return !it.cost || !!profile.owned[slotId + ':' + i];
 }
@@ -2409,6 +2410,7 @@ $('#gc-open').onclick = () => gameCenter.call('showLeaderboard', {}).catch(() =>
 let lockerSlot = 'top', pendingBuy = null, tryOn = null;
 function refreshProfileUI() {
   const lv = levelInfo(), l = profile.loadout;
+  if (l.suit && !isOwned('suit', l.suit)) { l.suit = 0; saveProfile(); }
   $('#menu-level').textContent = 'LV ' + lv.level;
   $('#menu-title').textContent = TITLES[l.title];
   $('#lk-level').textContent = 'LEVEL ' + lv.level;
@@ -2424,10 +2426,11 @@ function refreshProfileUI() {
 function renderLocker() {
   const tabs = $('#slot-tabs'), grid = $('#item-grid');
   tabs.innerHTML = ''; grid.innerHTML = '';
-  for (const s of SLOTS) {
+  const ordered = [SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
+  for (const s of ordered) {
     if (s.hidden) continue;
     const b = document.createElement('button');
-    b.textContent = s.label;
+    b.textContent = s.id === 'suit' ? '★ ' + s.label : s.label;
     b.className = (s.id === lockerSlot ? 'on' : '') + (profile.fresh.some(k => k.startsWith(s.id + ':')) ? ' new' : '');
     b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
     tabs.appendChild(b);
@@ -2436,11 +2439,11 @@ function renderLocker() {
   slot.items.forEach((it, i) => {
     const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
     const b = document.createElement('button');
-    b.className = 'item ' + (equipped ? 'equipped' : owned ? 'owned' : it.req ? 'locked' : 'cost') + (tryOn?.[slot.id] === i && !equipped ? ' trying' : '') + (pendingBuy === key ? ' confirm' : '') + (profile.fresh.includes(key) ? ' fresh' : '');
+    b.className = 'item ' + (it.premium ? 'premium ' : '') + (equipped ? 'equipped' : owned ? 'owned' : it.req || it.premium ? 'locked' : 'cost') + (tryOn?.[slot.id] === i && !equipped ? ' trying' : '') + (pendingBuy === key ? ' confirm' : '') + (profile.fresh.includes(key) ? ' fresh' : '');
     if (it.swatch !== undefined) { const sw = document.createElement('i'); sw.style.background = '#' + it.swatch.toString(16).padStart(6, '0'); b.appendChild(sw); }
     const name = document.createElement('b'); name.textContent = it.name;
     const st = document.createElement('small');
-    st.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : it.req ? '🔒 ' + reqText(it.req) : pendingBuy === key ? 'TAP AGAIN TO BUY' : '🔩 ' + it.cost.toLocaleString();
+    st.textContent = equipped ? 'EQUIPPED' : owned ? 'OWNED' : it.premium ? (storeKit.products[STORE_PREFIX + it.premium]?.price || (storeKit.available() ? 'APP STORE' : 'iOS APP')) : it.req ? '🔒 ' + reqText(it.req) : pendingBuy === key ? 'TAP AGAIN TO BUY' : '🔩 ' + it.cost.toLocaleString();
     b.append(name, st);
     b.onclick = () => lockerPick(slot, i);
     grid.appendChild(b);
@@ -2451,11 +2454,31 @@ function lockerPick(slot, i) {
   tryOn = { ...profile.loadout, [slot.id]: i };
   preview.show(tryOn);
   haptic('LIGHT');
-  if (isOwned(slot.id, i)) {
+  const buy = $('#lk-buy');
+  buy.classList.add('hidden');
+  if (it.premium && !isOwned(slot.id, i)) {
+    pendingBuy = null;
+    if (storeKit.available()) {
+      const price = storeKit.products[STORE_PREFIX + it.premium]?.price || '';
+      buy.textContent = 'BUY ' + price;
+      buy.classList.remove('hidden');
+      buy.onclick = async () => {
+        buy.disabled = true;
+        $('#lk-hint').textContent = 'Opening the App Store…';
+        const r = await storeKit.purchase(STORE_PREFIX + it.premium);
+        buy.disabled = false;
+        if (r.status === 'purchased') { profile.loadout[slot.id] = i; tryOn = null; saveProfile(); buy.classList.add('hidden'); }
+        $('#lk-hint').textContent = storeKit.message(r, it.name) + (r.status === 'purchased' ? ' Equipped.' : '');
+        refreshProfileUI();
+        renderLocker();
+      };
+      $('#lk-hint').textContent = it.desc + ' Exclusive outfit — try it on free.';
+    } else $('#lk-hint').textContent = it.desc + ' iOS exclusive — purchase it in the iPhone app.';
+  } else if (isOwned(slot.id, i)) {
     profile.loadout[slot.id] = i;
     tryOn = null; pendingBuy = null;
     saveProfile();
-    $('#lk-hint').textContent = it.name + ' equipped.';
+    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
   } else if (it.req) {
     pendingBuy = null;
     $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
@@ -2482,6 +2505,8 @@ function lockerPick(slot, i) {
 function openLocker() {
   sfx.init();
   tryOn = null; pendingBuy = null;
+  $('#lk-buy').classList.add('hidden');
+  storeKit.refresh();
   showScreen(ui.locker);
   preview.show(profile.loadout);
   const firstFresh = profile.fresh[0];
@@ -2493,6 +2518,7 @@ function openLocker() {
 document.querySelectorAll('[data-open="locker"]').forEach(b => (b.onclick = openLocker));
 $('#menu-char').onclick = openLocker;
 $('#locker-done').onclick = () => {
+  $('#lk-buy').classList.add('hidden');
   profile.loadout.primary = loadoutWeapons()[0];
   profile.fresh = [];
   saveProfile();
@@ -2507,11 +2533,13 @@ const storeKit = {
   pending: false,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'Store')); },
   call(method, opts = {}) { return window.Capacitor.nativePromise('Store', method, opts); },
-  ids() { return WEAPONS.filter(w => w.productId).map(w => w.productId); },
+  ids() { return [...WEAPONS.filter(w => w.productId).map(w => w.productId), ...SLOTS.find(s => s.id === 'suit').items.filter(it => it.premium).map(it => STORE_PREFIX + it.premium)]; },
   apply(owned) {
     profile.iap = Object.fromEntries((owned || []).map(id => [id, true]));
     saveProfile();
+    refreshProfileUI();
     if (activeScreen === ui.armory) renderArmory();
+    if (activeScreen === ui.locker) renderLocker();
   },
   async init() {
     if (!this.available()) return;
@@ -2523,21 +2551,32 @@ const storeKit = {
     if (!this.available()) return;
     try { this.apply((await this.call('getEntitlements')).owned); } catch {}
   },
-  async buy(w) {
-    if (this.pending) return;
+  async purchase(productId) {
+    if (this.pending) return { status: 'busy' };
     this.pending = true;
-    renderArmory('Opening the App Store…');
+    let result;
     try {
-      const r = await this.call('purchase', { id: w.productId });
-      if (r.status === 'purchased') {
-        profile.iap[w.productId] = true;
+      result = await this.call('purchase', { id: productId });
+      if (result.status === 'purchased') {
+        profile.iap[productId] = true;
         saveProfile();
         await this.refresh();
         sfx.clear(); haptic('HEAVY');
-        armoryNote = w.name + ' unlocked — equip it below!';
-      } else armoryNote = r.status === 'pending' ? 'Purchase pending approval.' : 'Purchase cancelled.';
-    } catch (e) { armoryNote = 'Purchase failed: ' + e.message; }
+      }
+    } catch (e) { result = { status: 'failed', error: e.message }; }
     this.pending = false;
+    return result;
+  },
+  message(r, name) {
+    if (r.status === 'purchased') return name + ' unlocked!';
+    if (r.status === 'pending') return 'Purchase pending approval.';
+    if (r.status === 'failed') return 'Purchase failed: ' + r.error;
+    return 'Purchase cancelled.';
+  },
+  async buy(w) {
+    renderArmory('Opening the App Store…');
+    const r = await this.purchase(w.productId);
+    armoryNote = r.status === 'purchased' ? w.name + ' unlocked — equip it below!' : this.message(r, w.name);
     renderArmory();
   },
   async restore() {

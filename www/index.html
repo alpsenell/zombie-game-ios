@@ -206,6 +206,11 @@
     .item.equipped small{color:#fff}
     .item.trying{border-color:#ffffff88}
     .item.confirm{border-color:var(--amber);background:#2a2210}
+    .item.premium{border-color:#ffc34d77;background:linear-gradient(160deg,#2a2210,#0e191e 60%)}
+    .item.premium b{color:var(--amber)}
+    .item.premium.locked{opacity:1}
+    .item.premium.locked small{color:var(--amber)}
+    #lk-buy{padding:13px 20px}
     .item.fresh:after{content:"NEW";position:absolute;right:6px;top:6px;padding:1px 5px;border-radius:5px;background:var(--red);font:900 8px var(--ui);color:#fff}
     .locker-foot{display:flex;align-items:center;gap:10px;justify-content:space-between;padding-top:8px;flex:none}
     #lk-hint{color:var(--dim);font:600 11px var(--ui)}
@@ -396,7 +401,7 @@
         <div class="locker-head"><h2>LOCKER</h2><div class="scrap">🔩 <span id="lk-scrap">0</span></div></div>
         <div id="slot-tabs"></div>
         <div id="item-grid"></div>
-        <div class="locker-foot"><span id="lk-hint">Tap an item to try it on.</span><button class="cta" id="locker-done">DONE</button></div>
+        <div class="locker-foot"><span id="lk-hint">Tap an item to try it on.</span><div class="row" style="gap:8px;flex-wrap:nowrap"><button class="cta gold hidden" id="lk-buy">BUY</button><button class="cta" id="locker-done">DONE</button></div></div>
       </div>
     </div>
   </section>
