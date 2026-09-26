@@ -1,0 +1,216 @@
+{
+  "identifier": "F5E1A0C4-0000-4000-8000-000000000001",
+  "nonRenewingSubscriptions": [],
+  "products": [
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C00",
+      "localizations": [
+        {
+          "description": "Chain-lightning weapon. Lightning jumps between up to five infected.",
+          "displayName": "Tesla Arc",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.weapon.tesla",
+      "referenceName": "Tesla Arc",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C01",
+      "localizations": [
+        {
+          "description": "Freeze beam. Freezes the horde solid; frozen infected shatter.",
+          "displayName": "Cryo Lance",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.weapon.cryo",
+      "referenceName": "Cryo Lance",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C02",
+      "localizations": [
+        {
+          "description": "Black hole launcher. Drags the horde in, then detonates.",
+          "displayName": "Singularity",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.weapon.singularity",
+      "referenceName": "Singularity",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C03",
+      "localizations": [
+        {
+          "description": "Incendiary minigun. Spins up, then shreds and ignites everything in front of you.",
+          "displayName": "Dragon's Breath",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.weapon.dragon",
+      "referenceName": "Dragon's Breath",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C04",
+      "localizations": [
+        {
+          "description": "Neon-lined tech suit, holo visor and a light-blade katana. Cosmetic only.",
+          "displayName": "Cyber Ronin",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.outfit.ronin",
+      "referenceName": "Cyber Ronin",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C05",
+      "localizations": [
+        {
+          "description": "Black iron plate cracked with molten embers. Horned helm. Cosmetic only.",
+          "displayName": "Infernal Knight",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.outfit.knight",
+      "referenceName": "Infernal Knight",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C06",
+      "localizations": [
+        {
+          "description": "A floor-length shadow cloak. Only the eyes remain. Cosmetic only.",
+          "displayName": "Spectre",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.outfit.spectre",
+      "referenceName": "Spectre",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "2.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C07",
+      "localizations": [
+        {
+          "description": "Fur parka with a wolf-head hood, snow goggles and fur boots. Cosmetic only.",
+          "displayName": "Arctic Wolf",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.outfit.wolf",
+      "referenceName": "Arctic Wolf",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C08",
+      "localizations": [
+        {
+          "description": "Black Harvest (21 Sep - 2 Nov 2026). Unlocks the premium reward track: scrap, card flair and the HOLLOW JACK outfit. No gameplay advantage.",
+          "displayName": "Season 1 Pass",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.season.1.pass",
+      "referenceName": "Season 1 Pass",
+      "type": "NonConsumable"
+    },
+    {
+      "displayPrice": "4.99",
+      "familyShareable": false,
+      "internalID": "1A2B3C09",
+      "localizations": [
+        {
+          "description": "Deep Water (2 Nov - 14 Dec 2026). Unlocks the premium reward track: scrap, card flair and the DEEP DIVER outfit. No gameplay advantage.",
+          "displayName": "Season 2 Pass",
+          "locale": "en_US"
+        }
+      ],
+      "productID": "com.alpsenel.laststanddeadzone.season.2.pass",
+      "referenceName": "Season 2 Pass",
+      "type": "NonConsumable"
+    }
+  ],
+  "settings": {
+    "_applicationInternalID": "",
+    "_developerTeamID": "",
+    "_failTransactionsEnabled": false,
+    "_lastSynchronizedDate": 0,
+    "_locale": "en_US",
+    "_storefront": "USA",
+    "_storeKitErrors": [
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Load Products"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Purchase"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Verification"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Store Sync"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Subscription Status"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "App Transaction"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Manage Subscriptions Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Refund Request Sheet"
+      },
+      {
+        "current": null,
+        "enabled": false,
+        "name": "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups": [],
+  "version": {
+    "major": 4,
+    "minor": 0
+  }
+}

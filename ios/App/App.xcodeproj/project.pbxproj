@@ -22,6 +22,7 @@
 		A1D0C0082F10000100DEAD01 /* AchievementsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */; };
 		A1D0C00A2F10000100DEAD01 /* SharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */; };
 		A1D0C00C2F10000100DEAD01 /* MatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */; };
+		A1D0C00F2F10000100DEAD01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,8 @@
 		A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsPlugin.swift; sourceTree = "<group>"; };
 		A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlugin.swift; sourceTree = "<group>"; };
 		A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchPlugin.swift; sourceTree = "<group>"; };
+		A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		A1D0C0102F10000100DEAD01 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +88,8 @@
 				A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */,
 				A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */,
 				A1D0C0052F10000100DEAD01 /* App.entitlements */,
+				A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */,
+				A1D0C0102F10000100DEAD01 /* Products.storekit */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -168,6 +173,7 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				A1D0C00F2F10000100DEAD01 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -328,6 +334,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6S7Q8F967Q;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -351,6 +358,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6S7Q8F967Q;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
