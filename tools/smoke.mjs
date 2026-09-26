@@ -23,8 +23,8 @@ export async function serve(port = 0) {
   return { server, url: `http://localhost:${server.address().port}/` };
 }
 
-export async function launch() {
-  return chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+export async function launch(args = []) {
+  return chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', ...args] });
 }
 
 export async function openGame(browser, url, { width = 844, height = 390, init } = {}) {
