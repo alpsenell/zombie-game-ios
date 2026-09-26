@@ -14,6 +14,8 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - `screen` `{ id }`
 - `player:death` `{ from, amount }` (before `run:end`; `from` is the attacker's position or `null`) · `tutorial:done` `{}`
 - Analytics: `api.analytics.track(type, payload)`; allowlisted events (`mission:complete`, `share`, `revive`, `season:*`, `coop:*`, `daily:*`, `ranked:*`) are forwarded automatically — see `ANALYTICS.md`. Never put names or free text in event data.
+- `armory:render` `{ grid, weapon }` — after the Armory grid/detail is rebuilt (decorate cards in `grid`)
+- `mission:complete` `{ id, period: 'daily' | 'weekly', xp, scrap }` — a mission reward was claimed (progression)
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,

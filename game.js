@@ -1084,7 +1084,7 @@ function hurtPlayer(amount, from, quiet) {
 }
 
 function killZombie(z, head, noScore) {
-  const u = z.userData, T = u.T;
+  const u = z.userData, T = u.T, burning = u.burnT > 0;
   u.dead = true; u.deathT = 0; u.cs = ''; u.slamT = 0; u.burnT = 0;
   if (u.frozenT > 0) {
     gore.emit(z.position.x, 1 * u.sc, z.position.z, 40, { speed: 5, spread: 2, life: 1.2, colors: [0xdff8ff, 0x9fd8f0, 0xffffff] });
@@ -1109,7 +1109,7 @@ function killZombie(z, head, noScore) {
       state.bestCombo = Math.max(state.bestCombo, state.combo);
       const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
       state.score += pts;
-      bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning: u.burnT > 0 });
+      bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning });
       floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
       if (head) toast('HEADSHOT', .8);
       else if (u.elite) toast('ELITE DOWN', .8);
@@ -2316,8 +2316,8 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing =
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-$('#start').onclick = startGame;
-$('#again').onclick = startGame;
+$('#start').onclick = () => startGame();
+$('#again').onclick = () => startGame(state.runOpts || {});
 $('#to-menu').onclick = toMenu;
 $('#resume').onclick = resume;
 $('#quit').onclick = toMenu;
@@ -2679,6 +2679,7 @@ function renderArmory(note) {
   } else if (w.req && !reqMet(w.req)) info('Locked — ' + reqText(w.req).toLowerCase() + '.');
   else btn(armoryConfirm === w.id ? 'CONFIRM 🔩 ' + w.price.toLocaleString() : 'BUY 🔩 ' + w.price.toLocaleString(), 'cta', () => buyWeapon(w));
   if (note ?? armoryNote) info(note ?? armoryNote);
+  bus.emit('armory:render', { grid, weapon: w });
 }
 function buyWeapon(w) {
   if (profile.scrap < w.price) { armoryNote = 'Need ' + (w.price - profile.scrap).toLocaleString() + ' more scrap.'; armoryConfirm = null; renderArmory(); return; }

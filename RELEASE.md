@@ -13,6 +13,37 @@ The local iOS project is generated from `index.html` through Capacitor. The game
    - `deadzone.bestwave` — "Deepest Wave"
    Add both leaderboards to the app version before submitting. The IDs must match `LEADERBOARDS` in `game.js`.
    Each submitted score carries the player's character loadout packed into the Game Center score *context* (see `encodeLoadout` in `character.js`). This is how other players' outfits appear in the leaderboard without a server. Keep the order and bit widths of `SLOTS` stable; append new items to the end of an existing slot instead of reordering.
+   **Achievements.** Under **Services → Game Center → Achievements** create these 25 achievements (not hidden, *Achievable more than once* off; add a title, pre-earned/earned description and a 512×512 or 1024×1024 image for each). Points total 995 of Apple's 1,000 limit. The IDs must match `ACHIEVEMENTS` in `features/progression/data.js` (prefix `deadzone.ach.`); progress is reported as a percentage, so partial progress shows in Game Center.
+
+   | ID | Title | Points | How to earn |
+   | --- | --- | --- | --- |
+   | `deadzone.ach.first_blood` | First Blood | 10 | Kill your first infected |
+   | `deadzone.ach.kills_100` | Centurion | 15 | Kill 100 infected |
+   | `deadzone.ach.kills_1000` | Horde Breaker | 40 | Kill 1,000 infected |
+   | `deadzone.ach.kills_10000` | Extinction Event | 90 | Kill 10,000 infected |
+   | `deadzone.ach.heads_100` | Headhunter | 20 | 100 headshot kills |
+   | `deadzone.ach.heads_1000` | Deadeye | 60 | 1,000 headshot kills |
+   | `deadzone.ach.wave_10` | Hold the Line | 20 | Reach wave 10 |
+   | `deadzone.ach.wave_20` | Last Stand | 40 | Reach wave 20 |
+   | `deadzone.ach.wave_30` | Unbreakable | 60 | Reach wave 30 |
+   | `deadzone.ach.wave_50` | Deadzone Legend | 100 | Reach wave 50 |
+   | `deadzone.ach.boss_abomination` | Abomination Slain | 30 | Defeat the Abomination |
+   | `deadzone.ach.boss_butcher` | Butchered | 30 | Defeat the Butcher |
+   | `deadzone.ach.boss_plague` | Regicide | 30 | Defeat the Plague King |
+   | `deadzone.ach.boss_goliath` | Giant Killer | 30 | Defeat Goliath |
+   | `deadzone.ach.nightmare_10` | Nightmare Survivor | 80 | Clear wave 10 on Nightmare |
+   | `deadzone.ach.arsenal_5` | Arms Dealer | 20 | Own 5 weapons |
+   | `deadzone.ach.arsenal_scrap` | Full Arsenal | 50 | Own every scrap weapon (no purchase needed) |
+   | `deadzone.ach.mastery_max` | Weapon Master | 50 | Reach mastery 10 with any weapon |
+   | `deadzone.ach.streak_7` | Dedicated | 20 | Play 7 days in a row |
+   | `deadzone.ach.streak_30` | Never Miss a Shift | 50 | Play 30 days in a row |
+   | `deadzone.ach.missions_25` | On Duty | 30 | Complete 25 daily/weekly missions |
+   | `deadzone.ach.combo_25` | Chain Reaction | 30 | Reach a 25 kill streak |
+   | `deadzone.ach.burn_250` | Scorched Earth | 30 | 250 kills on burning infected |
+   | `deadzone.ach.elites_50` | Elite Hunter | 30 | Kill 50 elites |
+   | `deadzone.ach.sharpshooter` | Sharpshooter | 30 | Finish a run of wave 5+ with 70% accuracy |
+
+   Achievements are reported by the native `AchievementsPlugin` (`ios/App/App/AchievementsPlugin.swift`, JS name `Achievements`); it must be registered with the Capacitor bridge alongside `GameCenterPlugin` and `StorePlugin`. Progress is also tracked on the device, so the in-game ACHIEVEMENTS list works without Game Center and is synced once the player signs in.
 6. **In-App Purchases (iOS exclusive weapons).** Sign the *Paid Apps Agreement* in App Store Connect, then under the app's **Monetization → In-App Purchases** create four **Non-Consumable** products (a display name, description, price tier and review screenshot each):
    - `com.alpsenel.laststanddeadzone.weapon.tesla` — Tesla Arc
    - `com.alpsenel.laststanddeadzone.weapon.cryo` — Cryo Lance
@@ -82,4 +113,4 @@ The privacy policy (required URL in App Store Connect) must disclose: that Telem
 
 ## Test notes for App Review
 
-The game starts immediately from the title screen. On first launch a small sheet asks whether to send anonymous gameplay stats (ALLOW / NO THANKS); nothing is sent unless the player allows it, and it can be changed in Settings. It is single player and needs no special hardware. An account is optional: signing in to Game Center only enables the global and friends leaderboards (🏆 RANKS on the title and game-over screens). The four iOS exclusive weapons in the ARMORY and the four outfits in the LOCKER's ★ EXCLUSIVE tab are non-consumable In-App Purchases; RESTORE in the Armory restores all of them. Outfits are cosmetic only. Scrap weapons are bought with in-game currency earned by playing and cannot be bought with money.
+The game starts immediately from the title screen. On first launch a small sheet asks whether to send anonymous gameplay stats (ALLOW / NO THANKS); nothing is sent unless the player allows it, and it can be changed in Settings. It is single player and needs no special hardware. An account is optional: signing in to Game Center only enables the global and friends leaderboards (🏆 RANKS on the title and game-over screens). The four iOS exclusive weapons in the ARMORY and the four outfits in the LOCKER's ★ EXCLUSIVE tab are non-consumable In-App Purchases; RESTORE in the Armory restores all of them. Outfits are cosmetic only. MISSIONS on the title screen lists daily and weekly missions and achievements; the 🔥 DAY button shows the daily login streak. All of their rewards are in-game scrap and XP and none can be bought. Scrap weapons are bought with in-game currency earned by playing and cannot be bought with money.
