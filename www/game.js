@@ -1710,16 +1710,17 @@ function gameOver() {
   bus.emit('run:end', runSummary());
   saveRun();
   grantRewards();
-  const rankEl = $('#over-rank');
+  const rankEl = $('#over-rank'), summary = runSummary();
   if (!state.score) rankEl.textContent = '';
   else if (!gameCenter.available()) rankEl.textContent = 'GLOBAL RANKINGS ARE AVAILABLE IN THE iOS APP';
   else {
     rankEl.textContent = 'SUBMITTING TO GLOBAL LEADERBOARD…';
-    const run = state.startedAt;
-    gameCenter.submit(state.score, state.wave, myCode()).then(p => {
+    const run = state.startedAt, label = { daily: 'DAILY RANK #', ranked: 'WEEKLY RANK #' }[summary.type] || 'GLOBAL RANK #';
+    gameCenter.submit(state.score, state.wave, encodeLoadout({ ...profile.loadout, primary: player.slots[0] }, levelInfo().level), summary).then(p => {
       if (state.startedAt !== run) return;
-      if (p) { records.rank = p.rank; store.set('records', records); }
-      rankEl.textContent = p ? 'GLOBAL RANK #' + p.rank.toLocaleString() : 'SIGN IN TO GAME CENTER TO RANK GLOBALLY';
+      if (p && !p.rejected && gameCenter.boards(summary.type)[0] === LEADERBOARDS.score) { records.rank = p.rank; store.set('records', records); }
+      rankEl.textContent = p?.rejected ? 'SCORE NOT SUBMITTED — ' + p.rejected : p ? label + p.rank.toLocaleString() : 'SIGN IN TO GAME CENTER TO RANK GLOBALLY';
+      bus.emit('run:submitted', { type: summary.type, board: gameCenter.boards(summary.type)[0], result: p });
     });
   }
   const secs = Math.round(state.clock);
@@ -1754,7 +1755,8 @@ function grantRewards() {
   profile.runs++;
   for (const k of state.bossKinds) profile.bosses[k] = (profile.bosses[k] || 0) + 1;
   profile.bestWave = Math.max(profile.bestWave, state.wave);
-  profile.bestByDiff[settings.difficulty] = Math.max(profile.bestByDiff[settings.difficulty] || 0, state.wave);
+  const runDiff = state.runDifficulty || settings.difficulty;
+  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, state.wave);
   if (daily) profile.lastDaily = today;
   const lvlAfter = levelInfo().level;
   const fresh = [...unlockedSet()].filter(k => !before.has(k));
@@ -2317,7 +2319,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 $('#start').onclick = () => startGame();
-$('#again').onclick = () => startGame(state.runOpts || {});
+$('#again').onclick = () => startGame(state.runOpts?.replay?.() || state.runOpts || {});
 $('#to-menu').onclick = toMenu;
 $('#resume').onclick = resume;
 $('#quit').onclick = toMenu;
@@ -2325,7 +2327,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', weekly: 'deadzone.weekly' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2334,29 +2336,32 @@ const gameCenter = {
     try { const r = await this.call('signIn'); this.player = r?.authenticated ? r : null; } catch { this.player = null; }
     return this.player;
   },
-  async rank() {
+  async rank(leaderboardId = LEADERBOARDS.score) {
     if (!this.player) return null;
-    try { return (await this.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 1 })).player || null; } catch { return null; }
+    try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  async submit(score, wave, context) {
+  boards(type) { return type === 'daily' ? [LEADERBOARDS.daily] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  guard: null,
+  async submit(score, wave, context, run) {
+    const rejected = run && this.guard?.(run);
+    if (rejected) return { rejected };
     if (!this.player && !(await this.signIn())) return null;
-    await Promise.allSettled([
-      this.call('submitScore', { leaderboardId: LEADERBOARDS.score, score, context }),
-      this.call('submitScore', { leaderboardId: LEADERBOARDS.wave, score: wave, context }),
-    ]);
-    return this.rank();
+    const ids = this.boards(run?.type);
+    await Promise.allSettled(ids.map(id => this.call('submitScore', { leaderboardId: id, score: id === LEADERBOARDS.wave ? wave : score, context })));
+    return this.rank(ids[0]);
   },
 };
 
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: settings.difficulty, date: Date.now(), code: myCode() });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }
 
 let boardTab = 'global', boardReturn = null, boardToken = 0;
+const boardView = { id: LEADERBOARDS.score, filter: null };
 const avatarCache = new Map();
 function avatarFor(code) {
   const d = decodeLoadout(code), key = d ? encodeLoadout(d.loadout) : 0;
@@ -2401,7 +2406,7 @@ function openInspect(p) {
 $('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
 
 function renderLocalRuns(list) {
-  const runs = store.get('runs', []);
+  const runs = store.get('runs', []).filter(r => !boardView.filter || boardView.filter(r));
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
   runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
 }
@@ -2421,7 +2426,7 @@ async function renderBoard() {
   if (token !== boardToken) return;
   if (!gameCenter.player) { status.textContent = 'Sign in to Game Center (Settings → Game Center) to compete globally.'; return; }
   try {
-    const r = await gameCenter.call('loadScores', { leaderboardId: LEADERBOARDS.score, count: 25, scope: boardTab });
+    const r = await gameCenter.call('loadScores', { leaderboardId: boardView.id, count: 25, scope: boardTab });
     if (token !== boardToken) return;
     status.textContent = r.total ? r.total.toLocaleString() + ' SURVIVORS RANKED' : 'No scores yet — be the first.';
     for (const e of r.entries || []) list.appendChild(boardRow(e.rank, e.name, '', e.score, e.isLocal, e.context));
@@ -2429,7 +2434,7 @@ async function renderBoard() {
       const gap = document.createElement('li'); gap.className = 'gap'; gap.textContent = '···'; list.appendChild(gap);
       list.appendChild(boardRow(r.player.rank, r.player.name + ' (YOU)', '', r.player.score, true, r.player.context));
     }
-    if (r.player) { records.rank = r.player.rank; store.set('records', records); refreshRecords(); }
+    if (r.player && boardView.id === LEADERBOARDS.score) { records.rank = r.player.rank; store.set('records', records); refreshRecords(); }
   } catch (e) {
     if (token === boardToken) status.textContent = 'Could not load rankings: ' + e.message;
   }
@@ -2773,7 +2778,7 @@ function grantScrap(n) { profile.scrap += Math.round(n); saveProfile(); refreshP
 function grantXP(n) { profile.xp += Math.round(n); saveProfile(); refreshProfileUI(); }
 const api = {
   THREE, bus, rng, R, hashSeed, $, ui, state, player, stats, look, move, settings, records, profile, store, scene, camera, zombies, pickups,
-  WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS,
+  WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS, boardView, renderBoard,
   saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,

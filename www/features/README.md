@@ -16,10 +16,15 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - Analytics: `api.analytics.track(type, payload)`; allowlisted events (`mission:complete`, `share`, `revive`, `season:*`, `coop:*`, `daily:*`, `ranked:*`) are forwarded automatically — see `ANALYTICS.md`. Never put names or free text in event data.
 - `armory:render` `{ grid, weapon }` — after the Armory grid/detail is rebuilt (decorate cards in `grid`)
 - `mission:complete` `{ id, period: 'daily' | 'weekly', xp, scrap }` — a mission reward was claimed (progression)
+- `run:submitted` `{ type, board, result }` — after a Game Center submit; `result` is `{ rank, score, total, ... }`, `{ rejected: reason }` or `null`
+- `rival:passed` `{ name, rank, score, count, board }` (competitive)
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
 spawns, modifiers, perks, drops and zombie speed deterministic via `api.R()` (use `api.R()` for any new gameplay randomness).
+`opts.replay()` (optional) returns the options REDEPLOY uses to start the next run of the same mode.
+Leaderboards: `api.gameCenter.boards(type)` routes submits (`daily` → `deadzone.daily`, `ranked` → `deadzone.weekly` + all-time, else all-time);
+`api.gameCenter.guard(run)` returns a rejection reason to block a submit; `api.boardView = { id, filter }` picks the board and local-run filter the RANKS screen shows (`api.renderBoard()`).
 
 ## UI slots
 `#menu-modes`, `#menu-extras`, `#hud-rival`, `#hud-extras`, `#over-extras`, `#pause-extras`. New full screens: create a

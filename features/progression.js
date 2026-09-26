@@ -29,7 +29,7 @@ function init(api) {
     return {
       tier: bestWave >= 15 ? 2 : bestWave >= 8 ? 1 : 0, bestWave, weaponName,
       owned: WEAPONS.filter(w => api.weaponOwned(w)),
-      hasDaily: FEATURES.some(f => f.id !== 'progression' && /daily/i.test(f.id)),
+      hasDaily: FEATURES.some(f => f.id !== 'progression' && /daily|competitive/i.test(f.id)),
     };
   }
   function achStats() {
