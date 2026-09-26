@@ -1,8 +1,11 @@
 import * as THREE from './vendor/three.module.js';
+import { createBus, rng, R, hashSeed } from './core.js';
+import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
 import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
+const bus = createBus();
 const ui = {
   hud: $('#hud'), menu: $('#menu'), pauseMenu: $('#pausemenu'), settings: $('#settings'), perks: $('#perks'), over: $('#over'), board: $('#board'), locker: $('#locker'), inspect: $('#inspect'), armory: $('#armory'),
   hpNum: $('#hp-num'), hpFill: $('#hp-fill'), hpLag: $('#hp-lag'), waveNum: $('#wave-num'), alive: $('#alive'), waveFill: $('#wave-fill'),
@@ -622,7 +625,7 @@ const MODS = {
   bloodmoon: { name: 'BLOOD MOON', desc: 'THEY MOVE FASTER', speed: 1.25, score: 1.3, fog: 0x2a0b0b },
   blackout: { name: 'BLACKOUT', desc: 'VISIBILITY IS LOW', fogDensity: .065, score: 1.3, fog: 0x05080a },
 };
-const diff = () => DIFFICULTIES[settings.difficulty] || DIFFICULTIES.survivor;
+const diff = () => DIFFICULTIES[state.runDifficulty || settings.difficulty] || DIFFICULTIES.survivor;
 const SKINS = [0x7f8f76, 0x8d9a82, 0x6e7e6a, 0x9a9178, 0x7a8a86];
 const CLOTHES = [0x1e292a, 0x2c2a3a, 0x3a3224, 0x4a1f1c, 0x24323c, 0x3d4a2a];
 const PANTS = [0x1a2226, 0x2a241c, 0x1c1e2a];
@@ -754,9 +757,9 @@ function makeZombie(kind, x, z, rise = true, elite = false) {
   const now = state.clock;
   root.userData = {
     zombie: true, kind, T, P, meshes, hp, maxHp: hp, elite, sc,
-    speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + Math.random() * .2),
+    speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + R() * .2),
     walk: Math.random() * 6, phase: Math.random() * 6, flash: 0, nextAttack: 0, swing: 0, dead: false, deathT: 0, rise: rise ? 1 : 0,
-    side: Math.random() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * sc * T.bulk, groanAt: Math.random() * 5,
+    side: R() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * sc * T.bulk, groanAt: Math.random() * 5,
     nextSpit: now + 2 + Math.random() * 2, spitWind: 0, nextSlam: now + 3, slamT: 0, nextCharge: now + 2, cs: '', ct: 0, nextSummon: now + 8, enraged: false,
   };
   root.position.set(x, rise ? -1.9 * sc : 0, z);
@@ -945,9 +948,17 @@ function resetRun() {
 
 function magSize(i) { return Math.round(WEAPONS[i].mag * stats.mag); }
 
-function startGame() {
+function startGame(opts = {}) {
   sfx.init();
+  state.runType = opts.type || 'normal';
+  state.runDifficulty = opts.difficulty || null;
+  rng.set(opts.seed ?? null);
   resetRun();
+  state.runType = opts.type || 'normal';
+  state.runDifficulty = opts.difficulty || null;
+  state.seed = opts.seed ?? null;
+  state.runOpts = opts;
+  if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
   camera.position.set(0, 1.64, 30);
   look.yaw = 0; look.pitch = 0; look.recoil = 0;
   camera.fov = 74; camera.updateProjectionMatrix();
@@ -960,6 +971,7 @@ function startGame() {
   schedule(.8, nextWave);
   if (!tutorialDone) schedule(.3, () => hint('Drag anywhere on the left to move'));
   haptic('MEDIUM');
+  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], opts });
 }
 
 function waveComposition(w) {
@@ -978,9 +990,9 @@ function waveComposition(w) {
   const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 : 0;
   const list = [];
   for (let i = 0; i < total; i++) {
-    let r = Math.random() * sum, kind = 'walker';
+    let r = R() * sum, kind = 'walker';
     for (const k in weights) { r -= weights[k]; if (r <= 0) { kind = k; break; } }
-    list.push({ kind, elite: Math.random() < eliteChance });
+    list.push({ kind, elite: R() < eliteChance });
   }
   if (bossWave) list.splice(Math.floor(list.length / 3), 0, { kind: BOSS_ORDER[(w / 5 - 1) % BOSS_ORDER.length], elite: false });
   return list;
@@ -994,7 +1006,8 @@ function applyMod(id) {
 
 function nextWave() {
   state.wave++;
-  state.mod = state.wave >= 6 && state.wave % 5 !== 0 && Math.random() < .35 ? pick(Object.keys(MODS)) : null;
+  const modKeys = Object.keys(MODS);
+  state.mod = state.wave >= 6 && state.wave % 5 !== 0 && R() < .35 ? modKeys[(R() * modKeys.length) | 0] : null;
   applyMod(state.mod);
   state.queue = waveComposition(state.wave);
   state.waveTotal = state.queue.length;
@@ -1005,20 +1018,21 @@ function nextWave() {
   message('WAVE ' + state.wave, M ? M.name + ' — ' + M.desc : boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.4);
   sfx.wave();
   haptic('MEDIUM');
+  bus.emit('wave:start', { wave: state.wave, mod: state.mod, boss: boss });
 }
 
 function findSpawn(minD = 16, maxD = 32) {
   const fwdX = -Math.sin(look.yaw), fwdZ = -Math.cos(look.yaw);
   let best = null;
   for (let i = 0; i < 30; i++) {
-    const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
+    const a = R() * Math.PI * 2, d = minD + R() * (maxD - minD);
     const x = camera.position.x + Math.cos(a) * d, z = camera.position.z + Math.sin(a) * d;
     if (blocked(x, z, 1)) continue;
     const c = navCell(x, z);
     if (c < 0 || NAV.dist[c] < 0 || NAV.dist[c] > d * 1.8) continue;
     const facing = (Math.cos(a) * fwdX + Math.sin(a) * fwdZ);
     if (!best || facing > best.facing) best = { x, z, facing };
-    if (facing > .2 && Math.random() > .4) break;
+    if (facing > .2 && R() > .4) break;
   }
   return best || { x: 0, z: -30 };
 }
@@ -1094,12 +1108,13 @@ function killZombie(z, head, noScore) {
       state.bestCombo = Math.max(state.bestCombo, state.combo);
       const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
       state.score += pts;
+      bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning: u.burnT > 0 });
       floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
       if (head) toast('HEADSHOT', .8);
       else if (u.elite) toast('ELITE DOWN', .8);
       if (stats.leech) player.hp = Math.min(stats.maxHp, player.hp + stats.leech);
       ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
-      const drops = T.boss ? 4 : Math.random() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
+      const drops = T.boss ? 4 : R() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
       for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
       if (T.boss) { state.bossKinds.push(u.kind); message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
     }
@@ -1209,6 +1224,7 @@ function shoot() {
   player.ammo[i]--;
   player.nextShot = state.clock + w.rate / stats.fireRate;
   state.shots++;
+  bus.emit('shot', { weapon: w.id });
   look.recoil += w.kick;
   look.yaw += (Math.random() - .5) * w.kick * .4;
   g.userData.kick = w.recoil;
@@ -1590,7 +1606,7 @@ const PICKUP_KINDS = {
 };
 function dropPickup(x, z, kind) {
   if (!kind) {
-    const r = Math.random(), lowHp = player.hp < stats.maxHp * .5;
+    const r = R(), lowHp = player.hp < stats.maxHp * .5;
     kind = r < (lowHp ? .5 : .3) ? 'health' : r < .82 ? 'ammo' : 'grenade';
   }
   if (blocked(x, z, .2)) { x = camera.position.x * .3 + x * .7; z = camera.position.z * .3 + z * .7; }
@@ -1645,9 +1661,9 @@ const PERKS = [
 function offerPerks() {
   state.mode = 'perk';
   ui.perkTitle.textContent = 'WAVE ' + state.wave + ' CLEARED';
-  const pool = PERKS.filter(p => (!p.when || p.when()) && (!p.rare || Math.random() < .3));
+  const pool = PERKS.filter(p => (!p.when || p.when()) && (!p.rare || R() < .3));
   const picks = [];
-  while (picks.length < 3 && pool.length) picks.push(pool.splice((Math.random() * pool.length) | 0, 1)[0]);
+  while (picks.length < 3 && pool.length) picks.push(pool.splice((R() * pool.length) | 0, 1)[0]);
   ui.perkList.innerHTML = '';
   for (const p of picks) {
     const b = document.createElement('button');
@@ -1655,6 +1671,7 @@ function offerPerks() {
     b.innerHTML = `<div class="ico">${p.icon}</div><b>${p.name}</b><span>${p.desc}</span>`;
     b.onclick = () => {
       p.apply(); sfx.perk(); haptic('MEDIUM');
+      bus.emit('perk', { name: p.name, rare: !!p.rare, wave: state.wave });
       showScreen(null);
       state.mode = 'playing';
       toast(p.name, 1.4);
@@ -1672,13 +1689,24 @@ function waveCleared() {
   player.hp = Math.min(stats.maxHp, player.hp + stats.maxHp * .2);
   player.slots.forEach(i => (player.reserve[i] = Math.min(WEAPONS[i].maxReserve, player.reserve[i] + magSize(i))));
   message('SECTOR CLEAR', 'BONUS +' + bonus, 2);
+  bus.emit('wave:clear', { wave: state.wave, bonus, hp: player.hp });
   sfx.clear(); haptic('MEDIUM');
   schedule(2.2, offerPerks);
+}
+
+function runSummary() {
+  return {
+    type: state.runType || 'normal', seed: state.seed, difficultyId: state.runDifficulty || settings.difficulty,
+    score: state.score, wave: state.wave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
+    accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
+    bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id,
+  };
 }
 
 function gameOver() {
   state.mode = 'dead';
   firing = false;
+  bus.emit('run:end', runSummary());
   saveRun();
   grantRewards();
   const rankEl = $('#over-rank');
@@ -1769,10 +1797,13 @@ function resume() {
 }
 
 let activeScreen = ui.menu;
+const screens = new Set([ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over, ui.board, ui.locker, ui.inspect, ui.armory]);
+function registerScreen(el) { screens.add(el); el.classList.add('hidden'); return el; }
 function showScreen(el) {
-  for (const s of [ui.menu, ui.pauseMenu, ui.settings, ui.perks, ui.over, ui.board, ui.locker, ui.inspect, ui.armory]) s.classList.toggle('hidden', s !== el);
+  for (const s of screens) s.classList.toggle('hidden', s !== el);
   activeScreen = el;
   placePreview();
+  bus.emit('screen', { id: el?.id || 'game' });
 }
 function placePreview() {
   const el = activeScreen;
@@ -2486,6 +2517,7 @@ function lockerPick(slot, i) {
     if (profile.scrap >= it.cost) {
       profile.scrap -= it.cost;
       profile.owned[key] = true;
+      bus.emit('purchase', { kind: 'scrap', item: key, cost: it.cost });
       profile.loadout[slot.id] = i;
       tryOn = null; pendingBuy = null;
       saveProfile();
@@ -2558,6 +2590,7 @@ const storeKit = {
     try {
       result = await this.call('purchase', { id: productId });
       if (result.status === 'purchased') {
+        bus.emit('purchase', { kind: 'iap', productId });
         profile.iap[productId] = true;
         saveProfile();
         await this.refresh();
@@ -2651,6 +2684,7 @@ function buyWeapon(w) {
   if (armoryConfirm !== w.id) { armoryConfirm = w.id; armoryNote = ''; renderArmory(); return; }
   profile.scrap -= w.price;
   profile.arsenal.owned[w.id] = true;
+  bus.emit('purchase', { kind: 'scrap', item: 'weapon:' + w.id, cost: w.price });
   armoryConfirm = null;
   saveProfile();
   sfx.pickup(); haptic('MEDIUM');
@@ -2719,6 +2753,19 @@ profile.loadout.primary = loadoutWeapons()[0];
 refreshProfileUI();
 placePreview();
 storeKit.init();
+
+function grantScrap(n) { profile.scrap += Math.round(n); saveProfile(); refreshProfileUI(); }
+function grantXP(n) { profile.xp += Math.round(n); saveProfile(); refreshProfileUI(); }
+const api = {
+  THREE, bus, rng, R, hashSeed, $, ui, state, player, stats, look, move, settings, records, profile, store, scene, camera, zombies, pickups,
+  WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS,
+  saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
+  startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
+  makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff,
+};
+for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
+if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver };
+bus.emit('app:ready', {});
 refreshRecords();
 populateMenu();
 syncSettingsUI();
