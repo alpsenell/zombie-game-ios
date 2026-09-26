@@ -86,6 +86,6 @@ export const CSS = `
 .pg-ad .xp{margin:4px auto 0}
 .stage-info .pg-ad small{color:var(--dim);font-size:9px;letter-spacing:1.3px;margin-top:4px}
 .pg-badge{display:inline-block;margin-top:4px;padding:3px 8px;border-radius:6px;background:linear-gradient(180deg,#ffd36a,#e0a02a);color:#1a1206;font:900 9px var(--ui);letter-spacing:1.5px}
-@media (orientation:portrait){.pg-modal{align-items:start;justify-items:center}.pg-card{width:min(92vw,420px)}}
+@media (orientation:portrait){.pg-modal{align-items:start;justify-items:center;padding-top:calc(max(16px,var(--st)) + 60px)}.pg-card{width:min(92vw,420px)}}
 @media (max-height:430px){.pg-head{margin-bottom:8px}.pg-head h2{font-size:26px!important}.pg-head .scrap{padding:5px 10px;font-size:12px}.pg-tabs button{padding:7px 4px}.pg-list{gap:5px;margin-bottom:8px}.pg-m{padding:7px 11px}.pg-m b{font-size:14px}.pg-bar{margin-top:5px}.pg-m small{margin-top:3px}.pg-foot .cta{padding:10px 28px}.pg-foot .ghost{padding:9px 14px}.pg-cal{gap:4px}.pg-card{padding:12px 14px 12px}.pg-card h3{font-size:24px}.pg-card>small{margin:4px 0 8px}.pg-cal div{padding:5px 2px}.pg-extra{margin-bottom:8px}.pg-card .cta{padding:11px 22px}.pg-over{margin:-4px 0 10px}}
 `;

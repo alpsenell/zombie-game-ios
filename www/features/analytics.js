@@ -180,14 +180,17 @@ export function init(api) {
   function prompt() {
     if (prompted || settings.analytics !== undefined || (navigator.webdriver && !override) || api.activeScreen !== api.ui.menu) return;
     prompted = true;
+    api.queueModal(done => {
+    if (settings.analytics !== undefined || api.activeScreen !== api.ui.menu) return done();
     const el = document.createElement('div');
     el.className = 'ad-sheet';
     el.id = 'analytics-consent';
     el.innerHTML = '<div class="ad-card" role="dialog" aria-modal="true" aria-labelledby="ad-title"><h3 id="ad-title">HELP IMPROVE THE GAME?</h3>' +
       '<p>Send anonymous gameplay stats (waves, deaths, weapons). No ads, no tracking across apps.</p><small>CHANGE ANYTIME IN SETTINGS</small>' +
       '<div class="row"><button class="ghost" data-v="0">NO THANKS</button><button class="cta" data-v="1">ALLOW</button></div></div>';
-    el.querySelectorAll('button').forEach(b => (b.onclick = () => { el.remove(); setConsent(b.dataset.v === '1'); }));
+    el.querySelectorAll('button').forEach(b => (b.onclick = () => { el.remove(); setConsent(b.dataset.v === '1'); done(); }));
     document.body.appendChild(el);
+    }, 10);
   }
 
   function devScreen() {
@@ -306,7 +309,7 @@ export function init(api) {
   });
   bus.on('app:ready', () => {
     if (enabled()) start();
-    setTimeout(prompt, 1200);
+    setTimeout(prompt, 300);
   });
 
   const emit = bus.emit;

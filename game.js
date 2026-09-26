@@ -2756,6 +2756,19 @@ refreshProfileUI();
 placePreview();
 storeKit.init();
 
+const modalQueue = [];
+let modalOpen = false;
+function queueModal(open, priority = 0) {
+  modalQueue.push({ open, priority });
+  modalQueue.sort((a, b) => b.priority - a.priority);
+  pumpModal();
+}
+function pumpModal() {
+  if (modalOpen || !modalQueue.length) return;
+  modalOpen = true;
+  let done = false;
+  modalQueue.shift().open(() => { if (done) return; done = true; modalOpen = false; setTimeout(pumpModal, 300); });
+}
 function grantScrap(n) { profile.scrap += Math.round(n); saveProfile(); refreshProfileUI(); }
 function grantXP(n) { profile.xp += Math.round(n); saveProfile(); refreshProfileUI(); }
 const api = {
@@ -2763,7 +2776,7 @@ const api = {
   WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS,
   saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
-  makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff,
+  makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
 };
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver };

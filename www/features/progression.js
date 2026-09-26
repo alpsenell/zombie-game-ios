@@ -317,14 +317,14 @@ function init(api) {
     d.append(bar, el('small', '', 'MASTERY ' + info.level + '/10 · ' + info.into.toLocaleString() + ' / ' + info.need.toLocaleString() + ' XP · NEXT +' + D.masteryReward(info.level + 1).toLocaleString() + ' 🔩'));
   }
 
-  let modal = null;
-  function closeStreak() { modal?.remove(); modal = null; }
+  let modal = null, modalDone = null;
+  function closeStreak() { modal?.remove(); modal = null; modalDone?.(); modalDone = null; }
   function streakCheck() {
     if (api.activeScreen !== api.ui.menu) return;
     const S = P.streak, today = D.dayNum();
     if (D.streakVisit(S, today)) { checkAch(); save(); }
     updateBadges();
-    if (S.shown !== today) { S.shown = today; save(); setTimeout(() => api.activeScreen === api.ui.menu && openStreak(), 450); }
+    if (S.shown !== today) { S.shown = today; save(); setTimeout(() => api.queueModal(done => { if (api.activeScreen !== api.ui.menu) return done(); openStreak(); modalDone = done; }), 450); }
   }
   function openStreak() {
     closeStreak();
