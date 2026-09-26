@@ -1,4 +1,5 @@
 import * as THREE from './vendor/three.module.js';
+import { WEAPONS, buildGun } from './weapons.js';
 
 const SKIN_TONES = [0xf1c7a5, 0xe0ac7e, 0xc68642, 0x8d5524, 0x5c3a21, 0xffdbb4, 0xa0765a, 0x3d2616];
 const HAIR_COLORS = [0x1a1410, 0x4a2e1a, 0xd8b060, 0x9a3a1a, 0x8a8a8a, 0xeeeeee, 0x2a6adf, 0xe05a9a];
@@ -57,6 +58,7 @@ export const SLOTS = [
     { req: '' }, { req: 'level:3' }, { cost: 300 }, { req: 'heads:100' }, { req: 'heads:500' }, { req: 'boss:abomination' }, { req: 'boss:butcher' }, { req: 'boss:plague' },
     { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' }]
     .map((it, i) => ({ ...it, name: TITLES[i] })) },
+  { id: 'primary', label: 'PRIMARY', bits: 4, hidden: true, items: WEAPONS.map(w => ({ name: w.name })) },
 ];
 
 export const DEFAULT_LOADOUT = Object.fromEntries(SLOTS.map(s => [s.id, 0]));
@@ -95,7 +97,7 @@ export function describeLoadout(l) {
     ['HEADGEAR', n('head')],
     ['FACE', n('face')],
     ['BACK', n('back')],
-    ['WEAPON', n('gun') + ' M4A1'],
+    ['WEAPON', (l.gun ? n('gun') + ' ' : '') + (WEAPONS[l.primary]?.name || 'M4A1')],
   ];
   return parts.filter(([, v]) => v && v !== 'NONE' && v !== 'CLEAN');
 }
@@ -323,25 +325,23 @@ export function buildSurvivor(l) {
   if (l.back === 6) { const w = m(0x8a4a1a, { roughness: .4 }); part(torso, G.cyl, w, [-.05, .05, -.16], [.16, .06, .16], [Math.PI / 2, 0, 0]); part(torso, G.cyl, w, [.03, .22, -.16], [.12, .06, .12], [Math.PI / 2, 0, 0]); part(torso, G.box, m(0x2a1a0e), [.14, .5, -.16], [.04, .45, .02], [0, 0, -.35]); }
   if (l.back === 7) { part(torso, G.box, m(0x9aa4a8, { metalness: .9, roughness: .25 }), [0, .25, -.16], [.03, .5, .28], [0, 0, -.5]); part(torso, G.box, m(0x5a0a08), [.05, .12, -.16], [.032, .15, .282], [0, 0, -.5]); }
 
-  const gun = new THREE.Group();
-  const skinDef = WEAPON_SKINS[l.gun] || WEAPON_SKINS[0];
+  const wdef = WEAPONS[l.primary] || WEAPONS[0];
   const gm = { base: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), dark: new THREE.MeshStandardMaterial() };
   paintGunMaterials(gm, l.gun);
-  part(gun, G.box, gm.metal, [0, 0, 0], [.07, .09, .36]);
-  part(gun, G.box, gm.base, [0, -.005, .31], [.08, .08, .28]);
-  part(gun, G.cyl, gm.dark, [0, 0, .58], [.014, .26, .014], [Math.PI / 2, 0, 0]);
-  part(gun, G.box, gm.dark, [0, -.12, .06], [.05, .18, .08], [.3, 0, 0]);
-  part(gun, G.box, gm.base, [0, -.03, -.28], [.055, .09, .24]);
-  part(gun, G.box, gm.dark, [0, -.1, -.12], [.045, .12, .055], [-.35, 0, 0]);
-  part(gun, G.box, gm.dark, [0, .08, .02], [.045, .05, .08]);
-  if (skinDef.glow) part(gun, G.box, m(skinDef.glow, { emissive: skinDef.glow, emissiveIntensity: 2 }), [.041, 0, .1], [.004, .015, .4]);
-  gun.position.set(-.07, 1.2, .26);
-  gun.rotation.set(.42, .16, 0);
+  if (wdef.id === 'r870' && !l.gun) gm.base.color.setHex(0x8a5428);
+  const gun = new THREE.Group();
+  const model = buildGun(wdef, gm);
+  model.rotation.y = Math.PI;
+  model.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  gun.add(model);
+  const pistol = wdef.id === 'deagle', heavy = wdef.id === 'dragon';
+  gun.position.set(pistol ? -.02 : -.07, pistol ? 1.28 : heavy ? 1.08 : 1.2, pistol ? .36 : .26);
+  gun.rotation.set(pistol ? .25 : .42, .16, 0);
   body.add(gun);
-  gun.updateMatrix();
+  root.updateMatrixWorld(true);
   const torsoOffset = new THREE.Vector3(0, 1.02, 0);
-  const grip = new THREE.Vector3(0, -.13, .02).applyMatrix4(gun.matrix).sub(torsoOffset);
-  const guard = new THREE.Vector3(0, -.06, .26).applyMatrix4(gun.matrix).sub(torsoOffset);
+  const grip = model.localToWorld(new THREE.Vector3(...wdef.grip)).sub(torsoOffset);
+  const guard = model.localToWorld(new THREE.Vector3(...wdef.guard)).sub(torsoOffset);
   solveArm(arms[-1].upper, arms[-1].el, arms[-1].sh.position, grip, new THREE.Vector3(-1, -.4, -.8), .29, .29);
   solveArm(arms[1].upper, arms[1].el, arms[1].sh.position, guard, new THREE.Vector3(1, -1, -.2), .29, .29);
 
@@ -389,8 +389,9 @@ export function createPreview() {
   function frame(kind) {
     mode = kind;
     if (kind === 'portrait') { cam.fov = 24; cam.position.set(0, 1.66, 1.45); cam.lookAt(0, 1.6, 0); }
+    else if (kind === 'weapon') { cam.fov = 30; cam.position.set(0, .5, 3.3); cam.lookAt(0, .12, 0); }
     else { cam.fov = 28; cam.position.set(0, 1.12, 5.1); cam.lookAt(0, 1.02, 0); }
-    ring.visible = floor.visible = kind !== 'portrait';
+    ring.visible = floor.visible = kind === 'full';
     cam.updateProjectionMatrix();
   }
   function size(cw, ch) {
@@ -405,8 +406,10 @@ export function createPreview() {
     t += dt;
     if (auto && !drag) spin += dt * .5;
     model.rotation.y = spin;
-    model.userData.torso.position.y = 1.02 + Math.sin(t * 2) * .006;
-    model.userData.head.rotation.y = Math.sin(t * .7) * .15;
+    if (model.userData.torso) {
+      model.userData.torso.position.y = 1.02 + Math.sin(t * 2) * .006;
+      model.userData.head.rotation.y = Math.sin(t * .7) * .15;
+    } else model.position.y = Math.sin(t * 1.6) * .03;
     renderer.render(scene, cam);
   }
   canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, s: spin }; canvas.setPointerCapture(e.pointerId); });
@@ -427,6 +430,17 @@ export function createPreview() {
     detach() { canvas.remove(); },
     show,
     render,
+    showWeapon(gunGroup) {
+      code = -2;
+      if (model) scene.remove(model);
+      const holder = new THREE.Group(), inner = new THREE.Group();
+      inner.add(gunGroup);
+      inner.scale.setScalar(1.25);
+      inner.position.set(0, .15, .3);
+      holder.add(inner);
+      model = holder;
+      scene.add(model);
+    },
     get visible() { return canvas.isConnected && canvas.offsetParent !== null; },
     thumbnail(loadout, px = 96) {
       const prev = { w, h, mode, spin, auto };

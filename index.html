@@ -143,8 +143,9 @@
     .diff button[data-diff=nightmare].on{background:#6d0f1c;border-color:#ff3a4a;box-shadow:0 0 18px #ff2a3a77}
     .diff-desc{margin:7px 0 clamp(10px,3vh,18px);font:600 11px var(--ui);color:var(--dim);letter-spacing:.3px}
     #menu .row .ghost{padding:15px 14px}
+    .fab{position:absolute;z-index:2;top:max(14px,var(--st));right:max(16px,var(--sr));width:44px;height:44px;padding:0;display:grid;place-items:center;font-size:18px}
     #menu .row .cta{padding:17px 28px}
-    #menu .wrap{max-width:480px}
+    #menu .wrap{max-width:520px}
     .board{width:min(94vw,540px);text-align:left}
     .board h2{text-align:center}
     .tabs{display:flex;gap:6px;margin-bottom:10px}
@@ -229,6 +230,38 @@
     #over-rewards span{padding:6px 11px;border-radius:20px;background:#ffffff0d;border:1px solid var(--line);font:900 11px var(--ui);letter-spacing:1.2px}
     #over-rewards .gold{background:#ffc34d22;border-color:#ffc34d77;color:var(--amber)}
     #over-rewards .hot{background:#e5483a2a;border-color:#e5483a88;color:#ffb0a8}
+    #armory{background:#010406e6;padding:0;place-items:stretch}
+    #armory-stage{position:relative;background:radial-gradient(ellipse at 50% 45%,#23313a 0,#050b0e 70%);overflow:hidden}
+    #armory-stage .char-canvas{position:absolute;inset:0;width:100%;height:100%}
+    .ar-bottom{position:absolute;left:max(16px,var(--sl));right:16px;bottom:max(12px,var(--sb));z-index:1;pointer-events:none}
+    #ar-desc{margin:0 0 8px;color:#cfd9d6;font:600 12px/1.4 var(--ui)}
+    #ar-stats{display:grid;gap:4px}
+    .stat{display:grid;grid-template-columns:74px 1fr;align-items:center;gap:8px;font:800 9px var(--ui);letter-spacing:1.3px;color:var(--dim)}
+    .stat i{display:block;height:5px;border-radius:3px;background:#ffffff18;overflow:hidden}
+    .stat i:after{content:"";display:block;height:100%;width:var(--v);background:linear-gradient(90deg,#e5483a,#ffc34d)}
+    .loadout-slots{display:flex;gap:8px;margin:10px 0 8px;flex:none}
+    .lslot{flex:1;padding:8px 10px;border-radius:10px;background:#ffffff0a;border:1px solid var(--line);min-width:0}
+    .lslot small{display:block;font:800 9px var(--ui);letter-spacing:1.5px;color:var(--dim)}
+    .lslot b{display:block;font:900 15px var(--display);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #weapon-grid{flex:1 1 0;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));grid-auto-rows:max-content;gap:8px;align-content:start;touch-action:pan-y;padding-bottom:6px}
+    .wcard{position:relative;display:flex;flex-direction:column;padding:10px 9px;border-radius:12px;border:1px solid var(--line);background:#0e191e;text-align:left}
+    .wcard b{font:900 14px var(--display);letter-spacing:.5px}
+    .wcard em{font:800 8px var(--ui);letter-spacing:1.2px;color:var(--dim);font-style:normal;margin-top:2px}
+    .wcard small{margin-top:6px;font:800 9px var(--ui);letter-spacing:1px;color:var(--dim)}
+    .wcard.owned small{color:#8fd8a8}
+    .wcard.cost small{color:var(--amber)}
+    .wcard.locked{opacity:.6}
+    .wcard.sel{border-color:#ffffff99;background:#16262c}
+    .wcard.eq{box-shadow:inset 0 0 0 1px var(--red)}
+    .wcard.premium{border-color:#ffc34d77;background:linear-gradient(160deg,#2a2210,#0e191e 60%)}
+    .wcard.premium:before{content:"iOS EXCLUSIVE";position:absolute;right:7px;top:7px;padding:1px 5px;border-radius:5px;background:var(--amber);color:#1a1206;font:900 7px var(--ui);letter-spacing:.8px}
+    .wcard.premium b{color:var(--amber)}
+    .wcard .tag{position:absolute;right:7px;bottom:8px;font:900 8px var(--ui);letter-spacing:1px;color:#fff;background:var(--red);padding:1px 5px;border-radius:5px}
+    #ar-actions{display:flex;gap:8px;flex-wrap:wrap;min-width:0}
+    #ar-actions button{padding:12px 14px;font-size:11px}
+    #ar-actions .note{align-self:center;color:var(--dim);font:600 11px var(--ui)}
+    .ghost.small{padding:7px 10px;font-size:10px}
+    .cta.gold{background:linear-gradient(180deg,#ffd36a,#e0a02a);color:#1a1206;box-shadow:0 5px 0 #7a5410,0 12px 28px #000c}
     .tips{margin-top:18px;color:var(--dim);font:600 11px/1.6 var(--ui);letter-spacing:.4px}
 
     .panel{width:min(94vw,440px);margin:auto;padding:24px;border-radius:18px;background:#081115ee;border:1px solid var(--line);box-shadow:0 20px 60px #000}
@@ -265,7 +298,7 @@
     .perk.rare{border-color:#ffc34d88;box-shadow:0 0 22px #ffc34d33}
     .perk.rare b{color:var(--amber)}
     @media (max-height:430px){#over .stats{grid-template-columns:repeat(6,1fr);gap:6px}#over .stats small{font-size:8px;letter-spacing:.8px}#over-rewards{margin:-4px 0 10px;gap:6px}#over-rewards span{padding:4px 9px;font-size:10px}#newbest{padding:3px 10px}.locker-head h2{font-size:24px}#slot-tabs{padding:8px 0 6px}.item{padding:8px 7px;min-height:56px}.inspect-info{padding:14px}.inspect-info h2{font-size:22px}.in-stats{margin:8px 0 6px}.gear-list{line-height:1.6}.tips{display:none}.stats{margin-bottom:10px}.stats div{padding:6px}#over .sub{margin-bottom:8px}#newbest{margin-bottom:8px}#over-rank{margin:-2px 0 10px}.rec{padding:6px 12px}.rec b{font-size:18px}.panel{padding:16px}.panel h2{font-size:26px;margin-bottom:8px}#over h2{font-size:38px}.stats b{font-size:18px}.opt{padding:7px 0}.perk{padding:12px 10px}.perk .ico{font-size:26px;margin-bottom:6px}}
-    @media (orientation:portrait){#menu-char{display:none}.locker{grid-template-columns:minmax(0,1fr);grid-template-rows:42% minmax(0,1fr)}#inspect .panel{grid-template-columns:1fr}#inspect-stage{min-height:40vh}#menu{background:linear-gradient(0deg,#020608f5 0%,#02060899 60%,#02060833 100%)}#menu .wrap{justify-self:center;text-align:center;margin:0}.records{justify-content:center}.row{justify-content:center}#stick-zone{width:50%;top:45%}#hint{bottom:auto;top:36%;white-space:normal;width:max-content;max-width:86vw;text-align:center}#weapon{right:max(20px,var(--sr));bottom:calc(max(12px,var(--sb)) + 230px)}}
+    @media (orientation:portrait){#armory .locker{grid-template-columns:minmax(0,1fr);grid-template-rows:38% minmax(0,1fr)}#menu-char{display:none}.locker{grid-template-columns:minmax(0,1fr);grid-template-rows:42% minmax(0,1fr)}#inspect .panel{grid-template-columns:1fr}#inspect-stage{min-height:40vh}#menu{background:linear-gradient(0deg,#020608f5 0%,#02060899 60%,#02060833 100%)}#menu .wrap{justify-self:center;text-align:center;margin:0}.records{justify-content:center}.row{justify-content:center}#stick-zone{width:50%;top:45%}#hint{bottom:auto;top:36%;white-space:normal;width:max-content;max-width:86vw;text-align:center}#weapon{right:max(20px,var(--sr));bottom:calc(max(12px,var(--sb)) + 230px)}}
   </style>
 </head>
 <body>
@@ -307,6 +340,7 @@
   </div>
 
   <section id="menu" class="screen">
+    <button class="ghost fab" data-open="settings" aria-label="Settings">⚙︎</button>
     <div id="menu-char"><div class="nametag"><b id="menu-level">LV 1</b><small id="menu-title">ROOKIE</small><br><span>TAP TO CUSTOMIZE</span></div></div>
     <div class="wrap">
       <div class="logo">LAST STAND<em>DEADZONE</em></div>
@@ -317,7 +351,7 @@
       </div>
       <div class="diff" id="diff"><button data-diff="recruit">RECRUIT</button><button data-diff="survivor">SURVIVOR</button><button data-diff="veteran">VETERAN</button><button data-diff="nightmare">NIGHTMARE</button></div>
       <div class="diff-desc" id="diff-desc"></div>
-      <div class="row"><button id="start" class="cta">DEPLOY</button><button class="ghost" data-open="locker">LOCKER<span class="badge" id="locker-badge"></span></button><button class="ghost" data-open="board">🏆 RANKS</button><button class="ghost" data-open="settings" aria-label="Settings">⚙︎</button></div>
+      <div class="row"><button id="start" class="cta">DEPLOY</button><button class="ghost" data-open="armory">ARMORY<span class="badge" id="armory-badge"></span></button><button class="ghost" data-open="locker">LOCKER<span class="badge" id="locker-badge"></span></button><button class="ghost" data-open="board" aria-label="Rankings">🏆</button></div>
       <div class="tips">Survive endless waves. Pick a perk after every wave.<br>Every fifth wave, something big comes.</div>
     </div>
   </section>
@@ -363,6 +397,21 @@
         <div id="slot-tabs"></div>
         <div id="item-grid"></div>
         <div class="locker-foot"><span id="lk-hint">Tap an item to try it on.</span><button class="cta" id="locker-done">DONE</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="armory" class="screen hidden">
+    <div class="locker">
+      <div id="armory-stage">
+        <div class="stage-info"><b id="ar-name">M4A1</b><small id="ar-type">ASSAULT RIFLE</small></div>
+        <div class="ar-bottom"><p id="ar-desc"></p><div id="ar-stats"></div></div>
+      </div>
+      <div class="locker-panel">
+        <div class="locker-head"><h2>ARMORY</h2><div class="row" style="gap:8px"><button class="ghost small hidden" id="ar-restore">RESTORE</button><div class="scrap">🔩 <span id="ar-scrap">0</span></div></div></div>
+        <div class="loadout-slots"><div class="lslot" id="ar-primary"><small>PRIMARY</small><b></b></div><div class="lslot" id="ar-secondary"><small>SECONDARY</small><b></b></div></div>
+        <div id="weapon-grid"></div>
+        <div class="locker-foot"><div id="ar-actions"></div><button class="cta" id="armory-done">DONE</button></div>
       </div>
     </div>
   </section>
