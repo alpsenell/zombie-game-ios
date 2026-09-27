@@ -3,7 +3,7 @@ const css = `
 #map-chip b{color:#fff;font:900 11px var(--ui);letter-spacing:1.4px}
 #map-chip:after{content:"›";font-size:15px;line-height:10px;color:var(--amber)}
 #maps{background:linear-gradient(0deg,#020608f5 0%,#020608b8 40%,#02060800 72%);place-items:end center}
-#maps .mp{width:min(96vw,920px);text-align:left}
+#maps .mp{width:min(100%,920px);text-align:left}
 #maps h2{margin:0 0 10px;font:900 30px var(--display);letter-spacing:2px;text-shadow:0 3px 12px #000}
 #maps h2 small{margin-left:10px;font:800 10px var(--ui);letter-spacing:2px;color:var(--amber)}
 .map-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
