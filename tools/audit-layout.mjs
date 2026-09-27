@@ -74,7 +74,7 @@ const { server, url } = await serve();
 const browser = await launch();
 for (const d of DEVICES) {
   if (only && d.name !== only) continue;
-  const { page, errors } = await openGame(browser, url, { width: d.width, height: d.height, init: `localStorage.setItem('deadzone.settings', JSON.stringify({analytics:false}))` });
+  const { page, errors } = await openGame(browser, url, { width: d.width, height: d.height });
   await page.addStyleTag({ content: insetCss(d.inset) });
   await page.evaluate(() => { for (const s of document.querySelectorAll('.sheet, .modal, #consent')) s.remove?.(); });
   await page.waitForTimeout(800);

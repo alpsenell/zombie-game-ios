@@ -1,6 +1,6 @@
 # App Store release checklist
 
-The local iOS project is generated from `index.html` through Capacitor. The game contains no third-party gameplay assets or advertising SDKs. Optional, opt-in analytics are described below and in `ANALYTICS.md`.
+The local iOS project is generated from `index.html` through Capacitor. The game contains no third-party gameplay assets or advertising SDKs. The game collects no data: it contains no analytics, crash-reporting or tracking code.
 
 ## Before uploading
 
@@ -82,55 +82,14 @@ Menu labels move occasionally; if the option is not on the leaderboard page, sea
 
 The game shows no ads and requires no account. It offers optional non-consumable In-App Purchases (four weapons, four outfits and a Season Pass per season), processed entirely by Apple through StoreKit; the game stores only which products the player owns, on the device. Global leaderboards use Apple Game Center: scores are sent to Apple through GameKit, and the game itself runs no servers. Players who are not signed in to Game Center can still play; their runs are kept only on the device. Check Apple's current guidance on declaring Game Center use in the App Privacy answers.
 
-### Opt-in analytics (TelemetryDeck)
+### Data collection
 
-If `APP_ID` in `features/analytics-config.js` is set, the game can send anonymous gameplay statistics to TelemetryDeck (TelemetryDeck GmbH, EU-hosted) — **only after the player taps ALLOW** on the in-app consent sheet or enables SETTINGS → *Anonymous analytics*. Details and the event catalog: `ANALYTICS.md`. If `APP_ID` stays empty, nothing is collected and the previous "Data Not Collected" answer still applies.
+The game collects no data. There is no analytics, crash-reporting or tracking code, and the game makes no network requests of its own besides Apple's GameKit and StoreKit.
 
-App Store Connect → **App Privacy** answers when analytics ships:
-- **Data types:** *Usage Data → Product Interaction* (runs, waves, perks, weapons, screens, purchases by product id). *Diagnostics* is **not** collected (no crash logs or performance data are sent); add it only if that changes.
-- **Linked to the user?** No — the identifier is a SHA-256 hash of a random per-install id, not tied to Game Center, the Apple ID or any account, and it is reset when the player opts out.
-- **Used for tracking?** No — no IDFA, no data brokers, no cross-app or cross-site linking. No App Tracking Transparency prompt is needed.
-- **Purpose:** Analytics.
-- Mention in App Review notes that collection only happens after in-app opt-in.
+App Store Connect → **App Privacy:** *Data Not Collected*.
 
-The privacy policy (required URL in App Store Connect) must disclose: that TelemetryDeck is used as a processor, what is sent (anonymous gameplay events, app version, platform, a hashed random install id, a session id), that it is opt-in and can be turned off in Settings, and a link to TelemetryDeck's privacy policy.
-
-**Network / ATS.** Signals go to `https://nom.telemetrydeck.com` over HTTPS with CORS from the `capacitor://localhost` webview, so no App Transport Security exception is needed.
-
-**Privacy manifest.** Because the analytics client is our own web code (not the TelemetryDeck Swift SDK, which ships its own manifest), the app target declares the collected data type. `ios/App/App/PrivacyInfo.xcprivacy` is in the App target's *Copy Bundle Resources* phase with:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>NSPrivacyTracking</key>
-  <false/>
-  <key>NSPrivacyTrackingDomains</key>
-  <array/>
-  <key>NSPrivacyCollectedDataTypes</key>
-  <array>
-    <dict>
-      <key>NSPrivacyCollectedDataType</key>
-      <string>NSPrivacyCollectedDataTypeProductInteraction</string>
-      <key>NSPrivacyCollectedDataTypeLinked</key>
-      <false/>
-      <key>NSPrivacyCollectedDataTypeTracking</key>
-      <false/>
-      <key>NSPrivacyCollectedDataTypePurposes</key>
-      <array>
-        <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
-      </array>
-    </dict>
-  </array>
-  <key>NSPrivacyAccessedAPITypes</key>
-  <array/>
-</dict>
-</plist>
-```
-
-`nom.telemetrydeck.com` is not a tracking domain, so it does not belong in `NSPrivacyTrackingDomains`. Web `localStorage` is not a required-reason API; if native code later reads `UserDefaults` or file timestamps directly, add the matching `NSPrivacyAccessedAPITypes` entries (Capacitor's own manifest covers the framework). If other data features are added, update the App Privacy answers, this manifest and the privacy policy before submission.
+**Privacy manifest.** `ios/App/App/PrivacyInfo.xcprivacy` is in the App target's *Copy Bundle Resources* phase and declares no tracking, no tracking domains and no collected data types (`NSPrivacyCollectedDataTypes` is an empty array). Web `localStorage` is not a required-reason API; if native code later reads `UserDefaults` or file timestamps directly, add the matching `NSPrivacyAccessedAPITypes` entries (Capacitor's own manifest covers the framework). If a data feature is ever added, update the App Privacy answers, this manifest and the privacy policy before submission.
 
 ## Test notes for App Review
 
-The game starts immediately from the title screen. On first launch a small sheet asks whether to send anonymous gameplay stats (ALLOW / NO THANKS); nothing is sent unless the player allows it, and it can be changed in Settings. It is a single-player game with an optional online CO-OP mode (2–4 players) and needs no special hardware. An account is optional: signing in to Game Center only enables the global and friends leaderboards (🏆 RANKS on the title and game-over screens), the daily/weekly boards, league badges, live rivals and CO-OP. CO-OP on the title screen uses Game Center matchmaking (or invites) to put 2–4 players in the same survival run; it requires Game Center and is not needed to test the rest of the game. Co-op uses no servers of ours: all traffic goes peer-to-peer through GameKit. 📅 DAILY and ⚔ RANKED on the title screen are playable without an account (rivals then come from the player's own past runs). The four iOS exclusive weapons in the ARMORY and the four outfits in the LOCKER's ★ EXCLUSIVE tab are non-consumable In-App Purchases; RESTORE in the Armory restores all of them. Outfits are cosmetic only. SEASON on the title screen shows the season reward track; the premium row is unlocked by that season's non-consumable Season Pass (cosmetics and scrap only), and RESTORE in the Armory restores it too. SHARE on the game-over screen opens the iOS share sheet with an image of the run. MISSIONS on the title screen lists daily and weekly missions and achievements; the 🔥 DAY button shows the daily login streak. All of their rewards are in-game scrap and XP and none can be bought. Scrap weapons are bought with in-game currency earned by playing and cannot be bought with money.
+The game starts immediately from the title screen. It is a single-player game with an optional online CO-OP mode (2–4 players) and needs no special hardware. An account is optional: signing in to Game Center only enables the global and friends leaderboards (🏆 RANKS on the title and game-over screens), the daily/weekly boards, league badges, live rivals and CO-OP. CO-OP on the title screen uses Game Center matchmaking (or invites) to put 2–4 players in the same survival run; it requires Game Center and is not needed to test the rest of the game. Co-op uses no servers of ours: all traffic goes peer-to-peer through GameKit. 📅 DAILY and ⚔ RANKED on the title screen are playable without an account (rivals then come from the player's own past runs). The four iOS exclusive weapons in the ARMORY and the four outfits in the LOCKER's ★ EXCLUSIVE tab are non-consumable In-App Purchases; RESTORE in the Armory restores all of them. Outfits are cosmetic only. SEASON on the title screen shows the season reward track; the premium row is unlocked by that season's non-consumable Season Pass (cosmetics and scrap only), and RESTORE in the Armory restores it too. SHARE on the game-over screen opens the iOS share sheet with an image of the run. MISSIONS on the title screen lists daily and weekly missions and achievements; the 🔥 DAY button shows the daily login streak. All of their rewards are in-game scrap and XP and none can be bought. Scrap weapons are bought with in-game currency earned by playing and cannot be bought with money.

@@ -1,4 +1,3 @@
-import * as analytics from './analytics.js';
 import progression from './progression.js';
 import * as competitive from './competitive.js';
 import * as season from './season.js';
@@ -10,7 +9,6 @@ import checkpoint from './checkpoint.js';
 import * as coop from './coop.js';
 
 export const FEATURES = [
-  analytics,
   progression,
   competitive,
   season,
