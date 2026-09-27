@@ -3,7 +3,7 @@ import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats, WOOD, woodStock } from './weapons.js';
-import { SLOTS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -859,7 +859,8 @@ function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
   return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
 }
-const slotById = id => id === BODY.id ? BODY : SLOTS.find(s => s.id === id);
+const ALL_SLOTS = [...SLOTS, ...EXTRA_SLOTS];
+const slotById = id => id === BODY.id ? BODY : ALL_SLOTS.find(s => s.id === id);
 function isOwned(slotId, i) {
   const it = slotById(slotId).items[i];
   if (!it) return false;
@@ -869,7 +870,7 @@ function isOwned(slotId, i) {
 }
 function unlockedSet() {
   const set = new Set();
-  for (const s of SLOTS) s.items.forEach((it, i) => { if (it.req && reqMet(it.req)) set.add(s.id + ':' + i); });
+  for (const s of ALL_SLOTS) s.items.forEach((it, i) => { if (it.req && reqMet(it.req)) set.add(s.id + ':' + i); });
   return set;
 }
 
@@ -1884,7 +1885,7 @@ function grantRewards() {
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
     const [slot, i] = fresh[0].split(':');
-    chip('🔓 UNLOCKED: ' + SLOTS.find(s => s.id === slot).items[i].name, 'hot');
+    chip('🔓 UNLOCKED: ' + slotById(slot).items[i].name, 'hot');
   } else if (fresh.length) chip('🔓 ' + fresh.length + ' NEW ITEMS IN LOCKER', 'hot');
   refreshProfileUI();
 }
@@ -2616,24 +2617,33 @@ function refreshProfileUI() {
   $('#lk-xp').style.width = (lv.into / lv.need * 100).toFixed(1) + '%';
   $('#lk-xptext').textContent = TITLES[l.title] + ' · ' + lv.into.toLocaleString() + ' / ' + lv.need.toLocaleString() + ' XP';
   $('#lk-scrap').textContent = profile.scrap.toLocaleString();
-  const affordable = SLOTS.some(s => s.items.some((it, i) => !isOwned(s.id, i) && it.cost && !it.req && it.cost <= profile.scrap));
+  const affordable = ALL_SLOTS.some(s => s.items.some((it, i) => !isOwned(s.id, i) && it.cost && !it.req && it.cost <= profile.scrap));
   $('#locker-badge').textContent = profile.fresh.length ? profile.fresh.length : affordable ? '!' : '';
   const gunAffordable = WEAPONS.some(w => w.price && !weaponOwned(w) && reqMet(w.req) && w.price <= profile.scrap);
   $('#armory-badge').textContent = gunAffordable ? '!' : '';
   applyLoadoutToGuns();
 }
+const groupOf = id => LOCKER_GROUPS.find(g => g.slots.includes(id)) || LOCKER_GROUPS[3];
 function renderLocker() {
-  const tabs = $('#slot-tabs'), grid = $('#item-grid');
-  tabs.innerHTML = ''; grid.innerHTML = '';
-  const ordered = [BODY, SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
-  for (const s of ordered) {
-    if (s.hidden) continue;
+  const groups = $('#slot-groups'), tabs = $('#slot-tabs'), grid = $('#item-grid'), group = groupOf(lockerSlot);
+  groups.innerHTML = ''; tabs.innerHTML = ''; grid.innerHTML = '';
+  const isNew = id => profile.fresh.some(k => k.startsWith(id + ':'));
+  for (const g of LOCKER_GROUPS) {
+    const b = document.createElement('button');
+    b.textContent = g.label;
+    b.className = (g === group ? 'on' : '') + (g.slots.some(isNew) ? ' new' : '');
+    b.onclick = () => { if (g === group) return; lockerSlot = g.slots.find(isNew) || g.slots[0]; pendingBuy = null; renderLocker(); };
+    groups.appendChild(b);
+  }
+  for (const id of group.slots) {
+    const s = slotById(id);
     const b = document.createElement('button');
     b.textContent = s.id === 'suit' ? '★ ' + s.label : s.label;
-    b.className = (s.id === lockerSlot ? 'on' : '') + (profile.fresh.some(k => k.startsWith(s.id + ':')) ? ' new' : '');
+    b.className = (s.id === lockerSlot ? 'on' : '') + (isNew(s.id) ? ' new' : '');
     b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
     tabs.appendChild(b);
   }
+  if (activeScreen === ui.locker) preview.attach($('#locker-stage'), group.id === 'face' || group.id === 'hair' ? 'bust' : 'full', false);
   const slot = slotById(lockerSlot);
   slot.items.forEach((it, i) => {
     const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
@@ -2678,7 +2688,7 @@ function lockerPick(slot, i) {
     profile.loadout[slot.id] = i;
     tryOn = null; pendingBuy = null;
     saveProfile();
-    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && slot.id !== 'body' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
+    $('#lk-hint').textContent = it.name + ' equipped.' + (!['suit', 'body', 'skin', 'build', 'height', 'jaw', 'eyes', 'brows', 'skinMark', 'gun', 'title', 'accessory'].includes(slot.id) && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under OUTFIT › ★ EXCLUSIVE.)' : '');
   } else if (it.req) {
     pendingBuy = null;
     $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
