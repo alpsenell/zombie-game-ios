@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three.module.js';
-import { WEAPONS, buildGun } from './weapons.js';
+import { WEAPONS, buildGun, WOOD, woodStock } from './weapons.js';
 
 const SKIN_TONES = [0xf1c7a5, 0xe0ac7e, 0xc68642, 0x8d5524, 0x5c3a21, 0xffdbb4, 0xa0765a, 0x3d2616];
 const HAIR_COLORS = [0x1a1410, 0x4a2e1a, 0xd8b060, 0x9a3a1a, 0x8a8a8a, 0xeeeeee, 0x2a6adf, 0xe05a9a];
@@ -647,7 +647,7 @@ export function buildSurvivor(l0) {
   const wdef = WEAPONS[l.primary] || WEAPONS[0];
   const gm = { base: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), dark: new THREE.MeshStandardMaterial() };
   paintGunMaterials(gm, l.gun);
-  if (wdef.id === 'r870' && !l.gun) gm.base.color.setHex(0x8a5428);
+  if (WOOD.has(wdef.id) && !l.gun) woodStock(gm.base);
   const gun = new THREE.Group();
   const model = buildGun(wdef, gm);
   model.rotation.y = Math.PI;

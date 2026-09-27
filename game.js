@@ -2,7 +2,7 @@ import * as THREE from './vendor/three.module.js';
 import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
-import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
+import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats, WOOD, woodStock } from './weapons.js';
 import { SLOTS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
@@ -772,7 +772,7 @@ function applyLoadoutToGuns() {
   guns.forEach((g, i) => {
     const m = g.userData.mats;
     paintGunMaterials(m, l.gun);
-    if (['r870', 'boom', 'm79', 'm24'].includes(WEAPONS[i].id) && l.gun === 0) { m.base.color.setHex(0x8a5428); m.base.roughness = .55; }
+    if (WOOD.has(WEAPONS[i].id) && l.gun === 0) woodStock(m.base);
     m.sleeve.color.setHex(c.sleeve);
     m.glove.color.setHex(c.glove);
   });
@@ -2690,7 +2690,7 @@ function weaponStatus(w) {
 }
 function showArmoryWeapon(w) {
   paintGunMaterials(armoryMats, profile.loadout.gun);
-  if (['r870', 'boom', 'm79', 'm24'].includes(w.id) && !profile.loadout.gun) armoryMats.base.color.setHex(0x8a5428);
+  if (WOOD.has(w.id) && !profile.loadout.gun) woodStock(armoryMats.base);
   preview.showWeapon(buildGun(w, armoryMats));
   $('#ar-name').textContent = w.name;
   $('#ar-type').textContent = w.type + (w.premium ? ' · iOS EXCLUSIVE' : '');
