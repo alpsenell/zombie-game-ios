@@ -4,6 +4,67 @@ const PI = Math.PI;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
 
+function bufGeo(pos, nor, uv) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+function merged(geos) {
+  const pos = [], nor = [], uv = [];
+  for (const g of geos) {
+    const n = g.toNonIndexed();
+    pos.push(...n.attributes.position.array); nor.push(...n.attributes.normal.array); uv.push(...n.attributes.uv.array);
+    n.dispose(); g.dispose();
+  }
+  return bufGeo(pos, nor, uv);
+}
+
+function flat(rects, uv) {
+  const pos = [], nor = [], uvs = [];
+  for (const [x0, z0, x1, z1, y = 0] of rects) for (const [x, z] of [[x0, z0], [x0, z1], [x1, z1], [x0, z0], [x1, z1], [x1, z0]]) { pos.push(x, y, z); nor.push(0, 1, 0); uvs.push(...uv(x, z)); }
+  return bufGeo(pos, nor, uvs);
+}
+
+function hazardStripe(c, B, y = .015, tint = 0x9a9a9a) {
+  const tex = c.canvas(64, 64, cx => {
+    cx.fillStyle = '#16140f'; cx.fillRect(0, 0, 64, 64);
+    cx.fillStyle = '#d6a22a'; cx.fillRect(0, 0, 32, 64);
+    for (let i = 0; i < 260; i++) { cx.fillStyle = `rgba(${Math.random() < .5 ? '10,9,6' : '120,110,90'},${Math.random() * .35})`; const s = Math.random() * 3; cx.fillRect(Math.random() * 64, Math.random() * 64, s, s * 3); }
+  }, [1, 1]);
+  const i = .45, o = .3, { minX: x0, maxX: x1, minZ: z0, maxZ: z1 } = B;
+  const g = flat([[x0 - o, z0 - o, x1 + o, z0 + i, y], [x0 - o, z1 - i, x1 + o, z1 + o, y], [x0 - o, z0 + i, x0 + i, z1 - i, y], [x1 - i, z0 + i, x1 + o, z1 - i, y]], (x, z) => [(x + z) / 1.3, (x - z) / 1.3]);
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: tex, color: tint, roughness: .85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  m.receiveShadow = true;
+  return c.add(m);
+}
+
+function chainFence(c, segs, h = 2.8) {
+  const tex = c.canvas(64, 64, cx => {
+    cx.strokeStyle = '#c8ccc8'; cx.lineWidth = 3;
+    cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(64, 64); cx.moveTo(64, 0); cx.lineTo(0, 64); cx.stroke();
+  }, [1, 1]);
+  const pos = [], nor = [], uv = [];
+  for (const [x0, z0, x1, z1] of segs) {
+    const len = Math.hypot(x1 - x0, z1 - z0), nx = (z1 - z0) / len, nz = -(x1 - x0) / len, u = len / 1.2, v = h / 1.2;
+    for (const [x, y, z, a, b] of [[x0, 0, z0, 0, 0], [x1, 0, z1, u, 0], [x1, h, z1, u, v], [x0, 0, z0, 0, 0], [x1, h, z1, u, v], [x0, h, z0, 0, v]]) { pos.push(x, y, z); nor.push(nx, 0, nz); uv.push(a, b); }
+  }
+  c.add(new THREE.Mesh(bufGeo(pos, nor, uv), new THREE.MeshStandardMaterial({ map: tex, alphaTest: .4, side: THREE.DoubleSide, metalness: .6, roughness: .5, color: 0x9aa0a0 })));
+  const post = c.mat(0x3a3e40, { metalness: .6, roughness: .5 }), wire = c.mat(0x7a7e80, { metalness: .8, roughness: .4 });
+  c.coilGeo ||= new THREE.TorusGeometry(.3, .025, 3, 8);
+  for (const [x0, z0, x1, z1] of segs) {
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 3)), ry = Math.atan2(x1 - x0, z1 - z0);
+    for (let k = 0; k <= n; k++) c.mesh(box(.12, h + .3, .12), post, x0 + (x1 - x0) * k / n, (h + .3) / 2, z0 + (z1 - z0) * k / n);
+    c.mesh(box(.07, .07, len), post, (x0 + x1) / 2, h, (z0 + z1) / 2).rotation.y = ry;
+    for (let k = 0; k < len / .8; k++) {
+      const t = k * .8 / len, r = c.mesh(c.coilGeo, wire, x0 + (x1 - x0) * t, h + .5, z0 + (z1 - z0) * t);
+      r.rotation.y = ry; r.castShadow = false;
+    }
+  }
+}
+
 function barrel(c, x, z) {
   const g = new THREE.Group();
   const drum = c.mesh(new THREE.CylinderGeometry(.34, .32, .9, 14, 1, true), c.mat(0x3b2a1e, { metalness: .6, roughness: .6, side: THREE.DoubleSide }), 0, .45, 0, g);
@@ -85,15 +146,20 @@ function sandbags(c, x, z, rot, len = 5, block = true) {
   if (block) c.block(x, z, ww, dd);
 }
 
-function jersey(c, x, z, rot = 0) {
+function jersey(c, x, z, rot = 0, j = .3) {
   const concrete = c.mat(0x8b8f88, { roughness: .95 });
   const g = new THREE.Group();
   c.mesh(box(2.2, .35, .7), concrete, 0, .17, 0, g);
   c.mesh(box(2.2, .6, .32), concrete, 0, .63, 0, g);
   c.mesh(box(2.21, .18, .33), c.mat(0xc2402c), 0, .78, 0, g);
-  g.position.set(x, 0, z); g.rotation.y = rot + (Math.random() - .5) * .3;
+  g.position.set(x, 0, z); g.rotation.y = rot + (Math.random() - .5) * j;
   c.add(g); c.solid(g);
   return g;
+}
+
+function jerseyLine(c, x0, x1, z) {
+  const n = Math.ceil((x1 - x0) / 2.2), sp = (x1 - x0) / n;
+  for (let k = 0; k < n; k++) jersey(c, x0 + (k + .5) * sp, z, 0, .02);
 }
 
 function skyline(c, color, n = 26, r0 = 70) {
@@ -111,7 +177,7 @@ function signTexture(c, w, h, draw) {
   return c.canvas(w, h, cx => { cx.textBaseline = 'middle'; cx.textAlign = 'center'; draw(cx, w, h); });
 }
 
-function street(c) {
+function street(c, B) {
   const { mesh, mat } = c;
   const road = mesh(new THREE.PlaneGeometry(18, 96), new THREE.MeshStandardMaterial({ map: c.grit('#2f3c43', '#a8c0be', 4, 20), roughness: .9, metalness: .1 }), 0, 0, 0);
   road.rotation.x = -PI / 2; road.castShadow = false;
@@ -128,30 +194,44 @@ function street(c) {
   const winDark = new THREE.MeshStandardMaterial({ color: 0x0a1418, roughness: .3, metalness: .6 });
   const winLit = new THREE.MeshStandardMaterial({ color: 0x331a08, emissive: 0xff8a2a, emissiveIntensity: 1.3 });
   const winBlue = new THREE.MeshStandardMaterial({ color: 0x0a1822, emissive: 0x3aa0ff, emissiveIntensity: .7 });
-  function building(x, z, w, d, h, col) {
+  function building(x, z, w, d, h, col, out) {
     const b = mesh(box(w, h, d), mat(col, { roughness: .88 }), x, h / 2, z);
-    c.solid(b);
-    c.block(x, z, w + .5, d + .5);
+    if (!out) { c.solid(b); c.block(x, z, w + .5, d + .5); }
     mesh(box(w + .4, .35, d + .4), mat(0x121a1f), x, h + .17, z);
-    const face = x < 0 ? 1 : -1;
+    const alongZ = !out || out[0], face = out ? out[0] || out[1] : x < 0 ? 1 : -1, L = alongZ ? d : w;
     for (let y = 2.2; y < h - 1; y += 2.6) {
-      for (let zz = -d * .36; zz <= d * .37; zz += d * .24) {
+      for (let t = -L * .36; t <= L * .37; t += L * .24) {
         const r = Math.random();
         const win = new THREE.Mesh(windowGeo, r > .82 ? winLit : r > .76 ? winBlue : winDark);
-        win.rotation.y = PI / 2;
-        win.position.set(x + face * (w / 2 + .03), y, z + zz);
+        if (alongZ) { win.rotation.y = PI / 2; win.position.set(x + face * (w / 2 + .03), y, z + t); }
+        else win.position.set(x + t, y, z + face * (d / 2 + .03));
         c.add(win);
       }
     }
-    mesh(box(.06, 2.2, 1.4), mat(0x0b0f12), x + face * (w / 2 + .03), 1.1, z);
+    if (!out) mesh(box(.06, 2.2, 1.4), mat(0x0b0f12), x + face * (w / 2 + .03), 1.1, z);
   }
   [[-15, -18, 9, 10, 16], [15, -17, 8, 11, 19], [-15, 3, 10, 9, 21], [15, 7, 9, 12, 17], [-16, 27, 8, 11, 20], [16, 28, 11, 10, 23], [-9, -36, 5, 8, 13], [10, -36, 6, 7, 15]]
     .forEach((v, i) => building(v[0], v[1], v[2], v[3], v[4], [0x252b31, 0x1b262d, 0x2d2628][i % 3]));
+  const cols = [0x252b31, 0x1b262d, 0x2d2628];
+  for (const s of [-1, 1]) {
+    for (let z = -55, i = 0; z < 55; i++) { const d = rnd(9, 14), e = Math.min(55, z + d); building(s * 50, (z + e) / 2, 8, e - z, rnd(11, 24), cols[i % 3], [-s, 0]); z = e; }
+    for (const sx of [-1, 1]) for (let x = 13, i = 0; x < 46; i++) { const w = rnd(8, 12), e = Math.min(46, x + w); building(sx * (x + e) / 2, s * 51, e - x, 8, rnd(10, 22), cols[(i + 1) % 3], [0, -s]); x = e; }
+  }
   skyline(c, 0x060b10);
 
   car(c, -4, -10, .3, carColors[0]); car(c, 5, 8, -.25, carColors[1]); car(c, -5, 34, 2.8, carColors[2]); car(c, 6.5, -24, 1.4, carColors[3], { tilt: .05 });
   sandbags(c, -5, 18, 0); sandbags(c, 4.5, 25, .4, 4); sandbags(c, -2, -30, -.2, 4);
-  for (let x = -8; x <= 8; x += 2.4) { jersey(c, x, 43); jersey(c, x + 1, -44); }
+  const FX = B.maxX + .4, FZ = B.maxZ + .4;
+  chainFence(c, [[-FX, -FZ, -11.8, -FZ], [11.8, -FZ, FX, -FZ], [-FX, FZ, -11.8, FZ], [11.8, FZ, FX, FZ], [FX, -FZ, FX, FZ], [-FX, -FZ, -FX, FZ]]);
+  hazardStripe(c, B);
+  for (const s of [-1, 1]) {
+    jerseyLine(c, -11.8, 11.8, s * (FZ + .35));
+    car(c, -6.5, s * 46.2, 1.45, carColors[2], { block: false, burnt: true });
+    car(c, -1.5, s * 47, 1.75, carColors[0], { block: false });
+    car(c, 3.8, s * 46.4, 1.3, carColors[4], { block: false, burnt: true, tilt: .08 });
+    car(c, -3.8, s * 46.6, 1.6, carColors[1], { block: false, burnt: true, y: 1.55, roll: PI });
+    car(c, 8.6, s * 47.4, .15, carColors[3], { block: false });
+  }
 
   const crateMat = mat(0x5a4630, { roughness: .9 });
   for (const [x, z] of [[6, 25], [-6.2, 20.5], [5, -28]]) {
@@ -178,7 +258,7 @@ function street(c) {
   [[-6, -4], [6.5, 21], [-4, 30], [4, -17]].forEach(p => barrel(c, ...p));
 }
 
-function mall(c) {
+function mall(c, B) {
   const { mesh, mat } = c;
   const tiles = c.canvas(256, 256, cx => {
     for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
@@ -200,8 +280,10 @@ function mall(c) {
   const shutter = mat(0x5b6266, { metalness: .5, roughness: .6 });
   const signs = [0xff3a6a, 0x3af0ff, 0xffc34d, 0x7dff6a, 0xb06aff, 0xff7a2a];
   const tube = mat(0xdde8f0, { emissive: 0xe4f2ff, emissiveIntensity: 2.2 }), tubeOff = mat(0x6a7278, { roughness: .4 });
+  const plank = mat(0x5a4630, { roughness: .9 });
   for (const s of [-1, 1]) {
     mesh(box(.6, 13, 82), wall, s * 29, 6.5, 0);
+    for (const e of [-1, 1]) mesh(box(4.7, 13, 2.2), wall, s * 26.7, 6.5, e * 37.5);
     for (const [y0, fh] of [[0, 3.6], [5.45, 2.9]]) for (let k = 0; k < 8; k++) {
       const z = -31.5 + k * 9;
       mesh(box(3.6, fh + .4, 8.2), dark, s * 26.4, y0 + fh / 2, z).castShadow = false;
@@ -210,10 +292,11 @@ function mall(c) {
       mesh(box(.2, .14, 7.6), metal, s * 24.3, y0 + fh, z);
       const lit = Math.random() > .3;
       mesh(box(.3, .8, 6.2), lit ? mat(0x111111, { emissive: signs[(Math.random() * signs.length) | 0], emissiveIntensity: 1.6 }) : mat(0x1a1d20), s * 24.25, y0 + fh + .75, z);
-      if (Math.random() < .4) {
-        const h = rnd(.8, fh - .4);
+      if (!y0 || Math.random() < .4) {
+        const h = y0 ? rnd(.8, fh - .4) : k % 3 === 1 ? fh * .55 : fh;
         mesh(box(.16, h, 7.4), shutter, s * 24.2, y0 + fh - h / 2, z);
         for (let r = .25; r < h; r += .35) mesh(box(.18, .04, 7.4), mat(0x3e4447), s * 24.2, y0 + fh - r, z);
+        if (h < fh) for (const [dz, a] of [[-1.8, .35], [1.6, -.3], [-.2, .08]]) mesh(box(.06, .24, 3.4), plank, s * 24.1, rnd(.5, 1.2), z + dz).rotation.x = a;
       }
     }
     for (let k = 0; k <= 8; k++) mesh(box(.9, 11, .9), trim, s * 24.4, 5.5, -36 + k * 9);
@@ -233,6 +316,11 @@ function mall(c) {
     mesh(box(58, 2.2, .7), mat(0x2a2e30), 0, 11.9, e * 38.6);
   }
   mesh(box(16, 5, .15), glass, 0, 2.5, -38.4);
+  for (const [e, w] of [[-1, 8], [1, 6]]) {
+    for (let x = -w + 1.6; x < w - 1; x += 3.1) for (const y of [.6, 1.3, 2.1, 3.4]) mesh(box(3.3, .28, .07), plank, x + rnd(-.15, .15), y + rnd(-.08, .08), e * 38.3).rotation.z = rnd(-.08, .08);
+    for (let x = -w + 2.5; x < w - 2; x += 4) mesh(box(3.6, .3, .07), plank, x, 1.8, e * 38.22).rotation.z = (x > 0 ? 1 : -1) * .7;
+  }
+  hazardStripe(c, B, .01, 0x8a8a8a);
   for (let x = -8; x <= 8; x += 4) mesh(box(.2, 5, .3), metal, x, 2.5, -38.35);
   mesh(box(16.4, .4, .4), metal, 0, 5.1, -38.35);
   const mega = new THREE.Mesh(new THREE.PlaneGeometry(14, 2.6), new THREE.MeshBasicMaterial({ map: signTexture(c, 512, 96, (cx, w, h) => {
@@ -376,28 +464,68 @@ function mall(c) {
   });
 }
 
-function overpass(c) {
+function overpass(c, B) {
   const { mesh, mat } = c;
-  const road = mesh(new THREE.PlaneGeometry(46, 100), new THREE.MeshStandardMaterial({ map: c.grit('#34363a', '#b0a898', 5, 22), roughness: .92, metalness: .05 }), 0, 0, 0);
-  road.rotation.x = -PI / 2; road.castShadow = false;
-  const dirt = mesh(new THREE.PlaneGeometry(150, 150), new THREE.MeshStandardMaterial({ map: c.grit('#2e2622', '#8a6a58', 18, 18), roughness: 1 }), 0, -.03, 0);
-  dirt.rotation.x = -PI / 2; dirt.castShadow = false;
+  const E = B.maxZ + 2.5, F = E + 8, G = F + 16;
+  const road = mesh(flat([[-23, -E, 23, E], [-23, F, 23, G], [-23, -G, 23, -F]], (x, z) => [x / 46 + .5, z / 100 + .5]), new THREE.MeshStandardMaterial({ map: c.grit('#34363a', '#b0a898', 5, 22), roughness: .92, metalness: .05 }), 0, 0, 0);
+  road.castShadow = false;
+  const dirt = mesh(flat([[-75, -E, 75, E, -.03], [-75, F, 75, 75, -.03], [-75, -75, 75, -F, -.03]], (x, z) => [x / 150 + .5, z / 150 + .5]), new THREE.MeshStandardMaterial({ map: c.grit('#2e2622', '#8a6a58', 18, 18), roughness: 1 }), 0, 0, 0);
+  dirt.castShadow = false;
   const white = mat(0xb8b2a2, { roughness: .9 }), yellow = mat(0xc9a038, { roughness: .9 });
-  for (const x of [-14.6, -7.3, 7.3, 14.6]) for (let z = -46; z < 46; z += 7) mesh(box(.16, .02, 3), white, x, .012, z).castShadow = false;
-  for (const x of [-21.4, -1.2, 1.2, 21.4]) mesh(box(.16, .02, 98), yellow, x, .012, 0).castShadow = false;
+  for (const x of [-14.6, -7.3, 7.3, 14.6]) for (let z = -46; z < 46; z += 7) if (Math.abs(z) + 1.5 < E) mesh(box(.16, .02, 3), white, x, .012, z).castShadow = false;
+  for (const x of [-21.4, -1.2, 1.2, 21.4]) mesh(box(.16, .02, 2 * E), yellow, x, .012, 0).castShadow = false;
 
   const concrete = mat(0x8a8478, { roughness: .95 }), darkC = mat(0x5e5a52, { roughness: 1 });
+  const W = B.maxX + .9;
   for (const s of [-1, 1]) {
-    mesh(box(1, 4.6, 100), concrete, s * 23.2, 2.3, 0);
-    mesh(box(1.4, .35, 100), darkC, s * 23.2, 4.7, 0);
-    for (let z = -48; z <= 48; z += 8) mesh(box(1.5, 4.8, .8), darkC, s * 23.2, 2.4, z);
+    mesh(box(1, 4.6, 2 * E), concrete, s * W, 2.3, 0);
+    mesh(box(1.4, .35, 2 * E), darkC, s * W, 4.7, 0);
+    for (let z = -44; z <= 44; z += 8) mesh(box(1.5, 4.8, .8), darkC, s * W, 2.4, z);
     for (let z = -40; z <= 40; z += 16) {
       const bent = Math.random() < .4;
-      const p = mesh(new THREE.CylinderGeometry(.1, .14, 8, 8), mat(0x2a2c2e, { metalness: .6, roughness: .5 }), s * 22.3, 4, z);
+      const p = mesh(new THREE.CylinderGeometry(.1, .14, 8, 8), mat(0x2a2c2e, { metalness: .6, roughness: .5 }), s * (W - .6), 4, z);
       if (bent) { p.rotation.z = s * .35; p.position.x -= s * 1.3; }
-      else mesh(box(1.8, .12, .3), mat(0x2a2c2e, { metalness: .6 }), s * 21.5, 8, z);
+      else mesh(box(1.8, .12, .3), mat(0x2a2c2e, { metalness: .6 }), s * (W - 1.4), 8, z);
+    }
+    for (const e of [-1, 1]) mesh(box(1, 4.6, G - F), concrete, s * W, 2.3, e * (F + G) / 2);
+  }
+  const rail = mat(0x9aa0a2, { metalness: .6, roughness: .45 }), railPost = mat(0x2a2c2e, { metalness: .6, roughness: .5 });
+  const rebar = mat(0x6a3a1e, { metalness: .5, roughness: .7 });
+  const chunk = c.lumpy(new THREE.IcosahedronGeometry(1, 0), .3);
+  const pit = mat(0x140c10, { roughness: 1 });
+  mesh(box(150, .1, F - E + 2), pit, 0, -9, E + (F - E) / 2).castShadow = false;
+  mesh(box(150, .1, F - E + 2), pit, 0, -9, -E - (F - E) / 2).castShadow = false;
+  const outTex = signTexture(c, 512, 128, (cx, w, h) => {
+    cx.fillStyle = '#e8762a'; cx.fillRect(0, 0, w, h);
+    cx.fillStyle = '#141210';
+    for (let x = -h; x < w; x += 48) { cx.beginPath(); cx.moveTo(x, h); cx.lineTo(x + 24, h); cx.lineTo(x + 24 + h, 0); cx.lineTo(x + h, 0); cx.fill(); }
+    cx.fillRect(64, 14, w - 128, h - 28);
+    cx.fillStyle = '#f2ead8'; cx.font = '900 64px Impact, sans-serif'; cx.fillText('BRIDGE OUT', w / 2, h / 2 + 3);
+  });
+  const outMat = new THREE.MeshStandardMaterial({ map: outTex, emissiveMap: outTex, emissive: 0xffffff, emissiveIntensity: .35, roughness: .7 });
+  const signs = [];
+  for (const e of [-1, 1]) {
+    jerseyLine(c, -B.maxX - .4, B.maxX + .4, e * (B.maxZ + .75));
+    for (const x of [-13, 0, 13]) {
+      signs.push(new THREE.PlaneGeometry(4.4, 1.1).rotateY(e > 0 ? PI : 0).translate(x, 1.75, e * (B.maxZ + 1.25)));
+      for (const dx of [-1.8, 1.8]) mesh(box(.12, 2.2, .12), railPost, x + dx, 1.1, e * (B.maxZ + 1.3));
+    }
+    mesh(box(2 * W, .34, .1), rail, 0, .72, e * (B.maxZ + 1.6));
+    for (let x = -W + .6; x < W; x += 2.2) mesh(box(.14, .9, .14), railPost, x, .45, e * (B.maxZ + 1.7));
+    for (const z of [E, F]) {
+      mesh(box(150, 9, .8), darkC, 0, -4.5, e * (z + (z === E ? .4 : -.4)));
+      mesh(box(2 * W + 1, .35, .9), concrete, 0, -.17, e * (z + (z === E ? .45 : -.45)));
+      for (let i = 0; i < 16; i++) {
+        const r = mesh(box(.05, .05, rnd(.8, 2)), rebar, rnd(-W, W), rnd(-.6, -.1), e * (z + (z === E ? .2 : -.2)));
+        r.rotation.set(rnd(-.9, .9) + (z === E ? e : -e) * .6, rnd(-.4, .4), 0); r.castShadow = false;
+      }
+    }
+    for (let i = 0; i < 5; i++) {
+      const ch = mesh(chunk, darkC, rnd(-18, 18), -8.4, e * rnd(E + 1.5, F - 1.5)); ch.scale.setScalar(rnd(.6, 1.4)); ch.rotation.set(rnd(0, 3), rnd(0, 3), 0);
     }
   }
+  c.add(new THREE.Mesh(merged(signs), outMat));
+  hazardStripe(c, B, .016, 0x7a7a7a);
   skyline(c, 0x1a0e1c, 30, 74);
 
   const deck = new THREE.Group();
@@ -420,14 +548,12 @@ function overpass(c) {
   slab.rotation.x = Math.atan2(5, 16); slab.rotation.z = .06; c.solid(slab);
   const colB = mesh(new THREE.CylinderGeometry(.7, .8, 3.6, 12), concrete, -17, 1.8, -33.5);
   colB.rotation.z = .12; c.solid(colB);
-  const rebar = mat(0x6a3a1e, { metalness: .5, roughness: .7 });
   for (let i = 0; i < 9; i++) {
     const r = mesh(box(.05, .05, rnd(1, 2.2)), rebar, -19.6 + i * .6, rnd(4.4, 5.4), -33 + rnd(-.3, .3));
     r.rotation.set(rnd(-.8, .8), rnd(-.4, .4), 0);
     r.castShadow = false;
   }
   c.block(-17, -24.5, 6.4, 18); c.block(-17, -33.5, 2, 2);
-  const chunk = c.lumpy(new THREE.IcosahedronGeometry(1, 0), .3);
   for (const [x, z, s] of [[-13.2, -16, .8], [-14.2, -14.5, .5], [-20.6, -15, .7], [-12.8, -30, .6], [8, 2, .4], [-5, -38, .6]]) {
     const ch = mesh(chunk, darkC, x, s * .5, z); ch.scale.setScalar(s); ch.rotation.set(rnd(0, 3), rnd(0, 3), 0);
     c.solid(ch); c.block(x, z, s * 2.2, s * 2.2);
@@ -491,7 +617,7 @@ function overpass(c) {
   }
 }
 
-function base(c) {
+function base(c, B) {
   const { mesh, mat } = c;
   const ground = mesh(new THREE.PlaneGeometry(130, 130), new THREE.MeshStandardMaterial({ map: c.grit('#4a4a3a', '#aaa488', 20, 20), roughness: 1 }), 0, -.02, 0);
   ground.rotation.x = -PI / 2; ground.castShadow = false;
@@ -504,32 +630,9 @@ function base(c) {
   }) }));
   pad.rotation.x = -PI / 2; pad.position.set(-15, .02, 22); pad.receiveShadow = true; c.add(pad);
 
-  const fenceTex = c.canvas(64, 64, cx => {
-    cx.strokeStyle = '#c8ccc8'; cx.lineWidth = 3;
-    cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(64, 64); cx.moveTo(64, 0); cx.lineTo(0, 64); cx.stroke();
-  }, [1, 1]);
-  const q = [], pos = [], nor = [], uv = [], F = 37.5;
-  for (const [x0, z0, x1, z1] of [[-F, -F, F, -F], [F, -F, F, F], [F, F, -F, F], [-F, F, -F, -F]]) q.push([x0, z0, x1, z1]);
-  for (const [x0, z0, x1, z1] of q) {
-    const len = Math.hypot(x1 - x0, z1 - z0), nx = (z1 - z0) / len, nz = -(x1 - x0) / len, u = len / 1.2, v = 2.8 / 1.2;
-    for (const [x, y, z, a, b] of [[x0, 0, z0, 0, 0], [x1, 0, z1, u, 0], [x1, 2.8, z1, u, v], [x0, 0, z0, 0, 0], [x1, 2.8, z1, u, v], [x0, 2.8, z0, 0, v]]) { pos.push(x, y, z); nor.push(nx, 0, nz); uv.push(a, b); }
-  }
-  const fg = new THREE.BufferGeometry();
-  fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  fg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  fg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  const fence = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({ map: fenceTex, alphaTest: .4, side: THREE.DoubleSide, metalness: .6, roughness: .5, color: 0x9aa0a0 }));
-  c.add(fence);
-  const post = mat(0x3a3e40, { metalness: .6, roughness: .5 }), wire = mat(0x7a7e80, { metalness: .8, roughness: .4 });
-  const coil = new THREE.TorusGeometry(.3, .025, 3, 8);
-  for (const [x0, z0, x1, z1] of q) {
-    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 3);
-    for (let k = 0; k <= n; k++) mesh(box(.12, 3.1, .12), post, x0 + (x1 - x0) * k / n, 1.55, z0 + (z1 - z0) * k / n);
-    for (let k = 0; k < len / .8; k++) {
-      const t = k * .8 / len, r = mesh(coil, wire, x0 + (x1 - x0) * t, 3.3, z0 + (z1 - z0) * t);
-      r.rotation.y = Math.atan2(x1 - x0, z1 - z0); r.castShadow = false;
-    }
-  }
+  const F = B.maxX + .4;
+  chainFence(c, [[-F, -F, F, -F], [F, -F, F, F], [F, F, -F, F], [-F, F, -F, -F]]);
+  hazardStripe(c, B, .006);
 
   const corr = mat(0x76806c, { metalness: .35, roughness: .6, flatShading: true, side: THREE.DoubleSide });
   const shell = new THREE.CylinderGeometry(11, 11, 14, 20, 1, true, -PI / 2, PI);
@@ -555,7 +658,7 @@ function base(c) {
   c.block(0, -27, 22.6, 14.8);
 
   const wood = mat(0x4a3a28, { roughness: .9 }), steel = mat(0x33383a, { metalness: .6, roughness: .5 });
-  function tower(x, z) {
+  function tower(x, z, out) {
     const g = new THREE.Group();
     for (const sx of [-1.2, 1.2]) for (const sz of [-1.2, 1.2]) mesh(box(.25, 5, .25), steel, sx, 2.5, sz, g);
     for (const [rx, ry] of [[0, 0], [0, PI / 2]]) for (const e of [-1.2, 1.2]) {
@@ -570,10 +673,15 @@ function base(c) {
     for (const sx of [-1.45, 1.45]) for (const sz of [-1.45, 1.45]) mesh(box(.1, 1.8, .1), steel, sx, 6.9, sz, g);
     const roof = mesh(new THREE.ConeGeometry(2.6, 1.1, 4), mat(0x2e3430, { flatShading: true }), 0, 8.3, 0, g);
     roof.rotation.y = PI / 4;
-    g.position.set(x, 0, z); c.add(g); c.solid(g);
-    c.block(x, z, 3.1, 3.1);
+    g.position.set(x, 0, z); c.add(g);
+    if (!out) { c.solid(g); c.block(x, z, 3.1, 3.1); }
   }
   for (const [x, z] of [[-28, 24], [28, 24], [-28, -12], [28, -12]]) tower(x, z);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    tower(sx * (F + 2.4), sz * (F + 2.4), true);
+    sandbags(c, sx * (F + 1), sz * (F - 5), PI / 2, 5, false);
+    sandbags(c, sx * (F - 5), sz * (F + 1), 0, 5, false);
+  }
   const beamGeo = new THREE.ConeGeometry(3.2, 34, 20, 1, true);
   beamGeo.translate(0, -17, 0); beamGeo.rotateX(-PI / 2);
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xe8f0ff, transparent: true, opacity: .1, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });

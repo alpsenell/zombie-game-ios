@@ -3,7 +3,7 @@ import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
-import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { SLOTS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -12,7 +12,7 @@ const ui = {
   hpNum: $('#hp-num'), hpFill: $('#hp-fill'), hpLag: $('#hp-lag'), waveNum: $('#wave-num'), alive: $('#alive'), waveFill: $('#wave-fill'),
   score: $('#score'), combo: $('#combo'), radar: $('#radar'), bossBar: $('#bossbar'), bossName: $('#boss-name'), bossFill: $('#boss-fill'),
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
-  damage: $('#damage'), lowhp: $('#lowhp'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
+  damage: $('#damage'), lowhp: $('#lowhp'), edge: $('#edge'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
   gunName: $('#gun-name'), ammo: $('#ammo'), fire: $('#fire'), reload: $('#reload'), reloadRing: $('#reload .ring circle'),
   grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'),
 };
@@ -65,7 +65,10 @@ function resize() {
   viewCam.updateProjectionMatrix();
   placeStickHome();
 }
-addEventListener('resize', () => { resize(); placePreview(); });
+const onResize = () => { resize(); placePreview(); };
+addEventListener('resize', onResize);
+addEventListener('orientationchange', () => [120, 400, 800].forEach(t => setTimeout(onResize, t)));
+window.visualViewport?.addEventListener('resize', onResize);
 
 const matCache = new Map();
 function mat(color, o = {}) {
@@ -225,6 +228,7 @@ scene.add(hemi);
 const fires = [];
 const world = { group: null, map: null, tex: [] };
 let bounds = MAPS[0].bounds;
+const edge = { t: 0, side: 0 };
 function worldCtx(group) {
   const track = t => (world.tex.push(t), t);
   return {
@@ -269,7 +273,7 @@ function loadMap(id) {
   world.group = new THREE.Group(); world.group.name = 'world';
   scene.add(world.group);
   applyEnv(map);
-  map.build(worldCtx(world.group));
+  map.build(worldCtx(world.group), map.bounds);
   bakeStatic([world.group], world.group);
   buildNav();
   return true;
@@ -776,6 +780,7 @@ function applyLoadoutToGuns() {
 
 const profile = Object.assign({ loadout: { ...DEFAULT_LOADOUT }, owned: {}, scrap: 300, xp: 0, kills: 0, heads: 0, bosses: {}, bestWave: 0, bestByDiff: {}, runs: 0, lastDaily: '', fresh: [], iap: {} }, store.get('profile', {}));
 profile.loadout = { ...DEFAULT_LOADOUT, ...profile.loadout };
+profile.loadout.body = profile.loadout.body === 1 ? 1 : 0;
 profile.arsenal = { owned: {}, primary: 'm4', secondary: 'r870', ...profile.arsenal };
 profile.iap ||= {};
 function weaponOwned(w) {
@@ -812,8 +817,9 @@ function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
   return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
 }
+const slotById = id => id === BODY.id ? BODY : SLOTS.find(s => s.id === id);
 function isOwned(slotId, i) {
-  const it = SLOTS.find(s => s.id === slotId).items[i];
+  const it = slotById(slotId).items[i];
   if (!it) return false;
   if (it.premium) return !!profile.iap[STORE_PREFIX + it.premium];
   if (it.req) return reqMet(it.req);
@@ -858,6 +864,7 @@ function resetRun() {
   ui.bossBar.classList.add('hidden');
   ui.swap.classList.add('hidden');
   ui.lowhp.classList.remove('on');
+  edge.t = 0; ui.edge.style.opacity = 0;
   hint('');
   for (const z of zombies) scene.remove(z);
   zombies.length = 0;
@@ -1963,6 +1970,7 @@ function updatePlayer(dt) {
   if (player.adrenT > 0) player.adrenT = Math.max(0, player.adrenT - dt);
   let mx = move.x + (keys.d ? 1 : 0) - (keys.a ? 1 : 0), my = move.y + (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
   const mag = Math.min(1, Math.hypot(mx, my));
+  let push = 0;
   const sprint = (move.sprint || keys.shift) && my > .5 && player.reloading <= 0;
   if (mag > .05 && !state.net?.downed) {
     const l = Math.hypot(mx, my); mx /= l; my /= l;
@@ -1972,9 +1980,14 @@ function updatePlayer(dt) {
     const nx = camera.position.x + fx * speed, nz = camera.position.z + fz * speed;
     if (!blocked(nx, camera.position.z, .36)) camera.position.x = nx;
     if (!blocked(camera.position.x, nz, .36)) camera.position.z = nz;
+    const ox = nx > bounds.maxX ? 1 : nx < bounds.minX ? -1 : 0, oz = nz > bounds.maxZ ? 1 : nz < bounds.minZ ? -1 : 0;
+    if (ox || oz) { const l = Math.hypot(ox, oz); push = Math.max(0, (fx * ox + fz * oz) / l) * mag; edge.side = (ox * cy - oz * sy) / l; }
     look.bob += dt * (sprint ? 13 : 9) * mag;
     if (!state.moved) { state.moved = true; if (!tutorialDone) hint('Drag the right side to aim · hold FIRE to shoot (you can aim while holding it)'); }
   }
+  const et = edge.t;
+  edge.t = push > edge.t ? Math.min(push, edge.t + dt * 4) : Math.max(0, edge.t - dt * 2);
+  if (edge.t || et) { ui.edge.style.opacity = (edge.t * .75).toFixed(3); ui.edge.style.setProperty('--ex', (50 - edge.side * 38).toFixed(1) + '%'); }
   player.sprinting = !!sprint && mag > .05;
   ui.stick.classList.toggle('sprint', player.sprinting);
   const targetFov = sprint ? 82 : 74;
@@ -2485,7 +2498,7 @@ function refreshProfileUI() {
 function renderLocker() {
   const tabs = $('#slot-tabs'), grid = $('#item-grid');
   tabs.innerHTML = ''; grid.innerHTML = '';
-  const ordered = [SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
+  const ordered = [BODY, SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
   for (const s of ordered) {
     if (s.hidden) continue;
     const b = document.createElement('button');
@@ -2494,7 +2507,7 @@ function renderLocker() {
     b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
     tabs.appendChild(b);
   }
-  const slot = SLOTS.find(s => s.id === lockerSlot);
+  const slot = slotById(lockerSlot);
   slot.items.forEach((it, i) => {
     const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
     const b = document.createElement('button');
@@ -2510,6 +2523,7 @@ function renderLocker() {
 }
 function lockerPick(slot, i) {
   const key = slot.id + ':' + i, it = slot.items[i];
+  if (slot.id === 'body' && i === 1 && profile.loadout.body !== 1 && profile.loadout.hair === DEFAULT_LOADOUT.hair) { profile.loadout.hair = 3; profile.owned['hair:3'] = true; }
   tryOn = { ...profile.loadout, [slot.id]: i };
   preview.show(tryOn);
   haptic('LIGHT');
@@ -2537,7 +2551,7 @@ function lockerPick(slot, i) {
     profile.loadout[slot.id] = i;
     tryOn = null; pendingBuy = null;
     saveProfile();
-    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
+    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && slot.id !== 'body' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
   } else if (it.req) {
     pendingBuy = null;
     $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
