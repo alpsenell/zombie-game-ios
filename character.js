@@ -72,14 +72,16 @@ export const SLOTS = [
   { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, season: x.season, req: x.season ? 'season:' + x.season : undefined, desc: x.desc, swatch: x.accent } : { name: 'NONE' }) },
 ];
 const LEVEL_CAP = 63;
+export const BODY = { id: 'body', label: 'BODY', items: [{ name: 'MALE' }, { name: 'FEMALE' }] };
 
 export const DEFAULT_LOADOUT = Object.fromEntries(SLOTS.map(s => [s.id, 0]));
 DEFAULT_LOADOUT.skin = 1;
 DEFAULT_LOADOUT.hair = 1;
 DEFAULT_LOADOUT.hairColor = 1;
+DEFAULT_LOADOUT.body = 0;
 
 export function encodeLoadout(loadout, level = 1) {
-  let code = 1, base = 4;
+  let code = loadout.body === 1 ? 3 : 1, base = 4;
   for (const s of SLOTS) {
     const size = 2 ** s.bits;
     code += (Math.max(0, Math.min(size - 1, loadout[s.id] | 0))) * base;
@@ -90,7 +92,9 @@ export function encodeLoadout(loadout, level = 1) {
 
 export function decodeLoadout(code) {
   code = Number(code);
-  if (!Number.isSafeInteger(code) || code <= 0 || code % 4 !== 1) return null;
+  const tag = code % 4;
+  if (!Number.isSafeInteger(code) || code <= 0 || (tag !== 1 && tag !== 3)) return null;
+  const body = tag === 3 ? 1 : 0;
   let rest = Math.floor(code / 4);
   const loadout = {};
   for (const s of SLOTS) {
@@ -98,14 +102,16 @@ export function decodeLoadout(code) {
     rest = Math.floor(rest / size);
     loadout[s.id] = v < s.items.length ? v : 0;
   }
-  return { loadout, level: Math.max(1, rest % (LEVEL_CAP + 1)) };
+  loadout.body = body;
+  return { loadout, level: Math.max(1, rest % (LEVEL_CAP + 1)), body };
 }
 
 export function describeLoadout(l) {
   const n = id => SLOTS.find(s => s.id === id).items[l[id]]?.name || '';
-  const suit = SUITS[l.suit];
-  if (suit) return [['OUTFIT', suit.name + ' (EXCLUSIVE)'], ['WEAPON', (l.gun ? n('gun') + ' ' : '') + (WEAPONS[l.primary]?.name || 'M4A1')]];
+  const suit = SUITS[l.suit], body = ['BODY', BODY.items[l.body === 1 ? 1 : 0].name];
+  if (suit) return [body, ['OUTFIT', suit.name + ' (EXCLUSIVE)'], ['WEAPON', (l.gun ? n('gun') + ' ' : '') + (WEAPONS[l.primary]?.name || 'M4A1')]];
   const parts = [
+    body,
     ['OUTFIT', n('topColor') + ' ' + n('top')],
     ['HAIR', l.hair === 7 ? 'BALD' : n('hairColor') + ' ' + n('hair')],
     ['HEADGEAR', n('head')],
@@ -183,7 +189,185 @@ const G = {
   torus: new THREE.TorusGeometry(1, .18, 8, 20),
   taper: new THREE.CylinderGeometry(.707, .6, 1, 4, 1).rotateY(Math.PI / 4),
 };
-const UP = new THREE.Vector3(0, -1, 0);
+const UP = new THREE.Vector3(0, -1, 0), Y = new THREE.Vector3(0, 1, 0), PI = Math.PI;
+
+const HS = [[.118, .14, .125], [.112, .136, .12]], HANG = .58 * PI;
+function hp(th, ph, r, f, hang) {
+  const [sx, sy, sz] = HS[f];
+  let drop = 0;
+  if (hang && th > HANG) { drop = (th - HANG) * .14; th = HANG; }
+  const st = Math.sin(th), dx = st * Math.sin(ph), dy = Math.cos(th), dz = st * Math.cos(ph);
+  const s = Math.min(1, Math.max(0, (.15 - dy) / 1.15)) ** 1.4;
+  return [dx * r * sx * (1 - (f ? .24 : .18) * s) * (1 + drop * 1.2), .14 + dy * r * sy - drop, dz * r * sz * (dz > 0 ? 1 - .05 * s : 1.07 - .2 * s) * (1 + drop * .5) - drop * drop * Math.abs(dx)];
+}
+const geos = new Map();
+function shell(key, n, k, fn) {
+  if (geos.has(key)) return geos.get(key);
+  const pos = [], idx = [];
+  for (let j = 0; j <= k; j++) for (let i = 0; i <= n; i++) pos.push(...fn(i / n, j / k, i));
+  for (let j = 0; j < k; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i, b = a + n + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const nr = g.attributes.normal.array, sum = new Map(), keyOf = v => [0, 1, 2].map(c => Math.round(pos[v * 3 + c] * 1e4)).join();
+  for (let v = 0; v < nr.length / 3; v++) { const kk = keyOf(v), a = sum.get(kk) || [0, 0, 0]; for (let c = 0; c < 3; c++) a[c] += nr[v * 3 + c]; sum.set(kk, a); }
+  for (let v = 0; v < nr.length / 3; v++) { const a = sum.get(keyOf(v)), d = Math.hypot(...a) || 1; for (let c = 0; c < 3; c++) nr[v * 3 + c] = a[c] / d; }
+  geos.set(key, g);
+  return g;
+}
+const fnOf = x => typeof x === 'function' ? x : () => x;
+function scalp(key, f, [ph0, ph1], th0, th1, rf, { hang = false, n = 24, k = 10 } = {}) {
+  const a0 = fnOf(th0), a1 = fnOf(th1), r = fnOf(rf);
+  return shell(key + ':' + f, n, k, (u, v, i) => { const ph = ph0 + (ph1 - ph0) * u, a = a0(ph, i), th = a + (a1(ph, i) - a) * v; return hp(th, ph, r(v, ph, th), f, hang); });
+}
+const line = (fr, sd, bk, burn = 0, p = 2) => ph => { const c = Math.cos(ph), w = Math.abs(c) ** p; return PI * (sd + ((c > 0 ? fr : bk) - sd) * w + burn * Math.exp(-(((Math.abs(ph) - 1.3) / .2) ** 2))); };
+const RING = [-PI, PI];
+
+function hairSpec(h, f, hat) {
+  if (hat && [2, 5, 6].includes(h)) h = h === 6 ? 0 : 1;
+  if (h === 7) return null;
+  const front = ph => Math.max(0, Math.cos(ph));
+  const S = {
+    0: { th: line(.31, .5, .66, .07, 4), r: v => 1.024 + .01 * (1 - v) },
+    1: f ? { th: (ph, i) => line(.3, .72, .72, 0, 5)(ph) + (i % 2) * .05 * PI * front(ph) ** 3, r: (v, ph, th) => 1.03 + .07 * (1 - Math.min(1, th / HANG) ** 2), hang: true }
+      : { th: (ph, i) => line(.31, .5, .66, .08, 4)(ph) + (i % 2) * .035 * PI * front(ph) ** 2, r: (v, ph) => 1.025 + .08 * (1 - v ** 3) + .03 * front(ph) * (1 - v) },
+    2: { th: line(.31, .5, .66, .08, 4), r: v => 1.025 + .05 * (1 - v ** 3) },
+    3: { th: (ph, i) => line(.3, f ? .9 : .78, f ? 1.3 : 1.02, 0, 4)(ph) + (i % 2) * .03 * PI * front(ph) ** 4, r: (v, ph, th) => 1.03 + .07 * (1 - Math.min(1, th / HANG) ** 2), hang: true },
+    4: { th: line(.3, .5, .66, .05, 4), r: v => 1.025 + .035 * (1 - v ** 2) },
+    5: { th: line(.31, .58, .72, 0, 3), r: (v, ph, th) => 1.025 + .46 * (1 - v ** 4) * (1 + .06 * Math.sin(ph * 5 + th * 7)) },
+    6: { th: line(.31, .5, .66, .07, 4), r: v => 1.024 + .01 * (1 - v) },
+  }[h];
+  const r = hat ? (v, ph, th) => Math.min(1.05, S.r(v, ph, th)) : S.r;
+  return { h, ...S, r, at: (th, ph) => th <= S.th(ph, 0) ? r(th / S.th(ph, 0), ph, th) : 1 };
+}
+function span(parent, geo, mat, a, b, w, d = w) {
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+  const o = part(parent, geo, mat, A.clone().add(B).multiplyScalar(.5).toArray(), [w, A.distanceTo(B), d]);
+  o.quaternion.setFromUnitVectors(Y, B.sub(A).normalize());
+  return o;
+}
+function outward(o, ph, tilt = 0) { o.rotation.set(PI / 2 + tilt, ph, 0, 'YXZ'); return o; }
+
+function buildHead(head, l, f, { skin, skinC, hairC, black, topDark }) {
+  const hairM = m(hairC, { roughness: .9, flatShading: true, side: THREE.DoubleSide }), brow = m(hairC, { roughness: .9 });
+  const P = (th, ph, r = 1, hang) => hp(th, ph, r, f, hang);
+  part(head, scalp('head', f, RING, 0, PI, 1, { n: 28, k: 18 }), skin, [0, 0, 0], [1, 1, 1]);
+  const hat = [1, 2, 4, 5].includes(l.head), hs = hairSpec(l.hair, f, hat);
+  const hr = hs ? hs.at : () => 1, hk = (hs ? hs.h : 7) + (hat ? 'h' : '');
+  const eye = f ? [1.4, .4] : [1.42, .4];
+  for (const s of [-1, 1]) {
+    const e = P(eye[0], s * eye[1], .985);
+    part(head, G.sphere, m(0xf4f4f0), e, f ? [.018, .014, .01] : [.018, .013, .01]).rotation.y = s * .35;
+    part(head, G.sphere, black, P(eye[0], s * eye[1], 1.06), [.0075, .0085, .005]).rotation.y = s * .35;
+    const b = P(eye[0] - .24, s * (eye[1] + .02), 1.03);
+    part(head, G.box, brow, b, f ? [.04, .007, .01] : [.046, .011, .012], [0, s * .38, s * (f ? -.03 : .03)]);
+    if (f) part(head, G.box, black, P(eye[0] - .1, s * (eye[1] + .02), 1.04), [.032, .005, .005], [0, s * .38, s * .15]);
+    const ear = P(1.62, s * 1.62, 1);
+    if (!hs || !(hs.h === 3 || hs.h === 5 || (f && hs.h === 1))) part(head, G.sphere, skin, [ear[0] + s * .006, ear[1], ear[2]], f ? [.018, .032, .018] : [.022, .038, .02]);
+  }
+  const nose = P(1.55, 0, 1);
+  part(head, G.box, skin, [0, nose[1], nose[2]], f ? [.022, .04, .024] : [.027, .046, .028], [-.18, 0, 0]);
+  const lipC = f ? new THREE.Color(skinC).lerp(new THREE.Color(0xb0405a), .45).getHex() : new THREE.Color(skinC).multiplyScalar(.62).getHex();
+  part(head, G.box, m(lipC, { roughness: .5 }), P(2.02, 0, l.face === 2 ? 1.1 : .995), f ? [.036, .011, .01] : [.042, .008, .01]);
+
+  if (hs) {
+    part(head, scalp('hair' + hk, f, RING, 0, hs.th, hs.r, { hang: hs.hang, n: 32, k: hs.hang ? 16 : 10 }), hs.h === 0 || hs.h === 6 ? m(new THREE.Color(hairC).lerp(new THREE.Color(skinC), .3).getHex(), { roughness: 1 }) : hairM, [0, 0, 0], [1, 1, 1]);
+    if (hs.h === 2) {
+      for (const [th, n, off] of [[0, 1, 0], [.15 * PI, 6, 0], [.3 * PI, 9, .3]]) for (let i = 0; i < n; i++) {
+        const ph = i / n * 2 * PI + off;
+        if (th > hs.th(ph, 0) - .06 * PI) continue;
+        const p = new THREE.Vector3(...P(th, ph, hr(th, ph) - .02)), d = p.clone().sub(new THREE.Vector3(0, .1, 0)).normalize();
+        const o = part(head, G.cone, hairM, p.addScaledVector(d, .03).toArray(), [.026, .075, .026]);
+        o.quaternion.setFromUnitVectors(Y, d);
+      }
+    }
+    if (hs.h === 6) for (let i = 0; i < 8; i++) {
+      const a = .27 * PI - i / 7 * .9 * PI, th = Math.abs(a), ph = a >= 0 ? 0 : PI, ht = .1 - Math.abs(a + .1) * .045;
+      const p = new THREE.Vector3(...P(th, ph, 1)), d = p.clone().sub(new THREE.Vector3(0, .12, 0)).normalize();
+      const o = part(head, G.box, hairM, p.addScaledVector(d, ht / 2 - .01).toArray(), [.03, ht, .05]);
+      o.quaternion.setFromUnitVectors(Y, d);
+    }
+    if (hs.h === 4) {
+      const t0 = P(.6 * PI, PI, hr(.6 * PI, PI) + .01), t1 = [0, t0[1] - .06, t0[2] - .06], t2 = [0, t0[1] - (f ? .26 : .19), t0[2] - .05];
+      span(head, G.sphere, hairM, t0, t1, .042, .048);
+      span(head, G.cyl, m(0xb33a2a), t0, t0.map((c, j) => c + (t1[j] - c) * .3), .036);
+      span(head, G.sphere, hairM, [0, t1[1] + .04, t1[2]], t2, .036, .04);
+    }
+  }
+
+  if (l.face === 1 || l.face === 2) {
+    const top = ph => PI * (.58 - .1 * Math.min(1, Math.abs(ph) / (.5 * PI)) ** 2);
+    const full = l.face === 2, c = full ? hairC : new THREE.Color(hairC).lerp(new THREE.Color(skinC), .55).getHex();
+    part(head, scalp('beard' + l.face, f, [-.56 * PI, .56 * PI], top, .97 * PI, full ? (v, ph) => 1.025 + .13 * v * Math.cos(ph) ** 2 : 1.022, { n: 20, k: 8 }), full ? hairM : m(c, { roughness: 1 }), [0, 0, 0], [1, 1, 1]);
+    if (full) span(head, G.box, hairM, P(1.9, -.22, 1.05), P(1.9, .22, 1.05), .018, .02);
+  }
+  if (l.face === 3) part(head, G.box, m(0x8a2a22), P(1.4, .5, 1.02), [.008, .085, .008], [0, .45, .35]);
+  if (l.face === 4) for (const s of [-1, 1]) { part(head, G.box, black, P(1.6, s * .42, 1.02), [.05, .012, .01], [0, s * .42, 0]); part(head, G.box, m(0xb33a2a), P(1.7, s * .42, 1.02), [.05, .01, .01], [0, s * .42, 0]); }
+  if (l.face === 5) {
+    for (const s of [-1, 1]) {
+      part(head, G.box, black, P(eye[0], s * eye[1], 1.1), [.055, .032, .01], [0, s * .38, 0]);
+      span(head, G.box, black, P(eye[0] - .03, s * .78, 1.1), P(1.5, s * 1.52, 1.1), .008, .01);
+    }
+    part(head, G.box, black, P(eye[0] - .03, 0, 1.08), [.03, .008, .01]);
+  }
+  if (l.face === 6) {
+    part(head, scalp('gstrap' + hk, f, RING, .3 * PI, .35 * PI, (v, ph, th) => hr(th, ph) + .02, { n: 24, k: 1 }), black, [0, 0, 0], [1, 1, 1]);
+    for (const s of [-1, 1]) outward(part(head, G.cyl, m(0xff9a3a, { emissive: 0xff7a1a, emissiveIntensity: .6, metalness: .3, roughness: .1 }), P(.34 * PI, s * .34, hr(.34 * PI, s * .34) + .05), [.027, .03, .027]), s * .34, -.35);
+  }
+  if (l.face === 7) {
+    part(head, scalp('skull', f, [-.5 * PI, .5 * PI], .57 * PI, .97 * PI, 1.1, { n: 14, k: 6 }), m(0xe8e4d8), [0, 0, 0], [1, 1, 1]);
+    for (let i = -2; i <= 2; i++) part(head, G.box, black, P(2.05, i * .13, 1.12), [.006, .05, .006], [0, i * .13, 0]);
+  }
+  const k = f ? .93 : 1;
+  if (l.head === 1) {
+    const cc = m(OUTFIT_COLORS[(l.topColor + 1) % 16]), p = P(.36 * PI, 0, 1.1);
+    part(head, scalp('cap', f, RING, 0, line(.36, .47, .5), 1.1, { k: 6 }), cc, [0, 0, 0], [1, 1, 1]);
+    part(head, G.box, cc, [0, p[1] - .004, p[2] + .05], [.19 * k, .014, .11], [.12, 0, 0]);
+    part(head, G.sphere, cc, P(0, 0, 1.1), [.018, .012, .018]);
+  }
+  if (l.head === 2) {
+    part(head, scalp('beanie', f, RING, 0, line(.33, .5, .56), (v, ph) => 1.11 + .012 * Math.cos(ph * 12), { n: 48, k: 6 }), topDark, [0, 0, 0], [1, 1, 1]);
+    part(head, scalp('cuff', f, RING, line(.25, .42, .48), line(.33, .5, .56), 1.16, { k: 1 }), topDark, [0, 0, 0], [1, 1, 1]);
+    const t = P(0, 0, 1.11);
+    part(head, G.sphere, topDark, [0, t[1] + .025, t[2]], [.035, .035, .035]);
+  }
+  if (l.head === 3) {
+    const red = m(0xb33a2a);
+    part(head, scalp('band' + hk, f, RING, line(.28, .36, .43), line(.33, .42, .5), (v, ph, th) => hr(th, ph) + .025, { n: 24, k: 2 }), red, [0, 0, 0], [1, 1, 1]);
+    const kn = P(.47 * PI, PI, hr(.47 * PI, PI) + .05);
+    part(head, G.sphere, red, kn, [.025, .022, .02]);
+    for (const s of [-1, 1]) part(head, G.box, red, [kn[0] + s * .02, kn[1] - .045, kn[2] - .01], [.03, .07, .008], [.2, 0, s * .35]);
+  }
+  if (l.head === 4) {
+    const br = m(0x6a4428, { roughness: .9 }), y = P(.36 * PI, 0, 1)[1] + .005;
+    part(head, G.cyl, br, [0, y, -.005], [.27 * k, .014, .25 * k]);
+    part(head, G.cyl, br, [0, y + .06, -.005], [.13 * k, .11, .14 * k]);
+    part(head, G.box, m(0x5a3a20, { roughness: .9 }), [0, y + .115, -.005], [.03, .012, .2 * k]);
+    part(head, G.cyl, m(0x2a1a0e), [0, y + .025, -.005], [.132 * k, .025, .142 * k]);
+  }
+  if (l.head === 5) {
+    const hm = m(0x3b4a2e, { roughness: .6 });
+    part(head, scalp('helm', f, RING, 0, line(.37, .56, .6), 1.22, { k: 7 }), hm, [0, 0, 0], [1, 1, 1]);
+    part(head, scalp('helmrim', f, RING, line(.35, .53, .57), line(.38, .57, .61), 1.27, { k: 1 }), hm, [0, 0, 0], [1, 1, 1]);
+    for (const s of [-1, 1]) span(head, G.box, black, P(.57 * PI, s * .5 * PI, 1.15), P(.9 * PI, s * .25 * PI, 1.04), .012, .014);
+  }
+  if (l.head === 6) {
+    const rub = m(0x1a1c1e, { roughness: .7 });
+    part(head, scalp('mask', f, [-.42 * PI, .42 * PI], .36 * PI, .92 * PI, (v, ph) => 1.1 + .1 * Math.sin(v * PI) * Math.cos(ph) ** 4, { n: 14, k: 8 }), rub, [0, 0, 0], [1, 1, 1]);
+    part(head, scalp('mstrap' + hk, f, [.4 * PI, 1.6 * PI], .42 * PI, .47 * PI, (v, ph, th) => hr(th, ph) + .02, { n: 16, k: 1 }), black, [0, 0, 0], [1, 1, 1]);
+    for (const s of [-1, 1]) outward(part(head, G.cyl, m(0x5a8a7a, { metalness: .5, roughness: .1 }), P(eye[0], s * eye[1], 1.16), [.03, .02, .03]), s * eye[1]);
+    outward(part(head, G.cyl, m(0x3a3a3a, { metalness: .5 }), P(.68 * PI, 0, 1.3), [.042, .06, .042]), 0, .35);
+  }
+  if (l.head === 7) {
+    const th = .2 * PI;
+    part(head, scalp('crown' + hk, f, RING, th - .03, th + .03, (v, ph, t) => hr(t, ph) + .015, { n: 24, k: 1 }), m(0x7dff3a, { emissive: 0x5aff2a, emissiveIntensity: 1.2 }), [0, 0, 0], [1, 1, 1]);
+    for (let i = 0; i < 7; i++) {
+      const ph = i / 7 * 2 * PI, p = new THREE.Vector3(...P(th - .05, ph, hr(th, ph) + .01)), d = new THREE.Vector3(Math.sin(ph) * .3, 1, Math.cos(ph) * .3).normalize();
+      part(head, G.cone, m(0xd9d0b4), p.addScaledVector(d, .03).toArray(), [.018, .07, .018]).quaternion.setFromUnitVectors(Y, d);
+    }
+  }
+}
 
 function suitParts(suit, { body, torso, head, arms, legs }) {
   const glow = m(suit.accent, { emissive: suit.accent, emissiveIntensity: 1.3, roughness: .3 });
@@ -341,7 +525,7 @@ export function buildSurvivor(l0) {
   const root = new THREE.Group();
   const skinC = SKIN_TONES[l.skin] ?? SKIN_TONES[1], hairC = HAIR_COLORS[l.hairColor] ?? HAIR_COLORS[0];
   const topC = OUTFIT_COLORS[l.topColor] ?? OUTFIT_COLORS[0], pantsC = PANTS_COLORS[l.pants] ?? PANTS_COLORS[0];
-  const skin = m(skinC, { roughness: .6 }), hairM = m(hairC, { roughness: .9 });
+  const skin = m(skinC, { roughness: .6 }), f = l.body === 1 ? 1 : 0;
   const style = l.top, hazmat = style === 7;
   const top = m(topC, { roughness: style === 2 ? .35 : .85, metalness: style === 2 ? .15 : .02 });
   const topDark = m(new THREE.Color(topC).multiplyScalar(.6).getHex(), { roughness: .9 });
@@ -352,14 +536,15 @@ export function buildSurvivor(l0) {
   const gloved = [2, 3, 4, 7].includes(style);
   const longSleeve = style !== 0;
   const body = new THREE.Group();
+  if (f) body.scale.setScalar(.95);
   root.add(body);
 
   const bootC = [[0x16181b, 0x0b0c0e], [0xe8e8e8, 0x2e5d8a], [0x6a4428, 0x2a1a0e], [0xb82a22, 0xf2f2f2]][l.boots] || [0x16181b, 0x0b0c0e];
   for (const s of [-1, 1]) {
-    const hip = new THREE.Group(); hip.position.set(s * .11, .9, 0); body.add(hip);
-    part(hip, G.capsule, pants, [0, -.21, 0], [.088, .155, .092]);
+    const hip = new THREE.Group(); hip.position.set(s * (f ? .1 : .11), .9, 0); body.add(hip);
+    part(hip, G.capsule, pants, [0, -.21, 0], f ? [.084, .155, .09] : [.088, .155, .092]);
     const knee = new THREE.Group(); knee.position.set(0, -.42, 0); hip.add(knee);
-    part(knee, G.capsule, pants, [0, -.2, 0], [.074, .15, .077]);
+    part(knee, G.capsule, pants, [0, -.2, 0], f ? [.066, .15, .07] : [.074, .15, .077]);
     part(knee, G.box, hazmat ? black : m(bootC[0]), [0, -.41, .04], [.13, .11, .26]);
     part(knee, G.box, hazmat ? black : m(bootC[1]), [0, -.465, .04], [.136, .03, .27]);
     if (l.boots === 0 || l.boots === 2) part(knee, G.box, hazmat ? black : m(bootC[0]), [0, -.32, 0], [.125, .14, .15]);
@@ -370,101 +555,70 @@ export function buildSurvivor(l0) {
   part(body, G.box, m(0x9a8a60, { metalness: .6, roughness: .3 }), [0, 1.0, .112], [.05, .035, .01]);
 
   const torso = new THREE.Group(); torso.position.y = 1.02; body.add(torso);
+  const fx = f ? .86 : 1, trunk = f ? new THREE.Group() : torso;
+  if (f) { trunk.scale.set(fx, 1, .94); torso.add(trunk); }
   const chest = style === 3 ? under : top;
-  part(torso, G.taper, chest, [0, .25, 0], [.44, .52, .24]);
-  part(torso, G.sphere, chest, [0, .48, 0], [.22, .06, .12]);
+  part(trunk, G.taper, chest, [0, .25, 0], [.44, .52, .24]);
+  part(trunk, G.sphere, chest, [0, .48, 0], [.22, .06, .12]);
+  if (f && !suit) part(trunk, G.taper, chest, [0, .33, .078], [.36, .12, .06], [-.45, 0, 0]);
   if (style === 1) {
-    part(torso, G.hemi, topDark, [0, .5, -.09], [.17, .16, .11], [-.4, 0, 0]);
-    part(torso, G.box, topDark, [0, .1, .118], [.24, .13, .01]);
-    for (const s of [-1, 1]) part(torso, G.cyl, m(0xeeeeee), [s * .05, .36, .12], [.006, .12, .006]);
+    part(trunk, G.hemi, topDark, [0, .5, -.09], [.17, .16, .11], [-.4, 0, 0]);
+    part(trunk, G.box, topDark, [0, .1, .118], [.24, .13, .01]);
+    for (const s of [-1, 1]) part(trunk, G.cyl, m(0xeeeeee), [s * .05, .36, .12], [.006, .12, .006]);
   }
   if (style === 2) {
-    for (const s of [-1, 1]) part(torso, G.box, topDark, [s * .08, .42, .117], [.1, .14, .01], [0, 0, s * .5]);
-    part(torso, G.box, m(0xcfcfcf, { metalness: .8, roughness: .2 }), [.02, .22, .118], [.012, .42, .005]);
+    for (const s of [-1, 1]) part(trunk, G.box, topDark, [s * .08, .42, .117], [.1, .14, .01], [0, 0, s * .5]);
+    part(trunk, G.box, m(0xcfcfcf, { metalness: .8, roughness: .2 }), [.02, .22, .118], [.012, .42, .005]);
   }
   if (style === 3) {
-    part(torso, G.taper, top, [0, .26, 0], [.48, .42, .29]);
-    for (let i = -1; i <= 1; i++) part(torso, G.box, topDark, [i * .12, .14, .14], [.1, .12, .05]);
-    part(torso, G.box, topDark, [-.1, .38, .14], [.08, .06, .03]);
+    part(trunk, G.taper, top, [0, .26, 0], [.48, .42, .29]);
+    for (let i = -1; i <= 1; i++) part(trunk, G.box, topDark, [i * .12, .14, .14], [.1, .12, .05]);
+    part(trunk, G.box, topDark, [-.1, .38, .14], [.08, .06, .03]);
   }
   if (style === 4) {
-    for (const s of [-1, 1]) part(torso, G.box, topDark, [s * .1, .34, .118], [.12, .1, .02]);
-    part(torso, G.box, topDark, [0, .03, 0], [.41, .06, .24]);
-    part(torso, G.box, topDark, [.13, .2, -.02], [.13, .18, .25]);
+    for (const s of [-1, 1]) part(trunk, G.box, topDark, [s * .1, .34, .118], [.12, .1, .02]);
+    part(trunk, G.box, topDark, [0, .03, 0], [.41, .06, .24]);
+    part(trunk, G.box, topDark, [.13, .2, -.02], [.13, .18, .25]);
   }
   if (style === 5) {
-    part(torso, G.taper, top, [0, -.26, 0], [.46, .62, .29], [Math.PI, 0, 0]);
-    for (const s of [-1, 1]) part(torso, G.box, topDark, [s * .09, .38, .12], [.1, .22, .02], [0, 0, s * .35]);
-    part(torso, G.box, topDark, [0, .02, 0], [.42, .05, .25]);
+    part(trunk, G.taper, top, [0, -.26, 0], [.46, .62, .29], [Math.PI, 0, 0]);
+    for (const s of [-1, 1]) part(trunk, G.box, topDark, [s * .09, .38, .12], [.1, .22, .02], [0, 0, s * .35]);
+    part(trunk, G.box, topDark, [0, .02, 0], [.42, .05, .25]);
   }
   if (style === 6) {
-    for (const s of [-1, 1]) part(torso, G.box, m(0xf2f2f2), [s * .2, .25, 0], [.012, .48, .235]);
-    part(torso, G.box, m(0xf2f2f2), [0, .47, .1], [.2, .03, .03]);
+    for (const s of [-1, 1]) part(trunk, G.box, m(0xf2f2f2), [s * .2, .25, 0], [.012, .48, .235]);
+    part(trunk, G.box, m(0xf2f2f2), [0, .47, .1], [.2, .03, .03]);
   }
-  if (hazmat) part(torso, G.box, m(0x111111), [0, .3, .118], [.14, .09, .01]);
+  if (hazmat) part(trunk, G.box, m(0x111111), [0, .3, .118], [.14, .09, .01]);
 
   const arms = {};
   for (const s of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(s * .235, .45, 0); torso.add(sh);
-    part(sh, G.sphere, style === 3 ? under : longSleeve ? top : chest, [0, -.01, 0], [.075, .07, .075]);
-    const upper = limb(sh, style === 3 ? under : longSleeve || style === 0 ? top : skin, .29, .058, [0, 0, 0]);
-    if (style === 0) part(upper, G.capsule, skin, [0, -.22, 0], [.052, .05, .052]);
+    const sh = new THREE.Group(); sh.position.set(s * .235 * fx, .45, 0); torso.add(sh);
+    const a = f ? .88 : 1;
+    part(sh, G.sphere, style === 3 ? under : longSleeve ? top : chest, [0, -.01, 0], [.075 * a, .07 * a, .075 * a]);
+    const upper = limb(sh, style === 3 ? under : longSleeve || style === 0 ? top : skin, .29, .058 * a, [0, 0, 0]);
+    if (style === 0) part(upper, G.capsule, skin, [0, -.22, 0], [.052 * a, .05, .052 * a]);
     const el = new THREE.Group(); el.position.y = -.29; upper.add(el);
-    part(el, G.capsule, style === 3 ? under : longSleeve ? top : skin, [0, -.12, 0], [.05, .09, .05]);
-    part(el, G.box, gloved ? glove : skin, [0, -.28, .01], [.065, .1, .085]);
+    part(el, G.capsule, style === 3 ? under : longSleeve ? top : skin, [0, -.12, 0], [.05 * a, .09, .05 * a]);
+    part(el, G.box, gloved ? glove : skin, [0, -.28, .01], [.065 * a, .1 * a, .085 * a]);
     arms[s] = { sh, upper, el };
   }
 
-  const neck = part(torso, G.cyl, skin, [0, .53, 0], [.055, .08, .055]);
+  const neck = part(torso, G.cyl, skin, [0, .54, .005], f ? [.045, .12, .045] : [.054, .12, .054]);
   neck.castShadow = false;
   const head = new THREE.Group(); head.position.set(0, .56, .01); torso.add(head);
-  part(head, G.sphere, skin, [0, .14, 0], [.118, .14, .125]);
-  part(head, G.sphere, skin, [0, .065, .035], [.085, .07, .085]);
-  for (const s of [-1, 1]) {
-    part(head, G.sphere, skin, [s * .12, .13, -.005], [.025, .04, .02]);
-    part(head, G.sphere, m(0xf4f4f0), [s * .045, .16, .108], [.02, .014, .01]);
-    part(head, G.sphere, black, [s * .045, .16, .116], [.009, .009, .006]);
-    part(head, G.box, hairM, [s * .047, .195, .114], [.045, .01, .01]);
-  }
-  part(head, G.box, skin, [0, .125, .125], [.028, .045, .03]);
-  part(head, G.box, m(new THREE.Color(skinC).multiplyScalar(.65).getHex()), [0, .07, .114], [.045, .008, .01]);
-
-  const hairTop = (sy = .17) => part(head, G.hemi, hairM, [0, .115, -.008], [.13, sy, .135]);
-  const covered = [2, 4, 5].includes(l.head);
-  const h = covered && [2, 5, 6].includes(l.hair) ? 1 : l.hair;
-  if (h === 0) hairTop(.16);
-  if (h === 1) { hairTop(.18); part(head, G.box, hairM, [0, .14, -.08], [.23, .14, .08]); }
-  if (h === 2) { hairTop(.18); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; part(head, G.cone, hairM, [Math.cos(a) * .07, .27, Math.sin(a) * .07 - .01], [.035, .09, .035], [Math.sin(a) * .5, 0, -Math.cos(a) * .5]); } }
-  if (h === 3) { hairTop(.185); part(head, G.box, hairM, [0, .02, -.1], [.25, .3, .06]); for (const s of [-1, 1]) part(head, G.box, hairM, [s * .125, .06, -.02], [.03, .22, .12]); }
-  if (h === 4) { hairTop(.18); part(head, G.capsule, hairM, [0, .05, -.16], [.04, .09, .04], [.5, 0, 0]); part(head, G.torus, m(0xb33a2a), [0, .14, -.13], [.03, .03, .03]); }
-  if (h === 5) part(head, G.sphere, hairM, [0, .21, -.03], [.2, .17, .19]);
-  if (h === 6) for (let i = 0; i < 6; i++) part(head, G.box, hairM, [0, .28 - Math.abs(i - 2.5) * .012, .08 - i * .045], [.035, .09, .04]);
-  if (l.face === 1) part(head, G.sphere, m(new THREE.Color(hairC).lerp(new THREE.Color(skinC), .55).getHex()), [0, .062, .037], [.089, .073, .089]);
-  if (l.face === 2) { part(head, G.sphere, hairM, [0, .05, .045], [.1, .085, .092]); part(head, G.box, hairM, [0, .088, .118], [.07, .016, .018]); for (const s of [-1, 1]) part(head, G.box, hairM, [s * .1, .1, .02], [.03, .1, .08]); }
-  if (l.face === 3) part(head, G.box, m(0x8a2a22), [.045, .16, .122], [.008, .09, .008], [0, 0, .35]);
-  if (l.face === 4) for (const s of [-1, 1]) { part(head, G.box, black, [s * .045, .13, .118], [.06, .012, .01]); part(head, G.box, m(0xb33a2a), [s * .045, .115, .116], [.06, .01, .01]); }
-  if (l.face === 5) { for (const s of [-1, 1]) part(head, G.box, black, [s * .045, .16, .122], [.06, .035, .012]); part(head, G.box, black, [0, .17, .122], [.03, .008, .01]); }
-  if (l.face === 6) { part(head, G.torus, black, [0, .2, 0], [.125, .125, .1], [Math.PI / 2, 0, 0]); for (const s of [-1, 1]) part(head, G.cyl, m(0xff9a3a, { emissive: 0xff7a1a, emissiveIntensity: .6, metalness: .3, roughness: .1 }), [s * .045, .2, .12], [.035, .03, .035], [Math.PI / 2, 0, 0]); }
-  if (l.face === 7) { part(head, G.box, m(0xe8e4d8), [0, .06, .085], [.18, .11, .1]); for (let i = -2; i <= 2; i++) part(head, G.box, black, [i * .025, .06, .136], [.006, .06, .004]); }
-
-  if (l.head === 1) { const cc = m(OUTFIT_COLORS[(l.topColor + 1) % 16]); part(head, G.hemi, cc, [0, .13, -.005], [.137, .17, .142]); part(head, G.box, cc, [0, .14, .15], [.2, .015, .12]); }
-  if (l.head === 2) { part(head, G.hemi, topDark, [0, .15, -.005], [.138, .15, .142]); part(head, G.cyl, topDark, [0, .165, -.005], [.14, .04, .144]); part(head, G.sphere, topDark, [0, .31, 0], [.035, .035, .035]); }
-  if (l.head === 3) { part(head, G.cyl, m(0xb33a2a), [0, .2, 0], [.13, .035, .135]); part(head, G.box, m(0xb33a2a), [0, .19, -.14], [.05, .06, .04], [0, 0, .7]); }
-  if (l.head === 4) { const br = m(0x6a4428, { roughness: .9 }); part(head, G.cyl, br, [0, .21, 0], [.26, .015, .26]); part(head, G.cyl, br, [0, .28, 0], [.12, .13, .12]); part(head, G.cyl, m(0x2a1a0e), [0, .235, 0], [.122, .025, .122]); }
-  if (l.head === 5) { const hm = m(0x3b4a2e, { roughness: .6 }); part(head, G.hemi, hm, [0, .15, -.005], [.15, .16, .16]); part(head, G.cyl, hm, [0, .15, -.005], [.152, .02, .162]); for (const s of [-1, 1]) part(head, G.box, black, [s * .12, .06, .02], [.01, .14, .015]); }
-  if (l.head === 6) { part(head, G.box, black, [0, .12, .1], [.2, .16, .08]); for (const s of [-1, 1]) part(head, G.cyl, m(0x5a8a7a, { metalness: .5, roughness: .1 }), [s * .05, .165, .145], [.035, .015, .035], [Math.PI / 2, 0, 0]); part(head, G.cyl, m(0x3a3a3a, { metalness: .5 }), [0, .06, .17], [.045, .06, .045], [Math.PI / 2, 0, 0]); part(head, G.torus, black, [0, .16, -.01], [.13, .13, .1], [Math.PI / 2, 0, 0]); }
-  if (l.head === 7) { for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; part(head, G.cone, m(0xd9d0b4), [Math.sin(a) * .11, .33, Math.cos(a) * .11], [.025, .12, .025], [Math.cos(a) * .25, 0, -Math.sin(a) * .25]); } part(head, G.torus, m(0x7dff3a, { emissive: 0x5aff2a, emissiveIntensity: 1.2 }), [0, .27, 0], [.12, .12, .12], [Math.PI / 2, 0, 0]); }
+  buildHead(head, l, f, { skin, skinC, hairC, black, topDark });
 
   const back = m(0x4a4a34, { roughness: .9 });
-  if (l.back === 1) { part(torso, G.box, back, [0, .26, -.2], [.32, .38, .16]); part(torso, G.box, m(0x3a3a28), [0, .12, -.29], [.24, .14, .05]); for (const s of [-1, 1]) part(torso, G.box, black, [s * .1, .3, .118], [.03, .4, .01]); }
-  if (l.back === 2) part(torso, G.cyl, m(0x5a6a3a), [0, .5, -.17], [.07, .38, .07], [0, 0, Math.PI / 2]);
-  if (l.back === 3) { part(torso, G.box, m(0x3a4030), [0, .24, -.2], [.28, .34, .15]); part(torso, G.cyl, black, [.1, .62, -.22], [.008, .5, .008]); part(torso, G.box, m(0x9a3a1a, { emissive: 0xff3a1a, emissiveIntensity: .8 }), [-.06, .34, -.28], [.03, .03, .01]); }
-  if (l.back === 4) { part(torso, G.box, m(0xcfd6da, { metalness: .9, roughness: .2 }), [0, .2, -.15], [.025, .9, .05], [0, 0, .7]); part(torso, G.box, black, [.27, .52, -.15], [.035, .22, .04], [0, 0, .7]); }
-  if (l.back === 5) part(torso, G.box, m(0x7a1a1a, { roughness: 1, side: THREE.DoubleSide }), [0, -.05, -.14], [.46, 1, .02], [.12, 0, 0]);
-  if (l.back === 6) { const w = m(0x8a4a1a, { roughness: .4 }); part(torso, G.cyl, w, [-.05, .05, -.16], [.16, .06, .16], [Math.PI / 2, 0, 0]); part(torso, G.cyl, w, [.03, .22, -.16], [.12, .06, .12], [Math.PI / 2, 0, 0]); part(torso, G.box, m(0x2a1a0e), [.14, .5, -.16], [.04, .45, .02], [0, 0, -.35]); }
-  if (l.back === 7) { part(torso, G.box, m(0x9aa4a8, { metalness: .9, roughness: .25 }), [0, .25, -.16], [.03, .5, .28], [0, 0, -.5]); part(torso, G.box, m(0x5a0a08), [.05, .12, -.16], [.032, .15, .282], [0, 0, -.5]); }
+  if (l.back === 1) { part(trunk, G.box, back, [0, .26, -.2], [.32, .38, .16]); part(trunk, G.box, m(0x3a3a28), [0, .12, -.29], [.24, .14, .05]); for (const s of [-1, 1]) part(trunk, G.box, black, [s * .1, .3, .118], [.03, .4, .01]); }
+  if (l.back === 2) part(trunk, G.cyl, m(0x5a6a3a), [0, .5, -.17], [.07, .38, .07], [0, 0, Math.PI / 2]);
+  if (l.back === 3) { part(trunk, G.box, m(0x3a4030), [0, .24, -.2], [.28, .34, .15]); part(trunk, G.cyl, black, [.1, .62, -.22], [.008, .5, .008]); part(trunk, G.box, m(0x9a3a1a, { emissive: 0xff3a1a, emissiveIntensity: .8 }), [-.06, .34, -.28], [.03, .03, .01]); }
+  if (l.back === 4) { part(trunk, G.box, m(0xcfd6da, { metalness: .9, roughness: .2 }), [0, .2, -.15], [.025, .9, .05], [0, 0, .7]); part(trunk, G.box, black, [.27, .52, -.15], [.035, .22, .04], [0, 0, .7]); }
+  if (l.back === 5) part(trunk, G.box, m(0x7a1a1a, { roughness: 1, side: THREE.DoubleSide }), [0, -.05, -.14], [.46, 1, .02], [.12, 0, 0]);
+  if (l.back === 6) { const w = m(0x8a4a1a, { roughness: .4 }); part(trunk, G.cyl, w, [-.05, .05, -.16], [.16, .06, .16], [Math.PI / 2, 0, 0]); part(trunk, G.cyl, w, [.03, .22, -.16], [.12, .06, .12], [Math.PI / 2, 0, 0]); part(trunk, G.box, m(0x2a1a0e), [.14, .5, -.16], [.04, .45, .02], [0, 0, -.35]); }
+  if (l.back === 7) { part(trunk, G.box, m(0x9aa4a8, { metalness: .9, roughness: .25 }), [0, .25, -.16], [.03, .5, .28], [0, 0, -.5]); part(trunk, G.box, m(0x5a0a08), [.05, .12, -.16], [.032, .15, .282], [0, 0, -.5]); }
 
-  if (suit) suitParts(suit, { body, torso, head, arms, legs });
+  if (suit) suitParts(suit, { body, torso: trunk, head, arms, legs });
 
   const wdef = WEAPONS[l.primary] || WEAPONS[0];
   const gm = { base: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), dark: new THREE.MeshStandardMaterial() };
@@ -480,9 +634,8 @@ export function buildSurvivor(l0) {
   gun.rotation.set(pistol ? .25 : .42, .16, 0);
   body.add(gun);
   root.updateMatrixWorld(true);
-  const torsoOffset = new THREE.Vector3(0, 1.02, 0);
-  const grip = model.localToWorld(new THREE.Vector3(...wdef.grip)).sub(torsoOffset);
-  const guard = model.localToWorld(new THREE.Vector3(...wdef.guard)).sub(torsoOffset);
+  const grip = torso.worldToLocal(model.localToWorld(new THREE.Vector3(...wdef.grip)));
+  const guard = torso.worldToLocal(model.localToWorld(new THREE.Vector3(...wdef.guard)));
   solveArm(arms[-1].upper, arms[-1].el, arms[-1].sh.position, grip, new THREE.Vector3(-1, -.4, -.8), .29, .29);
   solveArm(arms[1].upper, arms[1].el, arms[1].sh.position, guard, new THREE.Vector3(1, -1, -.2), .29, .29);
 

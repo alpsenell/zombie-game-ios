@@ -3,7 +3,7 @@ import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
-import { SLOTS, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { SLOTS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -776,6 +776,7 @@ function applyLoadoutToGuns() {
 
 const profile = Object.assign({ loadout: { ...DEFAULT_LOADOUT }, owned: {}, scrap: 300, xp: 0, kills: 0, heads: 0, bosses: {}, bestWave: 0, bestByDiff: {}, runs: 0, lastDaily: '', fresh: [], iap: {} }, store.get('profile', {}));
 profile.loadout = { ...DEFAULT_LOADOUT, ...profile.loadout };
+profile.loadout.body = profile.loadout.body === 1 ? 1 : 0;
 profile.arsenal = { owned: {}, primary: 'm4', secondary: 'r870', ...profile.arsenal };
 profile.iap ||= {};
 function weaponOwned(w) {
@@ -812,8 +813,9 @@ function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
   return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
 }
+const slotById = id => id === BODY.id ? BODY : SLOTS.find(s => s.id === id);
 function isOwned(slotId, i) {
-  const it = SLOTS.find(s => s.id === slotId).items[i];
+  const it = slotById(slotId).items[i];
   if (!it) return false;
   if (it.premium) return !!profile.iap[STORE_PREFIX + it.premium];
   if (it.req) return reqMet(it.req);
@@ -2485,7 +2487,7 @@ function refreshProfileUI() {
 function renderLocker() {
   const tabs = $('#slot-tabs'), grid = $('#item-grid');
   tabs.innerHTML = ''; grid.innerHTML = '';
-  const ordered = [SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
+  const ordered = [BODY, SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
   for (const s of ordered) {
     if (s.hidden) continue;
     const b = document.createElement('button');
@@ -2494,7 +2496,7 @@ function renderLocker() {
     b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
     tabs.appendChild(b);
   }
-  const slot = SLOTS.find(s => s.id === lockerSlot);
+  const slot = slotById(lockerSlot);
   slot.items.forEach((it, i) => {
     const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
     const b = document.createElement('button');
@@ -2537,7 +2539,7 @@ function lockerPick(slot, i) {
     profile.loadout[slot.id] = i;
     tryOn = null; pendingBuy = null;
     saveProfile();
-    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
+    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && slot.id !== 'body' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
   } else if (it.req) {
     pendingBuy = null;
     $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
