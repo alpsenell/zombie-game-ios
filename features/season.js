@@ -91,7 +91,7 @@ const CSS = `
 #inspect .panel.sp-framed{border:2px solid #ffc34d;box-shadow:0 0 26px #ffc34d55,0 20px 60px #000}
 #sp-in-tag{align-self:flex-start}
 @media (max-height:430px){.sp{gap:6px}.sp-title h2{font-size:22px}.sp-cell i{font-size:16px}.sp-cell img{width:30px;height:30px}.sp-foot .cta{padding:10px 18px}.sp-foot .ghost{padding:9px 12px}}
-@media (orientation:portrait){.sp-track{flex:0 1 auto;height:min(52vh,320px)}.sp{justify-content:center}}
+@media (orientation:portrait){.sp-track{flex:0 1 auto;height:min(52vh,320px)}.sp{justify-content:center}.sp-foot .row{width:100%;flex-wrap:wrap}.sp-foot .row button{flex:1 1 auto}}
 `;
 
 export const id = 'season';
