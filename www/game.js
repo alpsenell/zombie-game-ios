@@ -65,7 +65,10 @@ function resize() {
   viewCam.updateProjectionMatrix();
   placeStickHome();
 }
-addEventListener('resize', () => { resize(); placePreview(); });
+const onResize = () => { resize(); placePreview(); };
+addEventListener('resize', onResize);
+addEventListener('orientationchange', () => [120, 400, 800].forEach(t => setTimeout(onResize, t)));
+window.visualViewport?.addEventListener('resize', onResize);
 
 const matCache = new Map();
 function mat(color, o = {}) {
