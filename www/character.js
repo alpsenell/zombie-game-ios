@@ -455,11 +455,16 @@ function hp(th, ph, r, f, hang) {
   if (hang && th > HANG) { drop = (th - HANG) * .14; th = HANG; }
   const st = Math.sin(th), dx = st * Math.sin(ph), dy = Math.cos(th), dz = st * Math.cos(ph);
   const s = Math.min(1, Math.max(0, (.15 - dy) / 1.15)) ** 1.15;
-  const low = sstep(-.25, -.8, dy), behind = sstep(-.05, -.55, dz), carve = low * behind;
-  const jw = (1 - J[g] * s + J[2] * gs((dy + .62) / .22) + J[3] * gs((dy + .3) / .25)) * (1 - .38 * carve);
+  const jw = 1 - J[g] * s + J[2] * gs((dy + .62) / .22) + J[3] * gs((dy + .3) / .25);
   const chin = dz > 0 ? J[4] * (g ? .7 : 1) * gs((dy + .8) / .14) * Math.max(0, Math.cos(ph)) ** 8 : 0;
-  const zb = dz > 0 ? 1 - .05 * s : (1.07 - .2 * s) * (1 - .42 * low * sstep(0, -.7, dz));
-  return [dx * r * sx * jw * (1 + drop * 1.2), .14 + dy * r * sy * (dy < 0 ? (g ? .96 : 1.06) : 1) + .025 * carve * r - drop, (dz * r * sz * zb + chin * r * sz) * (1 + drop * .5) - drop * drop * Math.abs(dx)];
+  const zb = dz > 0 ? 1 - .05 * s : 1.04 - .1 * s;
+  let x = dx * r * sx * jw * (1 + drop * 1.2), y = .14 + dy * r * sy * (dy < 0 ? (g ? .96 : 1.04) : 1) - drop, z = (dz * r * sz * zb + chin * r * sz) * (1 + drop * .5) - drop * drop * Math.abs(dx);
+  if (!hang) {
+    const k = g ? .93 : 1, jawY = lerp(.056, .004, sstep(-.03, .085, z)) * k, n = z > -.03 ? sstep(jawY + .012, jawY - .03, y) : sstep(.085 * k, .025 * k, y);
+    const cz = -.012, rr = Math.hypot(x, z - cz), rn = (g ? .036 : .044) * Math.max(0, 1 - .15 * sstep(.02, -.03, y)) * (1 + (r - 1) * 1.6);
+    if (n > 0 && rr > rn) { const f = lerp(1, rn / rr, n); x *= f; z = cz + (z - cz) * f; }
+  }
+  return [x, y, z];
 }
 function relief(hf) {
   const g = hf & 1, jaw = hf >> 1;
@@ -494,6 +499,9 @@ function scalp(key, f, [ph0, ph1], th0, th1, rf, { hang = false, n = 24, k = 10,
     return p;
   });
 }
+const HAIRLINE = [[0, .29], [.45, .27], [.8, .31], [1.15, .4], [1.33, .55], [1.46, .45], [1.72, .44], [1.95, .6], [2.4, .72], [PI, .76]];
+const menLine = ph => PI * curve(HAIRLINE, Math.abs(ph))[0];
+const fadeR = v => 1.022 + .004 * (1 - v) - .012 * sstep(.85, 1, v);
 const line = (fr, sd, bk, burn = 0, p = 2) => ph => { const c = Math.cos(ph), w = Math.abs(c) ** p; return PI * (sd + ((c > 0 ? fr : bk) - sd) * w + burn * Math.exp(-(((Math.abs(ph) - 1.3) / .2) ** 2))); };
 const RING = [-PI, PI];
 
@@ -502,14 +510,14 @@ function hairSpec(h, f, hat) {
   if (h === 7) return null;
   const front = ph => Math.max(0, Math.cos(ph));
   const S = {
-    0: { th: line(.31, .5, .66, .07, 4), r: v => 1.024 + .01 * (1 - v) },
+    0: { th: menLine, r: fadeR },
     1: f ? { th: (ph, i) => line(.3, .72, .72, 0, 5)(ph) + (i % 2) * .05 * PI * front(ph) ** 3, r: (v, ph, th) => 1.03 + .07 * (1 - Math.min(1, th / HANG) ** 2), hang: true }
-      : { th: ph => line(.28, .5, .66, .08, 4)(ph) + .02 * PI * front(ph) ** 4 * Math.cos(ph * 5), r: (v, ph) => 1.025 + .08 * (1 - v ** 3) + .03 * front(ph) * (1 - v) },
-    2: { th: line(.31, .5, .66, .08, 4), r: v => 1.025 + .05 * (1 - v ** 3) },
+      : { base: menLine, th: ph => lerp(menLine(ph) + .01 * PI, PI * (.37 + .18 * sstep(1.6, 2.9, Math.abs(ph))), sstep(.75, 1.15, Math.abs(ph))), r: (v, ph) => 1.024 + .05 * (1 - v ** 1.5) * (.55 + .45 * front(ph)) + .02 * front(ph) ** 2 * Math.sin(PI * Math.min(1, v * 1.4)) },
+    2: { base: menLine, th: ph => PI * (.28 + .06 * sstep(.3, 1.4, Math.abs(ph)) + .1 * sstep(1.7, 2.9, Math.abs(ph))), r: v => 1.024 + .03 * (1 - v * v) },
     3: { th: (ph, i) => line(.3, f ? .9 : .78, f ? 1.3 : 1.02, 0, 4)(ph) + (i % 2) * .03 * PI * front(ph) ** 4, r: (v, ph, th) => 1.03 + .07 * (1 - Math.min(1, th / HANG) ** 2), hang: true },
     4: { th: line(.3, .5, .66, .05, 4), r: v => 1.025 + .035 * (1 - v ** 2) },
     5: { th: line(.31, .58, .72, 0, 3), r: (v, ph, th) => 1.025 + .46 * (1 - v ** 4) * (1 + .06 * Math.sin(ph * 5 + th * 7)) },
-    6: { th: line(.31, .5, .66, .07, 4), r: v => 1.024 + .01 * (1 - v) },
+    6: { th: menLine, r: fadeR },
   }[h];
   const r = hat ? (v, ph, th) => Math.min(1.05, S.r(v, ph, th)) : S.r;
   return { h, ...S, r, at: (th, ph) => th <= S.th(ph, 0) ? r(th / S.th(ph, 0), ph, th) : 1 };
@@ -560,10 +568,10 @@ function lipGeo(hf) {
   const fem = hf & 1, rel = relief(hf);
   return shell('lips' + hf, 16, 12, (u, v) => {
     const x = u * 2 - 1, th = (fem ? 1.95 : 1.99) + v * (fem ? .2 : .17) - .02 * x * x - (fem ? .03 : .015) * gs(x / .2) * gs(v / .18), ph = x * (fem ? .22 : .23);
-    const up = (fem ? .05 : .035) * gs((v - .3) / .17), lo = (fem ? .062 : .045) * gs((v - .72) / .18);
-    const h = ((up + lo) * (1 - x * x) ** .5 - .01 * gs((v - .5) / .06) * (1 - x * x)) * Math.sin(PI * v) ** .35;
+    const up = (fem ? .05 : .026) * gs((v - .3) / (fem ? .17 : .22)), lo = (fem ? .062 : .04) * gs((v - .7) / (fem ? .18 : .24));
+    const h = ((up + lo) * (1 - x * x) ** (fem ? .5 : .8) - (fem ? .01 : .005) * gs((v - .5) / .06) * (1 - x * x)) * Math.sin(PI * v) ** (fem ? .35 : .7);
     const p = hp(th, ph, 1 + rel(th, ph) + h - .003, hf);
-    const c = 1 - .5 * gs((v - .5) / .07) * (1 - x * x) - .15 * v;
+    const c = 1 - (fem ? .5 : .32) * gs((v - .5) / .07) * (1 - x * x) - (fem ? .15 : .06) * v;
     return [p[0], p[1], p[2], c];
   });
 }
@@ -594,16 +602,17 @@ function buildHead(head, l, hf, M) {
     part(eg, lidGeo(fem, 0), skin, [0, 0, 0], [er * 1.1, er * 1.1, er * 1.1], [.18, 0, s * (fem ? -.12 : -.05)]);
     part(eg, lidGeo(fem, 1), skin, [0, 0, 0], [er * 1.07, er * 1.07, er * 1.07], [PI - .42, 0, 0]);
     whole(head, browGeo(hf, l.brows | 0, s), m(browC, { roughness: .9, tex: 'hair' }));
-    const ear = P(1.64, s * 1.6, .96);
+    const ear = P(1.6, s * 1.47, .97);
     if (!hs || !(hs.h === 3 || hs.h === 5 || (fem && hs.h === 1))) part(head, earGeo(), skin, [ear[0] - s * .004, ear[1], ear[2] - .004], fem ? [.021, .028, .02] : [.025, .033, .024], [0, s * (PI / 2 - .12), s * .08]);
     if (l.accessory === 3 || l.accessory === 5) part(head, G.torus, m(0xe8c060, { metalness: .9, roughness: .2 }), [ear[0] + s * .004, ear[1] - .032, ear[2] + .004], [.009, .009, .009], [0, PI / 2, 0]);
   }
   whole(head, noseGeo(hf), face);
-  const lipC = fem ? new THREE.Color(skinC).lerp(new THREE.Color(0xb8405a), .5).getHex() : new THREE.Color(skinC).lerp(new THREE.Color(0x9a4a44), .3).multiplyScalar(.92).getHex();
+  const lipC = fem ? new THREE.Color(skinC).lerp(new THREE.Color(0xb8405a), .5).getHex() : new THREE.Color(skinC).lerp(new THREE.Color(0xa65a52), .2).getHex();
   whole(head, lipGeo(hf), m(lipC, { roughness: fem ? .3 : .55 }));
 
   if (hs) {
-    whole(head, scalp('hair' + hk, hf, RING, 0, hs.th, hs.r, { hang: hs.hang, n: 40, k: hs.hang ? 18 : 12, shade: (th, ph, v) => .7 + .3 * sstep(0, .3, v) - .2 * sstep(.85, 1, v) }), hs.h === 0 || hs.h === 6 ? m(new THREE.Color(hairC).lerp(new THREE.Color(skinC), .3).getHex(), { roughness: .9, tex: 'stubble' }) : hairM);
+    if (hs.base) whole(head, scalp('hairbase', hf, RING, 0, hs.base, fadeR, { n: 48, k: 14 }), m(new THREE.Color(hairC).lerp(new THREE.Color(skinC), .1).getHex(), { roughness: .8, tex: 'stubble' }));
+    whole(head, scalp('hair' + hk, hf, RING, 0, hs.th, hs.r, { hang: hs.hang, n: 48, k: hs.hang ? 18 : 12, shade: (th, ph, v) => .7 + .3 * sstep(0, .3, v) - (hs.base ? 0 : .2 * sstep(.85, 1, v)) }), hs.h === 0 || hs.h === 6 ? m(new THREE.Color(hairC).lerp(new THREE.Color(skinC), .3).getHex(), { roughness: .9, tex: 'stubble' }) : hairM);
     if (hs.h === 2) whole(head, merge('spikes' + hf + hk, () => {
       const out = [];
       for (const [th, n, off] of [[0, 1, 0], [.15 * PI, 6, 0], [.3 * PI, 9, .3]]) for (let i = 0; i < n; i++) {
@@ -1080,7 +1089,7 @@ export function buildSurvivor(l0) {
   const head = new THREE.Group(); head.position.set(0, f ? .52 : .565, .012); torso.add(head);
   head.scale.setScalar(f ? .9 : .9);
   whole(torso, shell('neck' + f + b, 18, 10, (u, v) => {
-    const a = PI + u * TAU, y = lerp(head.position.y + .07, S.top - .07, v), rx = .052 * nk * (1 + .1 * v * v), rz = .05 * nk * (1 + .05 * v);
+    const a = PI + u * TAU, y = lerp(head.position.y + .1, S.top - .07, v), rx = .052 * nk * (1 + .1 * v * v), rz = .05 * nk * (1 + .05 * v);
     const adam = f ? 0 : .008 * gs((y - .61) / .016) * gs(Math.sin(a) / .25) * Math.max(0, Math.cos(a));
     return [Math.sin(a) * rx, y, .004 + Math.cos(a) * rz + adam, 1 - .18 * (1 - sstep(.1, .5, v)) * Math.max(0, Math.cos(a))];
   }), neckSkin).castShadow = false;
