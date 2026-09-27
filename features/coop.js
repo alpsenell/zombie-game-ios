@@ -344,6 +344,7 @@ function onMessage(from, m) {
       if (isHost()) return;
       if (st.mode === 'perk') autoPick();
       net.mod = m[2] || null;
+      net.mutation = m[3] || null;
       st.wave = (m[1] | 0) - 1;
       api.nextWave();
       return;
@@ -489,7 +490,7 @@ function syncZombies(dt) {
     } else if (u.frozenT > 0) H.thaw(z);
     if (fl & 128 && Math.random() < .5) H.sparks.emit(z.position.x + (Math.random() - .5) * .4 * u.sc, (.4 + Math.random() * 1.2) * u.sc, z.position.z + (Math.random() - .5) * .4 * u.sc, 1, { speed: 1, spread: .8, life: .5, grav: -3, colors: [0xffa040, 0xff5a1a, 0xffd27a] });
     const cs = fl & 256 ? 'wind' : fl & 512 ? 'run' : fl & 1024 ? 'stun' : '';
-    if (cs !== u.cs && T.boss) {
+    if (cs !== u.cs && (T.boss || T.charge)) {
       if (cs === 'wind') { api.sfx.roar(); api.toast('CHARGE INCOMING — SIDESTEP!', 1.2); api.haptic('MEDIUM'); }
       if (cs === 'stun') { api.sfx.boom(); api.toast(T.name + ' IS STUNNED — HIT HIM!', 1.6); }
     }
@@ -504,6 +505,11 @@ function syncZombies(dt) {
       api.look.shake = Math.max(api.look.shake, .45 * Math.max(0, 1 - Math.hypot(api.camera.position.x - z.position.x, api.camera.position.z - z.position.z) / 20));
     }
     u.spitWind = fl & 2048 ? .3 : 0;
+    if (fl & 4096) { if (!(u.screamT > 0)) api.sfx.scream(); u.screamT = .5; } else if (u.screamT > 0) { u.screamT = 0; H.screamFx(z); }
+    u.hasteT = fl & 8192 ? 1 : 0;
+    if (!!(fl & 16384) !== u.hidden && !(fl & 16384) && Math.hypot(api.camera.position.x - z.position.x, api.camera.position.z - z.position.z) < 14) api.sfx.hiss();
+    u.hidden = !!(fl & 16384);
+    if (fl & 32768) { if (!(u.swellT > 0)) api.sfx.swell(); u.swellT = Math.max(.05, (u.swellT || .55) - dt); } else u.swellT = 0;
     if (fl & 64 && !u.enraged) {
       u.enraged = true;
       if (T.boss) { api.ui.bossName.textContent = T.name + ' · ENRAGED'; api.toast(T.name + ' IS ENRAGED', 1.6); api.sfx.roar(); }
@@ -522,7 +528,8 @@ function syncZombies(dt) {
 
 function flags(u) {
   return (u.rise > 0 ? 2 : 0) | (u.swing > 0 ? 4 : 0) | (u.frozenT > 0 ? 8 : 0) | (u.moving ? 16 : 0) | (u.slamT > 0 ? 32 : 0) | (u.enraged ? 64 : 0) | (u.burnT > 0 ? 128 : 0)
-    | (u.cs === 'wind' ? 256 : u.cs === 'run' ? 512 : u.cs === 'stun' ? 1024 : 0) | (u.spitWind > 0 ? 2048 : 0);
+    | (u.cs === 'wind' ? 256 : u.cs === 'run' ? 512 : u.cs === 'stun' ? 1024 : 0) | (u.spitWind > 0 ? 2048 : 0)
+    | (u.screamT > 0 ? 4096 : 0) | (u.hasteT > 0 ? 8192 : 0) | (u.hidden ? 16384 : 0) | (u.swellT > 0 ? 32768 : 0);
 }
 
 function sendSnapshot() {
@@ -669,6 +676,7 @@ function update(dt) {
 
 const net = {
   mod: null,
+  mutation: null,
   get host() { return isHost(); },
   get downed() { return !!S && S.me.st !== 0; },
   get out() { return !!S && S.me.st === 2; },
@@ -817,7 +825,7 @@ export function init(a) {
   api.bus.on('wave:start', e => {
     if (S?.phase !== 'run') return;
     if (isHost()) {
-      send(['w', e.wave, e.mod]);
+      send(['w', e.wave, e.mod, e.mutation || null]);
       for (const p of S.players.values()) if (p.st !== 0 && !p.me) { p.st = 0; p.bleed = 0; p.rev = 0; }
     }
     if (S.me.st !== 0) { S.me.st = 0; S.me.rev = 0; api.player.hp = api.stats.maxHp * .5; api.toast('BACK IN THE FIGHT', 1.6); }
