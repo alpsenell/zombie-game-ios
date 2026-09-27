@@ -109,6 +109,8 @@ button.cm-badge{cursor:pointer}
 .cm-over span:last-child{color:var(--dim);font:800 10px var(--ui);letter-spacing:1.4px}
 @media (max-height:430px) and (orientation:landscape){#board .panel{width:min(94vw,640px);display:grid;grid-template-columns:1fr 1fr;column-gap:8px}#board .panel>*{grid-column:1/-1;order:3}#board .panel>h2{order:0}#board .panel>#cm-boards{grid-column:1;order:1;margin-bottom:6px}#board .panel>.tabs{grid-column:2;order:2;margin-bottom:6px}#board-list{max-height:30vh}}
 @media (max-height:430px){.cm-grid{gap:5px;margin-bottom:8px}.cm-grid div{padding:5px 9px}.cm-grid b{font-size:14px}.cm-sub{margin-bottom:8px}.cm-rules{margin-bottom:10px;font-size:10px}.cm-ladder{margin-bottom:8px}.cm-over{margin:-4px 0 8px}.cm-mode{padding:7px 11px}}
+@media (orientation:landscape){.cm-rival .cm-line{max-width:calc(100vw - 2 * min(34vw,230px) - 2 * max(14px,var(--sl),var(--sr)) - 48px)}}
+@media (orientation:landscape) and (max-width:760px){.cm-rival{padding:4px 9px;letter-spacing:.8px}.cm-rival .cm-line{max-width:calc(100vw - 2 * min(30vw,230px) - 2 * max(14px,var(--sl),var(--sr)) - 40px)}}
 @media (orientation:portrait){#hud-rival{top:calc(max(12px,var(--st)) + 120px)}#hud:has(#bossbar:not(.hidden)) #hud-rival{top:calc(max(12px,var(--st)) + 150px)}.cm-rival .cm-line{max-width:80vw}.cm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cm-grid .wide{grid-column:span 2}#menu-modes{justify-content:center}}
 `;
 

@@ -742,7 +742,7 @@ export function createPreview() {
       if (canvas.parentElement !== el) el.appendChild(canvas);
       auto = autoSpin;
       frame(kind);
-      const r = el.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
       size(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)));
     },
     detach() { canvas.remove(); },
