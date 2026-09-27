@@ -2523,6 +2523,7 @@ function renderLocker() {
 }
 function lockerPick(slot, i) {
   const key = slot.id + ':' + i, it = slot.items[i];
+  if (slot.id === 'body' && i === 1 && profile.loadout.body !== 1 && profile.loadout.hair === DEFAULT_LOADOUT.hair) { profile.loadout.hair = 3; profile.owned['hair:3'] = true; }
   tryOn = { ...profile.loadout, [slot.id]: i };
   preview.show(tryOn);
   haptic('LIGHT');

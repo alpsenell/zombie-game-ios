@@ -104,6 +104,15 @@ const allErrors = [];
   await page.waitForFunction(() => window.__game);
   const reloaded = await page.evaluate(() => window.__game.api.profile.loadout.body);
   ok(reloaded === 1, 'female body survives a reload');
+  const swap = await page.evaluate(() => {
+    const { api } = window.__game, l = api.profile.loadout;
+    const pick = name => [...document.querySelectorAll('#item-grid .item')].find(b => b.querySelector('b').textContent === name).click();
+    const run = hair => { Object.assign(l, { body: 0, hair }); document.querySelector('[data-open="locker"]').click(); document.querySelector('#slot-tabs button').click(); pick('FEMALE'); document.querySelector('#locker-done').click(); return { body: l.body, hair: l.hair, owned: !!api.profile.owned['hair:3'] }; };
+    const kept = run(4), swapped = run(1);
+    return { kept, swapped };
+  });
+  ok(swap.kept.body === 1 && swap.kept.hair === 4, 'switching to FEMALE keeps a chosen hair style');
+  ok(swap.swapped.body === 1 && swap.swapped.hair === 3 && swap.swapped.owned, 'switching to FEMALE from the default hair gives free LONG hair');
   const thumbs = await page.evaluate(() => {
     const { api } = window.__game, l = { ...api.profile.loadout };
     const m = api.encodeLoadout({ ...l, body: 0 }, 10), f = api.encodeLoadout({ ...l, body: 1 }, 10);
