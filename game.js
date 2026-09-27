@@ -12,7 +12,7 @@ const ui = {
   hpNum: $('#hp-num'), hpFill: $('#hp-fill'), hpLag: $('#hp-lag'), waveNum: $('#wave-num'), alive: $('#alive'), waveFill: $('#wave-fill'),
   score: $('#score'), combo: $('#combo'), radar: $('#radar'), bossBar: $('#bossbar'), bossName: $('#boss-name'), bossFill: $('#boss-fill'),
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
-  damage: $('#damage'), lowhp: $('#lowhp'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
+  damage: $('#damage'), lowhp: $('#lowhp'), edge: $('#edge'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
   gunName: $('#gun-name'), ammo: $('#ammo'), fire: $('#fire'), reload: $('#reload'), reloadRing: $('#reload .ring circle'),
   grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'),
 };
@@ -225,6 +225,7 @@ scene.add(hemi);
 const fires = [];
 const world = { group: null, map: null, tex: [] };
 let bounds = MAPS[0].bounds;
+const edge = { t: 0, side: 0 };
 function worldCtx(group) {
   const track = t => (world.tex.push(t), t);
   return {
@@ -269,7 +270,7 @@ function loadMap(id) {
   world.group = new THREE.Group(); world.group.name = 'world';
   scene.add(world.group);
   applyEnv(map);
-  map.build(worldCtx(world.group));
+  map.build(worldCtx(world.group), map.bounds);
   bakeStatic([world.group], world.group);
   buildNav();
   return true;
@@ -858,6 +859,7 @@ function resetRun() {
   ui.bossBar.classList.add('hidden');
   ui.swap.classList.add('hidden');
   ui.lowhp.classList.remove('on');
+  edge.t = 0; ui.edge.style.opacity = 0;
   hint('');
   for (const z of zombies) scene.remove(z);
   zombies.length = 0;
@@ -1963,6 +1965,7 @@ function updatePlayer(dt) {
   if (player.adrenT > 0) player.adrenT = Math.max(0, player.adrenT - dt);
   let mx = move.x + (keys.d ? 1 : 0) - (keys.a ? 1 : 0), my = move.y + (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
   const mag = Math.min(1, Math.hypot(mx, my));
+  let push = 0;
   const sprint = (move.sprint || keys.shift) && my > .5 && player.reloading <= 0;
   if (mag > .05 && !state.net?.downed) {
     const l = Math.hypot(mx, my); mx /= l; my /= l;
@@ -1972,9 +1975,14 @@ function updatePlayer(dt) {
     const nx = camera.position.x + fx * speed, nz = camera.position.z + fz * speed;
     if (!blocked(nx, camera.position.z, .36)) camera.position.x = nx;
     if (!blocked(camera.position.x, nz, .36)) camera.position.z = nz;
+    const ox = nx > bounds.maxX ? 1 : nx < bounds.minX ? -1 : 0, oz = nz > bounds.maxZ ? 1 : nz < bounds.minZ ? -1 : 0;
+    if (ox || oz) { const l = Math.hypot(ox, oz); push = Math.max(0, (fx * ox + fz * oz) / l) * mag; edge.side = (ox * cy - oz * sy) / l; }
     look.bob += dt * (sprint ? 13 : 9) * mag;
     if (!state.moved) { state.moved = true; if (!tutorialDone) hint('Drag the right side to aim · hold FIRE to shoot (you can aim while holding it)'); }
   }
+  const et = edge.t;
+  edge.t = push > edge.t ? Math.min(push, edge.t + dt * 4) : Math.max(0, edge.t - dt * 2);
+  if (edge.t || et) { ui.edge.style.opacity = (edge.t * .75).toFixed(3); ui.edge.style.setProperty('--ex', (50 - edge.side * 38).toFixed(1) + '%'); }
   player.sprinting = !!sprint && mag > .05;
   ui.stick.classList.toggle('sprint', player.sprinting);
   const targetFov = sprint ? 82 : 74;
