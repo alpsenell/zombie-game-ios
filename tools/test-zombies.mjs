@@ -56,7 +56,8 @@ const helpers = () => {
     api.state.clock += 2; api.player.nextShot = 0; api.player.reloading = 0; api.player.swapT = 0;
     api.player.ammo[api.player.weapon] = 30;
     api.scene.updateMatrixWorld(true);
-    g.setFiring(true); g.update(1 / 60); g.setFiring(false);
+    const rnd = Math.random; Math.random = () => 0;
+    try { g.setFiring(true); g.update(1 / 60); g.setFiring(false); } finally { Math.random = rnd; }
     return api.state.shots - n;
   };
 };
