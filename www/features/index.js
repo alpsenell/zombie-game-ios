@@ -6,6 +6,7 @@ import * as runcard from './runcard.js';
 import perks from './perks.js';
 import revive from './revive.js';
 import mappick from './mappick.js';
+import checkpoint from './checkpoint.js';
 import * as coop from './coop.js';
 
 export const FEATURES = [
@@ -17,5 +18,6 @@ export const FEATURES = [
   perks,
   revive,
   mappick,
+  checkpoint,
   coop,
 ];

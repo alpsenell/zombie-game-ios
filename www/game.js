@@ -2,8 +2,8 @@ import * as THREE from './vendor/three.module.js';
 import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
-import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats } from './weapons.js';
-import { SLOTS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats, WOOD, woodStock } from './weapons.js';
+import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -14,7 +14,7 @@ const ui = {
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
   damage: $('#damage'), lowhp: $('#lowhp'), edge: $('#edge'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
   gunName: $('#gun-name'), ammo: $('#ammo'), fire: $('#fire'), reload: $('#reload'), reloadRing: $('#reload .ring circle'),
-  grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'),
+  grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'), perkSub: $('#perk-sub'),
 };
 
 const store = {
@@ -410,6 +410,9 @@ const sfx = (() => {
     minigun() { noise(.07, 2800, .35, 'lowpass', .7, 500); tone(150, .05, 'square', .06, 70); },
     spit() { noise(.25, 700, .35, 'bandpass', 3, 1800); tone(220, .2, 'sawtooth', .06, 90); },
     sizzle() { noise(.2, 3200, .12, 'highpass', 1); },
+    scream() { tone(620, .9, 'sawtooth', .1, 1500, .25); tone(655, .9, 'sawtooth', .08, 1620, .3); noise(.9, 2600, .2, 'bandpass', 3, 4800); },
+    hiss() { noise(.45, 5200, .16, 'highpass', 1.5, 2600); },
+    swell() { tone(120, .55, 'sine', .3, 380); noise(.5, 320, .22, 'lowpass', 2, 900); },
     boom() { noise(1.2, 900, 1.1, 'lowpass', .5, 60); tone(55, .8, 'sine', .5, 28); },
     wave() { tone(110, 1.2, 'sawtooth', .12, 104, .2); tone(165, 1.2, 'sawtooth', .08, 160, .2); },
     clear() { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, .25, 'triangle', .09), i * 90)); },
@@ -522,13 +525,17 @@ const blastLight = new THREE.PointLight(0xff8a30, 0, 22, 2); scene.add(blastLigh
 const muzzleWorld = new THREE.PointLight(0xffb060, 0, 9, 2); camera.add(muzzleWorld); muzzleWorld.position.set(.3, -.1, -1);
 
 const ZT = {
-  walker: { name: 'WALKER', hp: 80, speed: 1.15, dmg: 7, scale: 1, bulk: 1, score: 100, lean: .22, stride: 6.5, eye: 0xffb23f, drop: .12 },
-  runner: { name: 'RUNNER', hp: 48, speed: 3.1, dmg: 5, scale: .94, bulk: .85, score: 150, lean: .6, stride: 11, eye: 0xff2a1a, drop: .12, intro: 'Fast and fragile' },
-  crawler: { name: 'CRAWLER', hp: 60, speed: 1.8, dmg: 6, scale: 1, bulk: 1, score: 175, lean: 1.35, stride: 7, eye: 0xffe14a, drop: .15, crawl: true, aimY: .4, intro: 'Low to the ground — aim down' },
-  spitter: { name: 'SPITTER', hp: 70, speed: 1.3, dmg: 6, scale: 1.02, bulk: .9, score: 250, lean: .35, stride: 6, eye: 0x7dff3a, drop: .25, ranged: true, sacs: 3, skin: 0x7f9a62, intro: 'Spits acid from range — keep moving' },
-  bloater: { name: 'BLOATER', hp: 140, speed: .95, dmg: 0, scale: 1.1, bulk: 1.65, score: 300, lean: .05, stride: 4.5, eye: 0xff8a1a, drop: .3, explode: true, sacs: 7, skin: 0x9a8a6a, intro: 'Explodes — shoot it from a distance' },
-  riot: { name: 'RIOT', hp: 150, speed: 1.2, dmg: 10, scale: 1.05, bulk: 1.1, score: 350, lean: .15, stride: 6, eye: 0x6ad8ff, drop: .3, armor: .3, helmet: true, intro: 'Armored body — go for the head' },
-  brute: { name: 'BRUTE', hp: 420, speed: .9, dmg: 17, scale: 1.4, bulk: 1.35, score: 450, lean: .12, stride: 4.4, eye: 0x7dff5a, drop: .55, spikes: 3, intro: 'Tough as nails — save a grenade' },
+  walker: { name: 'WALKER', hp: 80, speed: 1.15, dmg: 7, scale: 1, bulk: 1, score: 100, lean: .22, stride: 6.5, eye: 0xffb23f, drop: .12, mix: [0, 0, 10, 10] },
+  runner: { name: 'RUNNER', hp: 48, speed: 3.1, dmg: 5, scale: .94, bulk: .85, score: 150, lean: .6, stride: 11, eye: 0xff2a1a, drop: .12, mix: [0, 2, 1.2, 6], intro: 'Fast and fragile' },
+  crawler: { name: 'CRAWLER', hp: 60, speed: 1.8, dmg: 6, scale: 1, bulk: 1, score: 175, lean: 1.35, stride: 7, eye: 0xffe14a, drop: .15, crawl: true, lunge: 1, aimY: .4, mix: [0, 3, 1, 4], intro: 'Low to the ground — aim down' },
+  spitter: { name: 'SPITTER', hp: 70, speed: 1.3, dmg: 6, scale: 1.02, bulk: .9, score: 250, lean: .35, stride: 6, eye: 0x7dff3a, drop: .25, ranged: true, sacs: 3, skin: 0x7f9a62, mix: [0, 4, .6, 3], intro: 'Spits acid from range — keep moving' },
+  bloater: { name: 'BLOATER', hp: 140, speed: .95, dmg: 0, scale: 1.1, bulk: 1.65, score: 300, lean: .05, stride: 4.5, eye: 0xff8a1a, drop: .3, explode: true, sacs: 7, skin: 0x9a8a6a, mix: [0, 6, .6, 3], intro: 'Swells and bursts — shoot it from a distance' },
+  riot: { name: 'RIOT', hp: 150, speed: 1.2, dmg: 10, scale: 1.05, bulk: 1.1, score: 350, lean: .15, stride: 6, eye: 0x6ad8ff, drop: .3, armor: .3, helmet: true, mix: [0, 7, .5, 3], intro: 'Armored body — go for the head' },
+  brute: { name: 'BRUTE', hp: 420, speed: .9, dmg: 17, scale: 1.4, bulk: 1.35, score: 450, lean: .12, stride: 4.4, eye: 0x7dff5a, drop: .55, spikes: 3, mix: [0, 8, .4, 2.5], intro: 'Tough as nails — save a grenade' },
+  screamer: { name: 'SCREAMER', hp: 65, speed: 1.25, dmg: 5, scale: 1.14, bulk: .7, score: 300, lean: -.05, stride: 5.5, eye: 0xff3ad0, drop: .3, scream: true, skin: 0xd9d2c6, cloth: 0x8c8294, radar: '#ff5ad8', mix: [1, 6, .35, 1.4], cap: [2, 10], intro: 'Its scream speeds up the horde — headshot interrupts it' },
+  shield: { name: 'SHIELDBEARER', hp: 170, speed: 1.1, dmg: 11, scale: 1.08, bulk: 1.12, score: 375, lean: .08, stride: 5.5, eye: 0xffd23a, drop: .3, armor: .12, shield: true, helmet: true, turn: 1.7, armorColor: 0x1b2330, radar: '#6a9cff', mix: [2, 6, .5, 2.4], intro: 'Shield stops frontal fire — flank it, headshot it or blow it up' },
+  stalker: { name: 'STALKER', hp: 85, speed: 2.6, dmg: 9, scale: 1.02, bulk: .78, score: 350, lean: .55, stride: 10, eye: 0x9ffff0, drop: .25, stalk: true, claws: true, skin: 0x2b2438, cloth: 0x120e18, radar: '#b58cff', mix: [3, 7, .5, 2.5], intro: 'Fades from sight and flanks — watch for its eyes' },
+  juggernaut: { name: 'JUGGERNAUT', hp: 650, speed: .85, dmg: 18, scale: 1.6, bulk: 1.42, score: 450, lean: .1, stride: 3.8, eye: 0xff6a1a, drop: .8, charge: true, chargeSpeed: 9.5, plated: true, armor: .55, spikes: 4, armorColor: 0x6a3a1c, radar: '#ffb21a', mix: [3, 8, .25, 1], cap: [1, 12], intro: 'Charges through anything — sidestep, then punish the stun' },
   abomination: { boss: true, name: 'ABOMINATION', hp: 2600, speed: 1.15, dmg: 30, scale: 2.3, bulk: 1.3, score: 3000, lean: .18, stride: 3.6, eye: 0xd35bff, drop: 1, spikes: 5, slam: true, intro: 'Ground slam — back off when the ring appears' },
   butcher: { boss: true, name: 'THE BUTCHER', hp: 2400, speed: 1.35, dmg: 34, scale: 2.1, bulk: 1.2, score: 3500, lean: .25, stride: 4.2, eye: 0xff2a1a, drop: 1, charge: true, cleaver: true, cloth: 0x6a1410, intro: 'Charges — sidestep, then punish while stunned' },
   plague: { boss: true, name: 'PLAGUE KING', hp: 2800, speed: 1, dmg: 26, scale: 2.2, bulk: 1.25, score: 4000, lean: .2, stride: 3.4, eye: 0x7dff3a, drop: 1, ranged: true, volley: 3, summon: true, crown: true, sacs: 8, skin: 0x6f8f4a, intro: 'Spits acid volleys and raises the dead' },
@@ -536,10 +543,15 @@ const ZT = {
 };
 const BOSS_ORDER = ['abomination', 'butcher', 'plague', 'goliath'];
 const DIFFICULTIES = {
-  recruit: { name: 'RECRUIT', desc: 'Weaker, slower infected. Score x0.5', hp: .7, dmg: .55, speed: .9, count: .8, elite: 0, score: .5, drops: 1.3, shift: 0 },
-  survivor: { name: 'SURVIVOR', desc: 'The intended experience. Score x1', hp: 1, dmg: 1, speed: 1, count: 1, elite: .02, score: 1, drops: 1, shift: 0 },
-  veteran: { name: 'VETERAN', desc: 'Bigger hordes, more elites. Score x1.75', hp: 1.3, dmg: 1.35, speed: 1.08, count: 1.2, elite: .06, score: 1.75, drops: .85, shift: 1 },
-  nightmare: { name: 'NIGHTMARE', desc: 'Brutal, scarce supplies. Score x3', hp: 1.65, dmg: 1.8, speed: 1.15, count: 1.4, elite: .12, score: 3, drops: .6, shift: 2 },
+  recruit: { name: 'RECRUIT', desc: 'Weaker, slower infected. Score x0.5', hp: .7, dmg: .55, speed: .9, count: .8, elite: 0, score: .5, drops: 1.3, shift: 0, rank: 0, mix: .45, ranged: 1 },
+  survivor: { name: 'SURVIVOR', desc: 'The intended experience. Score x1', hp: 1, dmg: 1, speed: 1, count: 1, elite: .02, score: 1, drops: 1, shift: 0, rank: 1, mix: 1, ranged: 2 },
+  veteran: { name: 'VETERAN', desc: 'Bigger hordes, more elites. Score x1.75', hp: 1.3, dmg: 1.35, speed: 1.08, count: 1.2, elite: .06, score: 1.75, drops: .85, shift: 1, rank: 2, mix: 1.25, ranged: 3 },
+  nightmare: { name: 'NIGHTMARE', desc: 'Brutal, scarce supplies. Score x3', hp: 1.65, dmg: 1.8, speed: 1.15, count: 1.4, elite: .12, score: 3, drops: .6, shift: 2, rank: 3, mix: 1.5, ranged: 3, mutate: .55 },
+};
+const MUTATIONS = {
+  regen: { name: 'REGENERATING', desc: 'WOUNDS CLOSE — FINISH THEM FAST', regen: .05 },
+  frenzy: { name: 'FRENZIED', desc: 'FASTER, HUNGRIER DEAD', speed: 1.15, rate: .75 },
+  hardened: { name: 'HARDENED', desc: 'THICKER HIDE ON EVERY INFECTED', hp: 1.25 },
 };
 const MODS = {
   horde: { name: 'HORDE', desc: 'TWICE THE DEAD, SLIGHTLY WEAKER', count: 1.7, hp: .75, score: 1.2 },
@@ -575,6 +587,10 @@ const ZG = {
   vest: new THREE.BoxGeometry(.62, .52, .38),
   pad: new THREE.BoxGeometry(.2, .1, .22),
   blade: new THREE.BoxGeometry(.03, .38, .22),
+  claw: new THREE.ConeGeometry(.022, .24, 4),
+  shield: new THREE.BoxGeometry(.66, .98, .05),
+  stripe: new THREE.BoxGeometry(.64, .07, .012),
+  port: new THREE.BoxGeometry(.4, .12, .012),
 };
 const flashMat = new THREE.MeshBasicMaterial({ color: 0xff5540 });
 const zombieMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .9, flatShading: true });
@@ -586,21 +602,25 @@ function zombieVariant(kind) {
   const list = zombieVariants.get(kind) || [];
   zombieVariants.set(kind, list);
   if (list.length >= (T.boss ? 1 : 4)) return pick(list);
-  const skin = T.skin ?? pick(SKINS), cloth = T.cloth ?? pick(CLOTHES), pants = pick(PANTS), blood = 0x5a0a08, bone = 0xd9d0b4, armor = 0x2a3440;
+  const skin = T.skin ?? pick(SKINS), cloth = T.cloth ?? pick(CLOTHES), pants = T.stalk ? 0x0e0b12 : pick(PANTS), blood = 0x5a0a08, bone = 0xd9d0b4, armor = T.armorColor ?? 0x2a3440;
+  const suit = T.helmet || T.plated;
   const piece = (geo, color, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => ({ geo, color, matrix: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(sx, sy, sz)) });
   const spine = [
     piece(ZG.belly, Math.random() > .5 ? skin : cloth, 0, .12, 0),
     piece(ZG.torso, cloth, 0, .44, 0),
     piece(ZG.wound, blood, (Math.random() - .5) * .25, .3 + Math.random() * .2, .158),
   ];
-  if (Math.random() > .4) for (let i = 0; i < 3; i++) spine.push(piece(ZG.rib, bone, .1, .3 + i * .04, .17));
+  if (T.scream || T.stalk || Math.random() > .4) for (let i = 0; i < (T.scream ? 5 : 3); i++) spine.push(piece(ZG.rib, bone, T.scream ? (i % 2 ? .1 : -.1) : .1, .3 + i * .045, .17));
   for (let i = 0; i < 3; i++) spine.push(piece(ZG.strip, cloth, (Math.random() - .5) * .4, .1, .16, .1, 0, (Math.random() - .5) * .5));
   const spikes = T.spikes || 0;
   for (let i = 0; i < spikes; i++) spine.push(piece(ZG.spike, bone, (i - (spikes - 1) / 2) * .1, .55, -.18, -.6));
-  if (T.helmet) spine.push(piece(ZG.vest, armor, 0, .4, 0));
-  const head = [piece(ZG.head, skin, 0, .19, 0, 0, 0, 0, 1, 1.12, 1.05)];
-  if (T.helmet) head.push(piece(ZG.helmet, armor, 0, .22, -.01), piece(ZG.visor, 0x0a0f14, 0, .27, .17));
-  else if (Math.random() > .35 && !T.crown) head.push(piece(ZG.hair, pick(HAIR), 0, .27, -.03, 0, 0, 0, 1, .55, 1));
+  if (suit) spine.push(piece(ZG.vest, armor, 0, .4, 0));
+  if (T.plated) spine.push(piece(ZG.vest, 0x8a4a22, 0, .5, .04, 0, 0, 0, .8, .45, 1.02), piece(ZG.pad, armor, -.36, .7, 0, 0, 0, .5, 1.7, 1.6, 1.5), piece(ZG.pad, armor, .36, .7, 0, 0, 0, -.5, 1.7, 1.6, 1.5));
+  const head = [piece(ZG.head, skin, 0, .19, 0, 0, 0, 0, 1, T.scream || T.stalk ? 1.32 : 1.12, 1.05)];
+  if (T.plated) head.push(piece(ZG.helmet, armor, 0, .22, -.01, 0, 0, 0, 1.05, 1.1, 1.05), piece(ZG.visor, 0x3a2414, 0, .19, .17, 0, 0, 0, 1, 3.2, 1), piece(ZG.visor, 0x0a0706, 0, .23, .19, 0, 0, 0, .8, .6, 1));
+  else if (T.helmet) head.push(piece(ZG.helmet, armor, 0, .22, -.01), piece(ZG.visor, 0x0a0f14, 0, .27, .17));
+  else if (T.scream) head.push(piece(ZG.hair, 0x1a1418, 0, .18, -.1, .25, 0, 0, 1.05, 1.5, .8));
+  else if (Math.random() > .35 && !T.crown && !T.stalk) head.push(piece(ZG.hair, pick(HAIR), 0, .27, -.03, 0, 0, 0, 1, .55, 1));
   if (T.crown) for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; head.push(piece(ZG.spike, bone, Math.sin(a) * .14, .42, Math.cos(a) * .14, Math.cos(a) * .3, 0, -Math.sin(a) * .3)); }
   const sacs = [];
   for (let i = 0; i < (T.sacs || 0); i++) {
@@ -609,9 +629,11 @@ function zombieVariant(kind) {
       ? piece(ZG.sac, 0, Math.sin(a) * .26, .15 + (i % 3) * .14, Math.cos(a) * .17, 0, 0, 0, 1.2, 1.2, 1.2)
       : piece(ZG.sac, 0, (i - (T.sacs - 1) / 2) * .13, .35 + (i % 2) * .12, -.17));
   }
+  if (T.scream) sacs.push(piece(ZG.sac, 0, 0, .6, .14, 0, 0, 0, 1.5, 1.2, 1.2));
   const arm = () => Math.random() > .5 ? cloth : skin;
   const shin = () => Math.random() > .7 ? skin : pants;
-  const upper = () => mergeGeos([piece(ZG.upper, T.helmet ? armor : arm(), 0, -.16, 0), ...(T.helmet ? [piece(ZG.pad, armor, 0, -.02, 0)] : [])]);
+  const upper = () => mergeGeos([piece(ZG.upper, suit ? armor : arm(), 0, -.16, 0), ...(suit ? [piece(ZG.pad, armor, 0, -.02, 0)] : [])]);
+  const claws = T.claws ? [-.035, 0, .035].map(x => piece(ZG.claw, bone, x, -.5, .03, Math.PI, 0, 0)) : [];
   const v = {
     pelvis: mergeGeos([piece(ZG.pelvis, pants, 0, 0, 0)]),
     thigh: mergeGeos([piece(ZG.thigh, pants, 0, -.2, 0)]),
@@ -621,29 +643,31 @@ function zombieVariant(kind) {
     sacs: sacs.length ? mergeGeos(sacs) : null,
     head: mergeGeos(head),
     eyes: mergeGeos([piece(ZG.eye, 0, -.07, .21, .17), piece(ZG.eye, 0, .07, .21, .17)]),
-    jaw: mergeGeos([piece(ZG.jaw, T.ranged ? 0x5f8a3a : skin, 0, -.03, .06)]),
+    jaw: mergeGeos([piece(ZG.jaw, T.ranged ? 0x5f8a3a : T.scream ? 0x3a0a14 : skin, 0, T.scream ? -.09 : -.03, .06, 0, 0, 0, T.scream ? .9 : 1, T.scream ? 2.6 : 1, 1)]),
+    shield: T.shield ? mergeGeos([piece(ZG.shield, 0x4a6272, 0, 0, 0), piece(ZG.port, 0xb8d4e4, 0, .3, .031), piece(ZG.stripe, 0xe8c23a, 0, .08, .031), piece(ZG.stripe, 0xe8c23a, 0, -.34, .031)]) : null,
     upperL: upper(),
     upperR: upper(),
-    foreL: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01)]),
-    foreR: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01), ...(T.cleaver ? [piece(ZG.blade, 0x9aa4a8, 0, -.5, .12), piece(ZG.blade, blood, 0, -.62, .12, 0, 0, 0, 1.1, .3, 1.02)] : [])]),
+    foreL: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01), ...claws]),
+    foreR: mergeGeos([piece(ZG.fore, skin, 0, -.14, 0), piece(ZG.hand, skin, 0, -.32, .01), ...claws, ...(T.cleaver ? [piece(ZG.blade, 0x9aa4a8, 0, -.5, .12), piece(ZG.blade, blood, 0, -.62, .12, 0, 0, 0, 1.1, .3, 1.02)] : [])]),
   };
   list.push(v);
   return v;
 }
 
 function makeZombie(kind, x, z, rise = true, elite = false) {
-  const T = ZT[kind], V = zombieVariant(kind), D = diff(), M = MODS[state.mod] || {};
+  const T = ZT[kind], V = zombieVariant(kind), D = diff(), M = MODS[state.mod] || {}, X = MUTATIONS[state.mutation] || {};
   const glow = elite ? 0x9ff4ff : T.eye;
   const eyeMat = mat(glow, { emissive: glow, emissiveIntensity: 5 });
+  const skinMat = T.stalk ? Object.assign(zombieMat.clone(), { transparent: true }) : zombieMat;
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
   const sc = T.scale * (elite ? 1.12 : 1);
   body.scale.set(sc * T.bulk, sc, sc * T.bulk);
   const P = {}, meshes = [];
   const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
-  const part = (geo, parent, shadow, material = zombieMat) => {
+  const part = (geo, parent, shadow, material = skinMat) => {
     const m = new THREE.Mesh(geo, material);
-    m.castShadow = shadow; m.userData.zroot = root; m.userData.base = material;
+    m.castShadow = shadow && !T.stalk; m.userData.zroot = root; m.userData.base = material;
     parent.add(m); meshes.push(m); return m;
   };
   P.hips = joint(body, 0, T.crawl ? .3 : .92, 0);
@@ -656,6 +680,7 @@ function makeZombie(kind, x, z, rise = true, elite = false) {
   }
   P.spine = joint(P.hips, 0, .1, 0); P.spine.rotation.x = T.lean;
   part(V.spine, P.spine, true);
+  if (V.shield) { P.shield = joint(P.spine, -.04, .3, .36); part(V.shield, P.shield, true); }
   if (V.sacs) part(V.sacs, P.spine, false, eyeMat).userData.glow = true;
   P.head = joint(P.spine, 0, .7, .02);
   part(V.head, P.head, true).userData.head = true;
@@ -674,14 +699,16 @@ function makeZombie(kind, x, z, rise = true, elite = false) {
     root.add(aura);
   }
   const bossTier = T.boss ? 1 + Math.floor((state.wave - 1) / 20) * .6 : 1;
-  const hp = T.hp * (1 + (state.wave - 1) * (T.boss ? .08 : .12)) * D.hp * (M.hp ?? 1) * (elite ? 2.2 : 1) * bossTier;
+  const hp = T.hp * (1 + (state.wave - 1) * (T.boss ? .08 : .12)) * D.hp * (M.hp ?? 1) * (X.hp ?? 1) * (elite ? 2.2 : 1) * bossTier;
   const now = state.clock;
   root.userData = {
     zombie: true, kind, T, P, meshes, hp, maxHp: hp, elite, sc,
-    speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + R() * .2),
+    speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (X.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + R() * .2),
     walk: Math.random() * 6, phase: Math.random() * 6, flash: 0, nextAttack: 0, swing: 0, dead: false, deathT: 0, rise: rise ? 1 : 0,
     side: R() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * sc * T.bulk, groanAt: Math.random() * 5,
     nextSpit: now + 2 + Math.random() * 2, spitWind: 0, nextSlam: now + 3, slamT: 0, nextCharge: now + 2, cs: '', ct: 0, nextSummon: now + 8, enraged: false,
+    nextScream: now + 3 + Math.random() * 2, screamT: 0, summons: 0, hasteT: 0, stalkT: 1.5, hidden: false, vis: 1, skinMat: T.stalk ? skinMat : null,
+    nextLunge: now + .5, lungeT: 0, lungeGo: 0, swellT: 0, hitAt: -9,
   };
   root.position.set(x, rise ? -1.9 * sc : 0, z);
   scene.add(root);
@@ -696,9 +723,20 @@ function flashZombie(z) {
   for (const m of u.meshes) if (!m.userData.glow) m.material = flashMat;
 }
 
+const HASTE_FX = { speed: .6, spread: 1, life: .4, grav: -2, colors: [0xff5ad8, 0xffa0ec] };
+const SCREAM_FX = { speed: 7, spread: 2.4, life: .5, grav: 0, drag: 2, colors: [0xff5ad8, 0xffa0ec, 0xffffff] };
+const SHADOW_FX = { speed: 2, spread: 2, life: 1.2, grav: -1.5, drag: 1.5, colors: [0x2a1a3a, 0x4a2a6a, 0x120a1a] };
+const METAL_FX = { speed: 4, spread: 2, life: .5, grav: 10, colors: [0xffd080, 0xcfe6ff, 0xff9a40] };
 function animateZombie(z, dt) {
   const u = z.userData, P = u.P, T = u.T;
   if (u.flash > 0) { u.flash -= dt; if (u.flash <= 0) for (const m of u.meshes) m.material = u.frozenT > 0 && !m.userData.glow ? iceMat : m.userData.base; }
+  if (u.skinMat) {
+    u.vis += ((u.hidden && !u.dead ? 0 : 1) - u.vis) * Math.min(1, dt * 5);
+    const o = u.vis > .97 ? 1 : (.05 + .95 * u.vis) * (Math.random() < .25 ? .3 : 1);
+    u.skinMat.opacity = o; u.skinMat.depthWrite = o > .9;
+  }
+  if (u.hasteT > 0 && !u.dead && Math.random() < dt * 10) sparks.emit(z.position.x, 1.7 * u.sc, z.position.z, 1, HASTE_FX);
+  if (u.swellT > 0 && !u.dead) { const k = 1 + (1 - u.swellT / .55) * .4 + Math.sin(state.clock * 45) * .05; z.children[0].scale.set(u.sc * T.bulk * k, u.sc * k, u.sc * T.bulk * k); }
   if (u.frozenT > 0 && !u.dead) return false;
   if (u.dead) {
     u.deathT += dt;
@@ -721,7 +759,8 @@ function animateZombie(z, dt) {
     P.armL.rotation.x = -2.1 + s * .8; P.armR.rotation.x = -2.1 - s * .8;
     P.armL.rotation.z = -.35; P.armR.rotation.z = .35;
     P.elbowL.rotation.x = P.elbowR.rotation.x = -.5;
-    P.hips.position.y = .3 + Math.abs(s) * .05 * amp;
+    P.hips.position.y = .3 + Math.abs(s) * .05 * amp + (u.lungeT > 0 ? .2 : 0);
+    if (u.lungeT > 0) P.head.rotation.x = -1.5;
     P.hips.rotation.y = s * .2 * amp;
     return false;
   }
@@ -730,14 +769,17 @@ function animateZombie(z, dt) {
   P.hips.position.y = .92 + Math.abs(s) * .04 * amp;
   P.hips.rotation.y = s * .12 * amp;
   let armX = -1.3, armSway = Math.sin(u.walk * .5 + u.phase) * .18;
-  if (u.kind === 'runner' || u.cs === 'run') { armX = -.4; armSway = s * 1.1; }
+  let armZ = .15;
+  if (u.kind === 'runner' || T.stalk || u.cs === 'run') { armX = -.4; armSway = s * 1.1; }
   if (u.swing > 0) { const k = u.swing / .45; armX = -1.3 - Math.sin(k * Math.PI) * 1.4; }
   if (u.slamT > 0 || u.cs === 'wind') { armX = -2.9; armSway = 0; }
   if (u.spitWind > 0) { P.head.rotation.x = -.7 + (1 - u.spitWind / .5) * .9; P.jaw.rotation.x = .7; }
   if (u.cs === 'stun') { P.head.rotation.x = .6; armX = -.2; }
+  if (u.screamT > 0) { armX = -2.6; armSway = Math.sin(state.clock * 40) * .08; armZ = .75; P.head.rotation.x = -.8; P.jaw.rotation.x = 1.1; }
   P.armL.rotation.x = armX + armSway; P.armR.rotation.x = armX - armSway;
-  P.armL.rotation.z = -.15; P.armR.rotation.z = .15;
-  P.elbowL.rotation.x = P.elbowR.rotation.x = u.kind === 'runner' ? -.9 : -.25;
+  P.armL.rotation.z = -armZ; P.armR.rotation.z = armZ;
+  P.elbowL.rotation.x = P.elbowR.rotation.x = u.kind === 'runner' || T.stalk ? -.9 : -.25;
+  if (T.shield) { P.armL.rotation.x = -1.2; P.armL.rotation.z = .35; P.elbowL.rotation.x = -1.1; }
   return false;
 }
 
@@ -772,7 +814,7 @@ function applyLoadoutToGuns() {
   guns.forEach((g, i) => {
     const m = g.userData.mats;
     paintGunMaterials(m, l.gun);
-    if (['r870', 'boom', 'm79', 'm24'].includes(WEAPONS[i].id) && l.gun === 0) { m.base.color.setHex(0x8a5428); m.base.roughness = .55; }
+    if (WOOD.has(WEAPONS[i].id) && l.gun === 0) woodStock(m.base);
     m.sleeve.color.setHex(c.sleeve);
     m.glove.color.setHex(c.glove);
   });
@@ -817,7 +859,8 @@ function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
   return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
 }
-const slotById = id => id === BODY.id ? BODY : SLOTS.find(s => s.id === id);
+const ALL_SLOTS = [...SLOTS, ...EXTRA_SLOTS];
+const slotById = id => id === BODY.id ? BODY : ALL_SLOTS.find(s => s.id === id);
 function isOwned(slotId, i) {
   const it = slotById(slotId).items[i];
   if (!it) return false;
@@ -827,7 +870,7 @@ function isOwned(slotId, i) {
 }
 function unlockedSet() {
   const set = new Set();
-  for (const s of SLOTS) s.items.forEach((it, i) => { if (it.req && reqMet(it.req)) set.add(s.id + ':' + i); });
+  for (const s of ALL_SLOTS) s.items.forEach((it, i) => { if (it.req && reqMet(it.req)) set.add(s.id + ':' + i); });
   return set;
 }
 
@@ -848,8 +891,8 @@ function resetRun() {
   Object.assign(player, { hp: 100, lagHp: 100, nades: 2, weapon: slots[0], slots, reloading: 0, swapT: 0, nextShot: 0, lastHurt: -9, pumpT: 0, lastBeat: 0, spin: 0, shotN: 0, adrenT: 0, invulnUntil: 0,
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
-    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty,
-    warpT: 0, killTimes: [], perks: [] });
+    waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -889,6 +932,8 @@ function startGame(opts = {}) {
   state.seed = opts.seed ?? null;
   state.runOpts = opts;
   if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
+  state.startWave = state.runType === 'normal' ? Math.max(1, Math.min(999, opts.startWave | 0)) : 1;
+  state.wave = state.startWave - 1;
   const S = world.map.start;
   camera.position.set(S.x, 1.64, S.z);
   look.yaw = S.yaw; look.pitch = 0; look.recoil = 0;
@@ -899,30 +944,38 @@ function startGame(opts = {}) {
   applyLoadoutToGuns();
   selectWeapon(player.slots[0], true);
   ui.swap.classList.toggle('hidden', player.slots[0] === player.slots[1]);
-  if (!state.net || state.net.host) schedule(.8, nextWave);
+  if (state.startWave > 1) {
+    state.kitTotal = Math.min(10, Math.ceil((state.startWave - 1) / 2));
+    player.nades = stats.nadeMax;
+    player.slots.forEach(i => (player.reserve[i] = WEAPONS[i].maxReserve));
+    schedule(.8, () => offerPerks(state.kitTotal));
+  } else if (!state.net || state.net.host) schedule(.8, nextWave);
   if (!tutorialDone) schedule(.3, () => hint('Drag anywhere on the left to move'));
   haptic('MEDIUM');
-  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], map: world.map.id, opts });
+  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], map: world.map.id, startWave: state.startWave, opts });
 }
 
+function rosterWeights(w, D = diff()) {
+  const e = w + D.shift, out = {};
+  for (const k in ZT) {
+    const m = ZT[k].mix;
+    if (!m || D.rank < m[0] || e < m[1]) continue;
+    out[k] = Math.min(m[3], (e - m[1] + 1) * m[2]) * (k === 'walker' ? 1 : D.mix);
+  }
+  return out;
+}
 function waveComposition(w) {
-  const D = diff(), M = MODS[state.mod] || {}, e = w + D.shift, bossWave = w % 5 === 0;
-  const weights = {
-    walker: 10,
-    runner: e >= 2 ? Math.min(6, (e - 1) * 1.2) : 0,
-    crawler: e >= 3 ? Math.min(4, e - 2) : 0,
-    spitter: e >= 4 ? Math.min(3, (e - 3) * .6) : 0,
-    bloater: e >= 6 ? Math.min(3, (e - 5) * .6) : 0,
-    riot: e >= 7 ? Math.min(3, (e - 6) * .5) : 0,
-    brute: e >= 8 ? Math.min(2.5, (e - 7) * .4) : 0,
-  };
-  const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+  const D = diff(), M = MODS[state.mod] || {}, bossWave = w % 5 === 0;
+  const weights = rosterWeights(w, D), sum = Object.values(weights).reduce((a, b) => a + b, 0);
   const total = Math.min(70, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * (bossWave ? .6 : 1)));
   const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 : 0;
-  const list = [];
+  const list = [], count = {};
   for (let i = 0; i < total; i++) {
     let r = R() * sum, kind = 'walker';
     for (const k in weights) { r -= weights[k]; if (r <= 0) { kind = k; break; } }
+    const cap = ZT[kind].cap;
+    if (cap && (count[kind] || 0) >= cap[0] + Math.floor(w / cap[1])) kind = 'walker';
+    count[kind] = (count[kind] || 0) + 1;
     list.push({ kind, elite: R() < eliteChance });
   }
   if (bossWave) list.splice(Math.floor(list.length / 3), 0, { kind: BOSS_ORDER[(w / 5 - 1) % BOSS_ORDER.length], elite: false });
@@ -939,17 +992,19 @@ function nextWave() {
   state.wave++;
   const modKeys = Object.keys(MODS);
   state.mod = state.net && !state.net.host ? state.net.mod : state.wave >= 6 && state.wave % 5 !== 0 && R() < .35 ? modKeys[(R() * modKeys.length) | 0] : null;
+  const mutKeys = Object.keys(MUTATIONS), D = diff();
+  state.mutation = state.net && !state.net.host ? state.net.mutation || null : !state.mod && D.mutate && state.wave >= 3 && state.wave % 5 !== 0 && R() < D.mutate ? mutKeys[(R() * mutKeys.length) | 0] : null;
   applyMod(state.mod);
   state.queue = waveComposition(state.wave);
   state.waveTotal = state.queue.length;
   state.waveDone = 0;
   state.between = false;
   state.spawnGap = 0;
-  const boss = state.wave % 5 === 0, M = MODS[state.mod];
-  message('WAVE ' + state.wave, M ? M.name + ' — ' + M.desc : boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.4);
+  const boss = state.wave % 5 === 0, M = MODS[state.mod], X = MUTATIONS[state.mutation];
+  message('WAVE ' + state.wave, M ? M.name + ' — ' + M.desc : X ? 'MUTATION: ' + X.name + ' — ' + X.desc : boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.4);
   sfx.wave();
   haptic('MEDIUM');
-  bus.emit('wave:start', { wave: state.wave, mod: state.mod, boss: boss });
+  bus.emit('wave:start', { wave: state.wave, mod: state.mod, mutation: state.mutation, boss: boss, checkpoint: state.startWave > 1 && state.wave === state.startWave });
 }
 
 function findSpawn(minD = 16, maxD = 32) {
@@ -1043,7 +1098,12 @@ function killZombie(z, head, noScore) {
     const x = z.position.x, zz = z.position.z;
     z.visible = false; u.deathT = 4.9;
     schedule(.08, () => explode(x, zz, { hostile: true, radius: 4.6, zdmg: 220, pdmg: 32, color: 0xb6ff4a }));
+    if (diff().rank >= 2) schedule(.12, () => acidPuddle(x, zz));
   }
+  if (T.scream) { u.screamT = 0; sparks.emit(z.position.x, 1.6 * u.sc, z.position.z, 24, SCREAM_FX); }
+  if (T.stalk) gore.emit(z.position.x, 1 * u.sc, z.position.z, 30, SHADOW_FX);
+  if (T.shield || T.plated) sparks.emit(z.position.x, 1.1 * u.sc, z.position.z, T.plated ? 34 : 18, METAL_FX);
+  if (T.plated) { look.shake = Math.max(look.shake, .25); sfx.thump(); }
   if (z === state.boss) { state.boss = null; ui.bossBar.classList.add('hidden'); slamRing.visible = false; }
   if (!state.between && state.mode === 'playing') {
     state.waveDone++;
@@ -1099,15 +1159,20 @@ function nova(r = 9) {
 }
 const deathGuards = [];
 
+function shieldFacing(z) {
+  const dx = camera.position.x - z.position.x, dz = camera.position.z - z.position.z, d = Math.hypot(dx, dz) || 1;
+  return (Math.sin(z.rotation.y) * dx + Math.cos(z.rotation.y) * dz) / d > .35;
+}
 function damageZombie(z, amount, point, head, dir) {
   const u = z.userData, T = u.T;
   if (u.dead) return;
-  const armored = point && !head && T.armor;
+  const armored = point && !head && T.armor && (!T.shield || shieldFacing(z));
   const remote = state.net?.claim(z, amount, head, !!armored, point);
   if (armored) amount *= T.armor;
   if (u.cs === 'stun') amount *= 2;
   if (u.frozenT > 0) amount *= 1.3;
   if (!remote) u.hp -= amount;
+  u.hitAt = state.clock;
   flashZombie(z);
   const heavy = u.sc > 1.3 ? .3 : 1;
   if (dir) { u.kx += dir.x * heavy; u.kz += dir.z * heavy; }
@@ -1117,6 +1182,7 @@ function damageZombie(z, amount, point, head, dir) {
     if (amount >= 20 || head) floater(point.x, point.y + .2, point.z, Math.round(amount), head ? 'head' : armored ? 'armor' : '');
   }
   if (remote) return;
+  if (head && u.screamT > 0) { u.screamT = 0; u.nextScream = state.clock + 4; toast('SCREAM INTERRUPTED', 1); }
   if (T.boss && !u.enraged && u.hp < u.maxHp * .5 && u.hp > 0) {
     u.enraged = true; u.speed *= 1.3;
     ui.bossName.textContent = T.name + ' · ENRAGED';
@@ -1551,7 +1617,7 @@ function bossAbilities(z, dt, d, dx, dz) {
     }
     if (u.cs === 'run') {
       u.ct -= dt;
-      const step = 11 * dt;
+      const step = (T.chargeSpeed ?? 11) * dt;
       const nx = z.position.x + u.cdx * step, nz = z.position.z + u.cdz * step;
       u.walk += dt * T.stride * 3;
       u.moving = true;
@@ -1587,6 +1653,52 @@ function bossAbilities(z, dt, d, dx, dz) {
     }
   }
   return false;
+}
+
+function specialAbilities(z, dt, d) {
+  const u = z.userData, T = u.T;
+  if (T.scream) {
+    if (u.screamT > 0) { if ((u.screamT -= dt) <= 0) scream(z); return true; }
+    if (state.clock > u.nextScream && d < 20 && u.clear) { u.screamT = .9; sfx.scream(); return true; }
+  }
+  if (T.stalk) {
+    u.stalkT -= dt;
+    if (d < 6 || u.burnT > 0 || u.chill > .3 || state.clock - u.hitAt < 1) { if (u.hidden) { u.hidden = false; u.stalkT = 1.6; if (d < 14) sfx.hiss(); } }
+    else if (u.stalkT <= 0) { u.hidden = !u.hidden; u.stalkT = u.hidden ? 2.4 + Math.random() : 1.1 + Math.random() * .6; if (!u.hidden && d < 14) sfx.hiss(); }
+  }
+  if (T.lunge && diff().rank >= T.lunge) {
+    if (u.lungeT > 0) { if ((u.lungeT -= dt) <= 0) u.lungeGo = .32; return true; }
+    if (u.lungeGo > 0) u.lungeGo -= dt;
+    else if (d > 1.6 && d < 4.2 && state.clock > u.nextLunge && u.clear) { u.lungeT = .4; u.nextLunge = state.clock + 3 + Math.random() * 2; sfx.hiss(); return true; }
+  }
+  return false;
+}
+function scream(z) {
+  const u = z.userData, x = z.position.x, zz = z.position.z;
+  u.nextScream = state.clock + (diff().rank >= 3 ? 6 : 7.5);
+  screamFx(z);
+  let alive = 0;
+  for (const o of zombies) {
+    const v = o.userData;
+    if (v.dead) continue;
+    alive++;
+    if (o !== z && !v.T.boss && Math.hypot(o.position.x - x, o.position.z - zz) < 11) v.hasteT = 6;
+  }
+  let n = 0;
+  for (let i = 0; i < 4 && n < 2 && u.summons < 4 && alive + n < 20; i++) {
+    const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 2, sx = x + Math.cos(a) * r, sz = zz + Math.sin(a) * r;
+    if (blocked(sx, sz, .6)) continue;
+    makeZombie(R() < .5 ? 'runner' : 'walker', sx, sz, true);
+    n++; u.summons++;
+  }
+  state.waveTotal += n;
+}
+function screamFx(z) {
+  const d = Math.hypot(camera.position.x - z.position.x, camera.position.z - z.position.z);
+  sparks.emit(z.position.x, 1.8 * z.userData.sc, z.position.z, 36, SCREAM_FX);
+  if (d > 25) return;
+  look.shake = Math.max(look.shake, .18 * (1 - d / 25));
+  toast('THE SCREAM RILES THE HORDE', 1.2); haptic('MEDIUM');
 }
 
 const PICKUP_KINDS = {
@@ -1649,9 +1761,10 @@ const PERKS = [
   { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+45% damage, +15% fire rate', rare: true, apply: () => { stats.damage *= 1.45; stats.fireRate *= 1.15; } },
 ];
 
-function offerPerks() {
+function offerPerks(kit = 0) {
   state.mode = 'perk';
-  ui.perkTitle.textContent = 'WAVE ' + state.wave + ' CLEARED';
+  ui.perkTitle.textContent = kit ? 'STARTING KIT' : 'WAVE ' + state.wave + ' CLEARED';
+  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' : 'CHOOSE AN UPGRADE';
   const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave));
   const ok = p => !p.when || p.when();
   const pool = PERKS.filter(p => !p.legendary && ok(p) && (!p.rare || r() < .3));
@@ -1669,7 +1782,8 @@ function offerPerks() {
       if (state.mode !== 'perk') return;
       p.apply(); sfx.perk(); haptic(p.legendary ? 'HEAVY' : 'MEDIUM');
       state.perks.push(p.name);
-      bus.emit('perk', { name: p.name, icon: p.icon, rare: !!p.rare, legendary: !!p.legendary, wave: state.wave });
+      bus.emit('perk', { name: p.name, icon: p.icon, rare: !!p.rare, legendary: !!p.legendary, wave: state.wave, kit: !!kit });
+      if (kit > 1) { offerPerks(kit - 1); return; }
       showScreen(null);
       state.mode = 'playing';
       toast(p.name, 1.4);
@@ -1696,11 +1810,13 @@ function waveCleared() {
 function runSummary() {
   return {
     type: state.runType || 'normal', seed: state.seed, difficultyId: state.runDifficulty || settings.difficulty,
-    score: state.score, wave: state.wave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
+    score: state.score, wave: state.wave, startWave: state.startWave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
   };
 }
+
+const reachedWave = () => state.startWave === 1 || state.wave > state.startWave ? state.wave : 0;
 
 function gameOver() {
   state.mode = 'dead';
@@ -1726,10 +1842,10 @@ function gameOver() {
   const best = !coop && state.score > records.score;
   if (!coop) {
     records.score = Math.max(records.score, state.score);
-    records.wave = Math.max(records.wave, state.wave);
+    records.wave = Math.max(records.wave, reachedWave());
     store.set('records', records);
   }
-  $('#over-sub').textContent = 'WAVE ' + state.wave + ' · ' + diff().name + ' · ' + world.map.name;
+  $('#over-sub').textContent = 'WAVE ' + state.wave + (state.startWave > 1 ? ' · STARTED AT WAVE ' + state.startWave : '') + ' · ' + diff().name + ' · ' + world.map.name;
   $('#newbest').classList.toggle('hidden', !best || state.score === 0);
   $('#st-score').textContent = state.score.toLocaleString();
   $('#st-kills').textContent = state.kills;
@@ -1747,17 +1863,18 @@ function grantRewards() {
   const chip = (text, cls = '') => { const e = document.createElement('span'); e.textContent = text; if (cls) e.className = cls; box.appendChild(e); };
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
-  const scrap = Math.round((state.score / 150 + state.wave * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
-  const xp = Math.round(state.score / 10 + state.wave * 50);
+  const played = state.wave - state.startWave + 1;
+  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
+  const xp = Math.round(state.score / 10 + played * 50);
   profile.scrap += scrap;
   profile.xp += xp;
   profile.kills += state.kills;
   profile.heads += state.heads;
   profile.runs++;
   for (const k of state.bossKinds) profile.bosses[k] = (profile.bosses[k] || 0) + 1;
-  profile.bestWave = Math.max(profile.bestWave, state.wave);
+  profile.bestWave = Math.max(profile.bestWave, reachedWave());
   const runDiff = state.runDifficulty || settings.difficulty;
-  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, state.wave);
+  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, reachedWave());
   if (daily) profile.lastDaily = today;
   const lvlAfter = levelInfo().level;
   const fresh = [...unlockedSet()].filter(k => !before.has(k));
@@ -1768,7 +1885,7 @@ function grantRewards() {
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
     const [slot, i] = fresh[0].split(':');
-    chip('🔓 UNLOCKED: ' + SLOTS.find(s => s.id === slot).items[i].name, 'hot');
+    chip('🔓 UNLOCKED: ' + slotById(slot).items[i].name, 'hot');
   } else if (fresh.length) chip('🔓 ' + fresh.length + ' NEW ITEMS IN LOCKER', 'hot');
   refreshProfileUI();
 }
@@ -1901,8 +2018,8 @@ function drawRadar() {
   for (const p of pickups) plot(p.position.x, p.position.z, 5, '#6dff8a');
   for (const z of zombies) {
     const u = z.userData;
-    if (u.dead) continue;
-    plot(z.position.x, z.position.z, u.T.boss ? 11 : u.sc > 1.3 ? 8 : 6, u.T.boss ? '#d35bff' : u.elite ? '#8ff0ff' : u.T.explode ? '#ff9a2a' : u.T.ranged ? '#9aff3a' : '#ff4a3a');
+    if (u.dead || u.vis < .4) continue;
+    plot(z.position.x, z.position.z, u.T.boss ? 11 : u.sc > 1.3 ? 8 : 6, u.T.boss ? '#d35bff' : u.elite ? '#8ff0ff' : u.T.radar || (u.T.explode ? '#ff9a2a' : u.T.ranged ? '#9aff3a' : '#ff4a3a'));
   }
   state.net?.radar(plot);
   c.fillStyle = '#fff'; c.beginPath(); c.moveTo(0, -9); c.lineTo(6, 6); c.lineTo(-6, 6); c.fill();
@@ -1921,9 +2038,9 @@ function updateHud(dt) {
   ui.hpLag.style.transform = `scaleX(${player.lagHp / stats.maxHp})`;
   ui.lowhp.classList.toggle('on', hpPct < .3 && state.mode === 'playing');
   if (hpPct < .3 && state.clock - player.lastBeat > 1 && state.mode === 'playing') { player.lastBeat = state.clock; sfx.heartbeat(); }
-  setText(ui.waveNum, 'WAVE ' + Math.max(1, state.wave));
+  setText(ui.waveNum, 'WAVE ' + Math.max(state.startWave || 1, state.wave));
   const left = state.waveTotal - state.waveDone;
-  setText(ui.alive, state.wave === 0 ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : '') + left + ' INFECTED LEFT');
+  setText(ui.alive, state.wave < (state.startWave || 1) ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : state.mutation ? MUTATIONS[state.mutation].name + ' · ' : '') + left + ' INFECTED LEFT');
   ui.waveFill.style.transform = `scaleX(${state.waveTotal ? 1 - state.waveDone / state.waveTotal : 0})`;
   setText(ui.score, state.score.toLocaleString());
   const comboOn = state.combo > 1 && state.clock - state.lastKill < 3;
@@ -1952,7 +2069,7 @@ function assistTarget() {
   let best = null, bestScore = 1;
   for (const z of zombies) {
     const u = z.userData;
-    if (u.dead || u.rise > .3) continue;
+    if (u.dead || u.rise > .3 || u.vis < .5) continue;
     tmp.set(z.position.x, z.position.y + (u.T.aimY ?? 1.3) * u.sc, z.position.z).sub(camera.position);
     const d = tmp.length();
     if (d > 40) continue;
@@ -2053,7 +2170,9 @@ function updatePlayer(dt) {
 
 function updateZombies(dt, playing, target0 = menuTarget) {
   if (target0 === menuTarget && Math.hypot(zombies[0]?.position.x - menuTarget.x, zombies[0]?.position.z - menuTarget.z) < 3) menuWander();
-  let nearestGroan = null, ng = 14;
+  let nearestGroan = null, ng = 14, ranged = 0;
+  const D = diff(), X = MUTATIONS[state.mutation] || {};
+  if (playing) for (const o of zombies) { const v = o.userData; if (!v.dead && (v.spitWind > 0 || state.clock - (v.spatAt ?? -9) < 1.2)) ranged++; }
   for (let k = zombies.length - 1; k >= 0; k--) {
     const z = zombies[k], u = z.userData, T = u.T, target = (playing && state.net?.targetFor(z)) || target0;
     if (animateZombie(z, dt)) { scene.remove(z); zombies.splice(k, 1); continue; }
@@ -2072,28 +2191,37 @@ function updateZombies(dt, playing, target0 = menuTarget) {
     }
     if (u.frozenT > 0) { u.frozenT -= dt; if (u.frozenT <= 0) thaw(z); else continue; }
     else if (u.chill > 0) u.chill = Math.max(0, u.chill - dt * .35);
+    if (u.hasteT > 0) u.hasteT -= dt;
+    if (X.regen && playing && !T.boss && u.hp < u.maxHp && state.clock - u.hitAt > 2) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * X.regen * dt);
     const dx = target.x - z.position.x, dz = target.z - z.position.z, d = Math.hypot(dx, dz) || .001;
     const reach = .75 + u.sc * .45;
     let vx = 0, vz = 0;
-    if (playing && T.explode && d < reach + .35) { killZombie(z, false, true); continue; }
-    const busy = playing && T.boss && bossAbilities(z, dt, d, dx, dz);
+    if (playing && T.explode) {
+      if (u.swellT > 0) { if ((u.swellT -= dt) <= 0) { killZombie(z, false, true); continue; } }
+      else if (d < reach + 1.1) { u.swellT = .55; sfx.swell(); }
+    }
+    const busy = playing && ((T.boss || T.charge) && bossAbilities(z, dt, d, dx, dz) || specialAbilities(z, dt, d));
     if (u.dead) continue;
     u.pathT = (u.pathT || 0) - dt;
     if (playing && u.pathT <= 0) { u.pathT = .3 + Math.random() * .15; u.clear = lineClear(z.position.x, z.position.z, target.x, target.z, Math.min(.6, u.radius)); }
-    const hold = playing && T.ranged && d > 4.5 && d < 13 && u.clear;
+    const hold = playing && u.clear && (T.ranged ? d > 4.5 && d < 13 : !!T.scream && d > 7 && d < 16);
     if (playing && T.ranged && hold) {
       if (u.spitWind > 0) {
         u.spitWind -= dt;
-        if (u.spitWind <= 0) { spit(z, target); u.nextSpit = state.clock + (T.boss ? (u.enraged ? 2.4 : 3.4) : 2.6 + Math.random()); }
-      } else if (state.clock > u.nextSpit) u.spitWind = .5;
+        if (u.spitWind <= 0) { spit(z, target); u.spatAt = state.clock; u.nextSpit = state.clock + (T.boss ? (u.enraged ? 2.4 : 3.4) : 2.6 + Math.random()); }
+      } else if (state.clock > u.nextSpit && (T.boss || ranged < D.ranged)) { u.spitWind = .5; ranged++; }
     } else u.spitWind = 0;
     u.moving = d > reach && !hold && !busy;
     if (busy && u.cs === 'run') u.moving = true;
     if (u.moving && !busy) {
       let ax = dx / d, az = dz / d;
-      const step = u.speed * (playing ? 1 : .6) * (1 - (u.chill || 0) * .6) * dt;
+      const step = u.speed * (playing ? 1 : .6) * (1 - (u.chill || 0) * .6) * (u.hasteT > 0 ? 1.35 : 1) * (u.lungeGo > 0 ? 3.4 : 1) * (u.hidden ? 1.2 : 1) * dt;
       const r = u.radius;
       const wp = playing && !u.clear && !target.remote ? navStep(z.position.x, z.position.z) : null;
+      if (T.stalk && !wp && d > 5) {
+        const a = Math.atan2(ax, az) + u.side * Math.min(.75, (d - 5) * .1), fx = Math.sin(a), fz = Math.cos(a);
+        if (!blocked(z.position.x + fx * 2, z.position.z + fz * 2, r)) { ax = fx; az = fz; }
+      }
       if (wp) { const wx = wp.x - z.position.x, wz = wp.z - z.position.z, wl = Math.hypot(wx, wz) || 1; ax = wx / wl; az = wz / wl; }
       else if (blocked(z.position.x + ax * step * 4, z.position.z + az * step * 4, r)) {
         for (const off of [.7, 1.3, 1.9]) {
@@ -2117,13 +2245,13 @@ function updateZombies(dt, playing, target0 = menuTarget) {
     if (!blocked(z.position.x, z.position.z + vz, u.radius * .8)) z.position.z += vz;
     const face = Math.atan2(dx, dz);
     let df = face - z.rotation.y; df = Math.atan2(Math.sin(df), Math.cos(df));
-    z.rotation.y += df * Math.min(1, dt * 8);
+    z.rotation.y += df * Math.min(1, dt * (T.turn ?? 8));
     if (playing && !T.explode && !busy) {
       if (u.swing > 0) {
         const before = u.swing; u.swing -= dt;
         if (before > .18 && u.swing <= .18 && d < reach + .5) (target.hurt || hurtPlayer)(T.dmg * (1 + (state.wave - 1) * .05) * (u.elite ? 1.4 : 1), z.position);
       } else if (!u.moving && d <= reach + .1 && state.clock > u.nextAttack) {
-        u.swing = .45; u.nextAttack = state.clock + (u.kind === 'runner' ? .7 : 1.05);
+        u.swing = .45; u.nextAttack = state.clock + (u.kind === 'runner' ? .7 : 1.05) * (X.rate ?? 1);
       }
     }
     if (playing) {
@@ -2353,7 +2481,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing =
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-$('#start').onclick = () => startGame();
+$('#start').onclick = () => startGame(api.deployOpts());
 $('#again').onclick = () => startGame(state.runOpts?.replay?.() || state.runOpts || {});
 $('#to-menu').onclick = toMenu;
 $('#resume').onclick = resume;
@@ -2390,7 +2518,7 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }
@@ -2443,7 +2571,7 @@ $('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
 function renderLocalRuns(list) {
   const runs = store.get('runs', []).filter(r => !boardView.filter || boardView.filter(r));
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
-  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
+  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave + (r.start > 1 ? ' (FROM ' + r.start + ')' : ''), new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
 }
 async function renderBoard() {
   const token = ++boardToken, list = $('#board-list'), status = $('#board-status');
@@ -2489,24 +2617,33 @@ function refreshProfileUI() {
   $('#lk-xp').style.width = (lv.into / lv.need * 100).toFixed(1) + '%';
   $('#lk-xptext').textContent = TITLES[l.title] + ' · ' + lv.into.toLocaleString() + ' / ' + lv.need.toLocaleString() + ' XP';
   $('#lk-scrap').textContent = profile.scrap.toLocaleString();
-  const affordable = SLOTS.some(s => s.items.some((it, i) => !isOwned(s.id, i) && it.cost && !it.req && it.cost <= profile.scrap));
+  const affordable = ALL_SLOTS.some(s => s.items.some((it, i) => !isOwned(s.id, i) && it.cost && !it.req && it.cost <= profile.scrap));
   $('#locker-badge').textContent = profile.fresh.length ? profile.fresh.length : affordable ? '!' : '';
   const gunAffordable = WEAPONS.some(w => w.price && !weaponOwned(w) && reqMet(w.req) && w.price <= profile.scrap);
   $('#armory-badge').textContent = gunAffordable ? '!' : '';
   applyLoadoutToGuns();
 }
+const groupOf = id => LOCKER_GROUPS.find(g => g.slots.includes(id)) || LOCKER_GROUPS[3];
 function renderLocker() {
-  const tabs = $('#slot-tabs'), grid = $('#item-grid');
-  tabs.innerHTML = ''; grid.innerHTML = '';
-  const ordered = [BODY, SLOTS.find(s => s.id === 'suit'), ...SLOTS.filter(s => s.id !== 'suit')];
-  for (const s of ordered) {
-    if (s.hidden) continue;
+  const groups = $('#slot-groups'), tabs = $('#slot-tabs'), grid = $('#item-grid'), group = groupOf(lockerSlot);
+  groups.innerHTML = ''; tabs.innerHTML = ''; grid.innerHTML = '';
+  const isNew = id => profile.fresh.some(k => k.startsWith(id + ':'));
+  for (const g of LOCKER_GROUPS) {
+    const b = document.createElement('button');
+    b.textContent = g.label;
+    b.className = (g === group ? 'on' : '') + (g.slots.some(isNew) ? ' new' : '');
+    b.onclick = () => { if (g === group) return; lockerSlot = g.slots.find(isNew) || g.slots[0]; pendingBuy = null; renderLocker(); };
+    groups.appendChild(b);
+  }
+  for (const id of group.slots) {
+    const s = slotById(id);
     const b = document.createElement('button');
     b.textContent = s.id === 'suit' ? '★ ' + s.label : s.label;
-    b.className = (s.id === lockerSlot ? 'on' : '') + (profile.fresh.some(k => k.startsWith(s.id + ':')) ? ' new' : '');
+    b.className = (s.id === lockerSlot ? 'on' : '') + (isNew(s.id) ? ' new' : '');
     b.onclick = () => { lockerSlot = s.id; pendingBuy = null; renderLocker(); };
     tabs.appendChild(b);
   }
+  if (activeScreen === ui.locker) preview.attach($('#locker-stage'), group.id === 'face' || group.id === 'hair' ? 'bust' : 'full', false);
   const slot = slotById(lockerSlot);
   slot.items.forEach((it, i) => {
     const key = slot.id + ':' + i, owned = isOwned(slot.id, i), equipped = profile.loadout[slot.id] === i;
@@ -2551,7 +2688,7 @@ function lockerPick(slot, i) {
     profile.loadout[slot.id] = i;
     tryOn = null; pendingBuy = null;
     saveProfile();
-    $('#lk-hint').textContent = it.name + ' equipped.' + (slot.id !== 'suit' && slot.id !== 'body' && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under ★ EXCLUSIVE.)' : '');
+    $('#lk-hint').textContent = it.name + ' equipped.' + (!['suit', 'body', 'skin', 'build', 'height', 'jaw', 'eyes', 'brows', 'skinMark', 'gun', 'title', 'accessory'].includes(slot.id) && profile.loadout.suit ? ' (Hidden while an exclusive outfit is worn — pick NONE under OUTFIT › ★ EXCLUSIVE.)' : '');
   } else if (it.req) {
     pendingBuy = null;
     $('#lk-hint').textContent = 'Locked — ' + reqText(it.req).toLowerCase() + ' to unlock.';
@@ -2678,7 +2815,7 @@ function weaponStatus(w) {
 }
 function showArmoryWeapon(w) {
   paintGunMaterials(armoryMats, profile.loadout.gun);
-  if (['r870', 'boom', 'm79', 'm24'].includes(w.id) && !profile.loadout.gun) armoryMats.base.color.setHex(0x8a5428);
+  if (WOOD.has(w.id) && !profile.loadout.gun) woodStock(armoryMats.base);
   preview.showWeapon(buildGun(w, armoryMats));
   $('#ar-name').textContent = w.name;
   $('#ar-type').textContent = w.type + (w.premium ? ' · iOS EXCLUSIVE' : '');
@@ -2826,9 +2963,9 @@ const api = {
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
-  offerPerks, nova, deathGuards, gameOver,
+  offerPerks, nova, deathGuards, gameOver, deployOpts: () => ({}),
 };
-Object.assign(api, { netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver } });
+Object.assign(api, { MUTATIONS, rosterWeights, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
 if ($('#cm-league')) $('#menu .records').appendChild($('#cm-league'));
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };

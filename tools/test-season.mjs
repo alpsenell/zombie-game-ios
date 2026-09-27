@@ -144,7 +144,7 @@ const allErrors = [];
   await page.screenshot({ path: join(shots, 'menu-844x390.png') });
 
   await page.click('[data-open="locker"]');
-  await page.evaluate(() => { [...document.querySelectorAll('#slot-tabs button')].find(b => b.textContent.includes('EXCLUSIVE')).click(); });
+  await page.evaluate(() => { [...document.querySelectorAll('#slot-groups button')].find(b => b.textContent === 'OUTFIT').click(); [...document.querySelectorAll('#slot-tabs button')].find(b => b.textContent.includes('EXCLUSIVE')).click(); });
   const lk = await page.evaluate(() => [...document.querySelectorAll('#item-grid .item')].map(b => [b.querySelector('b').textContent, b.className, b.querySelector('small').textContent]));
   const hollow = lk.find(x => x[0] === 'HOLLOW JACK'), diver = lk.find(x => x[0] === 'DEEP DIVER');
   ok(hollow && hollow[1].includes('owned') && !hollow[1].includes('locked'), 'season 1 suit is owned in the locker');

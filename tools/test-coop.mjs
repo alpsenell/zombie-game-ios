@@ -225,6 +225,22 @@ check(zb && zb.tgt === idB && zb.z < -29, 'zombie near client chases client', zb
 const onClient = (await zlist(B)).find(z => z.nid === near[1]);
 check(onClient && Math.abs(onClient.z - zb.z) < .75, 'client renders the chasing zombie', onClient);
 
+// ---------- new zombie types replicate ----------
+await clearZombies(A);
+await lockstep([A, B], .3);
+const newIds = await A.evaluate(() => {
+  const { api } = window.__game, c = api.camera.position, out = [];
+  for (const [k, dx] of [['screamer', 0], ['shield', 2.5], ['stalker', -2.5], ['juggernaut', 5]]) {
+    const zb = api.makeZombie(k, c.x + dx, c.z + 12, false);
+    Object.assign(zb.userData, { speed: 0, nextScream: 1e9, nextCharge: 1e9, stalkT: 1e9, hitAt: -1e9, hidden: k === 'stalker' });
+    out.push(zb.userData.nid);
+  }
+  return out;
+});
+await lockstep([A, B], .6);
+const repl = await B.evaluate(ids => ids.map(id => { const z = window.__game.api.zombies.find(z => z.userData.nid === id); return z && { kind: z.userData.kind, hidden: z.userData.hidden }; }), newIds);
+check(repl.map(r => r?.kind).join() === 'screamer,shield,stalker,juggernaut' && repl[2].hidden && !repl[1].hidden, 'client replicates new zombie types and the stalker fade', repl);
+
 // ---------- mid-fight screenshots ----------
 await clearZombies(A);
 await lockstep([A, B], .3);

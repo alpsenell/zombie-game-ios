@@ -53,11 +53,14 @@ export function plausible(run, api, now = Date.now()) {
   if (![run.score, run.wave, run.kills, run.heads, run.time].every(num) || !Number.isInteger(run.score)) return 'INVALID RUN DATA';
   const D = api.DIFFICULTIES[run.difficultyId];
   if (!D) return 'UNKNOWN DIFFICULTY';
+  const start = run.startWave ?? 1, played = run.wave - start + 1;
+  if (!Number.isInteger(start) || start < 1 || played < 1) return 'INVALID START WAVE';
+  if (start > 1 && run.type !== 'normal') return 'CHECKPOINT START IN A FAIR-PLAY RUN';
   if (run.wave > 999 || run.heads > run.kills) return 'IMPOSSIBLE STATS';
-  if (run.kills > run.wave * 160 + 40) return 'TOO MANY KILLS FOR WAVE ' + run.wave;
-  if (run.time < (run.wave - 1) * 2 || run.kills > run.time * 25 + 30) return 'RUN TOO FAST';
-  const bosses = Math.min(run.bosses?.length || 0, Math.floor(run.wave / 5) + 1);
-  const cap = (125 * run.wave * (run.wave + 1) + run.kills * 7100 * D.score + bosses * 94000 * D.score) * 1.5 + 1000;
+  if (run.kills > played * 160 + 40) return 'TOO MANY KILLS FOR WAVE ' + run.wave;
+  if (run.time < (played - 1) * 2 || run.kills > run.time * 25 + 30) return 'RUN TOO FAST';
+  const bosses = Math.min(run.bosses?.length || 0, Math.floor(run.wave / 5) - Math.floor((start - 1) / 5) + 1);
+  const cap = (125 * (run.wave * (run.wave + 1) - start * (start - 1)) + run.kills * 7100 * D.score + bosses * 94000 * D.score) * 1.5 + 1000;
   if (run.score > cap) return 'SCORE TOO HIGH FOR THIS RUN';
   if (run.type === 'daily' || run.type === 'ranked') {
     if ((run.slots || []).some(i => api.WEAPONS[i]?.premium)) return 'PREMIUM WEAPON IN A FAIR-PLAY RUN';

@@ -35,7 +35,7 @@ export const TEMPLATES = [
   { id: 'burn', ev: 'kill', daily: [10, 20, 30], weekly: [80, 150, 250], w: 1.2, fn: add(e => e.burning), avail: c => c.owned.some(w => w.burn), text: n => n0(n) + ' BURNING KILLS' },
   { id: 'elite', ev: 'kill', daily: [3, 6, 10], weekly: [20, 35, 50], w: 1.3, fn: add(e => e.elite), avail: c => c.tier >= 1, text: n => 'KILL ' + n + ' ELITES' },
   { id: 'combo', ev: 'kill', daily: [8, 12, 16], w: 1.2, fn: (e, m) => Math.max(m.p, e.combo || 0), text: n => 'KILL STREAK OF ' + n },
-  { id: 'accuracy', ev: 'run:end', daily: [50, 55, 60], w: 1.2, fn: (e, m) => e.wave >= 3 ? Math.max(m.p, Math.floor(e.accuracy * 100)) : m.p, unit: '%', text: n => 'FINISH A RUN WITH ' + n + '% ACCURACY' },
+  { id: 'accuracy', ev: 'run:end', daily: [50, 55, 60], w: 1.2, fn: (e, m) => e.wave - (e.startWave || 1) >= 2 ? Math.max(m.p, Math.floor(e.accuracy * 100)) : m.p, unit: '%', text: n => 'FINISH A RUN WITH ' + n + '% ACCURACY' },
   { id: 'perks', ev: 'perk', daily: [3, 5, 8], w: 1, fn: add(() => true), text: n => 'PICK ' + n + ' PERKS' },
   { id: 'daily', ev: 'run:end', daily: [1, 1, 1], w: 1.1, fn: add(e => e.type === 'daily'), avail: c => c.hasDaily, text: () => 'PLAY THE DAILY CHALLENGE' },
   { id: 'runs', ev: 'run:end', weekly: [5, 8, 10], w: 1, fn: add(e => e.kills > 0), text: n => 'PLAY ' + n + ' RUNS' },

@@ -390,15 +390,15 @@ function init(api) {
     track('kill', e);
     checkAch();
   });
-  bus.on('wave:start', e => { P.stats.bestWave = Math.max(P.stats.bestWave, e.wave); track('wave:start', e); checkAch(); });
+  bus.on('wave:start', e => { if (e.checkpoint) return; P.stats.bestWave = Math.max(P.stats.bestWave, e.wave); track('wave:start', e); checkAch(); });
   bus.on('wave:clear', e => { if (run?.difficultyId === 'nightmare') P.stats.nightmare = Math.max(P.stats.nightmare, e.wave); track('wave:clear', e); checkAch(); });
-  bus.on('perk', e => track('perk', e));
+  bus.on('perk', e => { if (!e.kit) track('perk', e); });
   bus.on('mission:complete', e => track('mission:complete', e));
   bus.on('purchase', () => checkAch());
   bus.on('run:end', e => {
     run ||= newRun(e);
     P.stats.runs++;
-    if (e.wave >= 5) P.stats.accuracy = Math.max(P.stats.accuracy, Math.floor(e.accuracy * 100));
+    if (e.wave - (e.startWave || 1) >= 4) P.stats.accuracy = Math.max(P.stats.accuracy, Math.floor(e.accuracy * 100));
     track('run:end', e);
     checkAch();
     lastRun = run;
