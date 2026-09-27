@@ -1,22 +1,20 @@
 # App Store assets
 
-Captured from the iOS Simulator (iOS 26.5) on the release-prep branch. All files are PNG.
+Screenshots captured from build 1.0 (2) in the iOS Simulator (iOS 26.5), portrait. StoreKit prices come from `ios/App/App/Products.storekit`, which matches the App Store Connect prices. All files are PNG.
 
 ## screenshots/
 
-- `iphone-6.9-inch/` — 1320×2868 (iPhone 17 Pro Max simulator), portrait. App Store Connect 6.9" slot.
-- `iphone-6.5-inch/` — 1284×2778 (iPhone 14 Plus simulator), portrait. App Store Connect 6.5" slot.
-
-Six shots per size, in suggested order:
+- `iphone-6.9-inch/` — 1320×2868 (iPhone 17 Pro Max simulator). App Store Connect 6.9" slot; the 6.5" slot is not needed when 6.9" is provided.
+- `ipad-13-inch/` — 2064×2752 (iPad Pro 13-inch (M5) simulator). App Store Connect 13" iPad slot.
 
 | File | Screen |
 | --- | --- |
 | `01-title.png` | Title screen |
-| `02-gameplay-boss.png` | Gameplay, wave 10+ with Goliath boss and boss health bar |
-| `03-armory.png` | Armory (Singularity selected, localized StoreKit prices) |
-| `04-locker.png` | Locker, ★ EXCLUSIVE tab (Infernal Knight try-on) |
-| `05-game-over.png` | Game-over screen with rewards (scrap, XP, level up, mission, season XP, CLAIM) |
-| `06-ranked-board.png` | Ranked weekly board / league ladder |
+| `02-gameplay.png` | Gameplay, Dead Mall (iPhone) / Street (iPad), zombies in close |
+| `03-armory.png` | Armory (Tesla Arc on iPhone, M4A1 with iOS-exclusive prices on iPad) |
+| `04-locker.png` | Locker, ★ EXCLUSIVE tab with an outfit try-on and its price |
+| `05-upgrades.png` | iPhone only: wave cleared, choose an upgrade |
+| `06-season.png` | iPhone only: Season 1 reward track |
 
 ## iap-review/
 

@@ -3,7 +3,7 @@
   "nonRenewingSubscriptions": [],
   "products": [
     {
-      "displayPrice": "4.99",
+      "displayPrice": "2.99",
       "familyShareable": false,
       "internalID": "1A2B3C00",
       "localizations": [
@@ -18,7 +18,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "4.99",
+      "displayPrice": "2.99",
       "familyShareable": false,
       "internalID": "1A2B3C01",
       "localizations": [
@@ -33,7 +33,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "4.99",
+      "displayPrice": "3.99",
       "familyShareable": false,
       "internalID": "1A2B3C02",
       "localizations": [
@@ -48,7 +48,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "4.99",
+      "displayPrice": "3.99",
       "familyShareable": false,
       "internalID": "1A2B3C03",
       "localizations": [
@@ -63,7 +63,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "2.99",
+      "displayPrice": "1.99",
       "familyShareable": false,
       "internalID": "1A2B3C04",
       "localizations": [
@@ -78,7 +78,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "2.99",
+      "displayPrice": "1.99",
       "familyShareable": false,
       "internalID": "1A2B3C05",
       "localizations": [
@@ -93,7 +93,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "2.99",
+      "displayPrice": "1.99",
       "familyShareable": false,
       "internalID": "1A2B3C06",
       "localizations": [
@@ -108,7 +108,7 @@
       "type": "NonConsumable"
     },
     {
-      "displayPrice": "2.99",
+      "displayPrice": "1.99",
       "familyShareable": false,
       "internalID": "1A2B3C07",
       "localizations": [
