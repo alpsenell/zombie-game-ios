@@ -23,6 +23,10 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
 spawns, modifiers, perks, drops and zombie speed deterministic via `api.R()` (use `api.R()` for any new gameplay randomness).
 `opts.replay()` (optional) returns the options REDEPLOY uses to start the next run of the same mode.
+`opts.startWave` (normal runs only; others always start at 1) starts at that wave with score 0 and a starting kit: full grenades and reserve ammo plus
+`min(10, ceil((startWave - 1) / 2))` perk picks. `runSummary()`, `run:start` and `saveRun` carry `startWave`; the first `wave:start` has `checkpoint: true`
+and starting-kit `perk` events have `kit: true`. `features/checkpoint.js` stores the highest wave cleared per difficulty (`profile.checkpoint.cleared`),
+adds the START WAVE stepper next to DEPLOY and sets `api.deployOpts()` (used by DEPLOY and the map sheet).
 Leaderboards: `api.gameCenter.boards(type)` routes submits (`daily` → `deadzone.daily`, `ranked` → `deadzone.weekly` + all-time, else all-time);
 `api.gameCenter.guard(run)` returns a rejection reason to block a submit; `api.boardView = { id, filter }` picks the board and local-run filter the RANKS screen shows (`api.renderBoard()`).
 

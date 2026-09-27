@@ -233,7 +233,7 @@ export function init(api) {
   }
 
   const milestone = w => w <= 10 || w % 5 === 0;
-  const runInfo = () => ({ type: run.type, difficulty: run.difficulty, map: run.map });
+  const runInfo = () => ({ type: run.type, difficulty: run.difficulty, map: run.map, startWave: run.start > 1 ? run.start : undefined });
   function causeOf(from) {
     if (!from) return 'acid';
     let best = null, bd = 2.5;
@@ -247,7 +247,7 @@ export function init(api) {
   function endRun(s, cause) {
     if (!run || run.ended) return;
     run.ended = true;
-    const wave = s?.wave ?? run.wave, deep = wave >= 10;
+    const wave = s?.wave ?? run.wave, deep = wave >= 10 && run.start <= 1;
     track('Run.ended', {
       ...runInfo(), wave, score: bucket(s?.score, SCORE), kills: bucket(s?.kills, COUNT), accuracy: pct(s?.accuracy), duration: bucket(s?.time, RUN_T),
       cause, perks: run.perks.slice(0, 12).join(','), perkCount: run.perks.length, bosses: s?.bosses?.length ?? 0, weapon: run.slots[0], reachedWave10: deep,
@@ -266,7 +266,7 @@ export function init(api) {
     sessionRuns++;
     const slots = (d.slots || []).map(i => api.WEAPONS[i]?.id).filter(Boolean);
     const map = safe(d.opts?.map) || safe(d.opts?.map?.id);
-    run = { type: d.type || 'normal', difficulty: d.difficultyId, map, slots, weapons: {}, perks: [], cause: null, wave: 0, waveAt: 0, snap: null, ended: false };
+    run = { type: d.type || 'normal', difficulty: d.difficultyId, map, slots, weapons: {}, perks: [], cause: null, wave: 0, waveAt: 0, snap: null, ended: false, start: d.startWave || 1 };
     const runs = api.profile?.runs ?? 0;
     track('Run.started', { ...runInfo(), primary: slots[0], secondary: slots[1] !== slots[0] ? slots[1] : undefined, firstRun: runs === 0, runs: bucket(runs, COUNT), sessionRun: sessionRuns });
   });
@@ -293,7 +293,7 @@ export function init(api) {
   });
   bus.on('perk', d => {
     if (run) run.perks.push(d.name);
-    track('Perk.picked', { perk: d.name, rare: !!d.rare, wave: d.wave, difficulty: run?.difficulty });
+    track('Perk.picked', { perk: d.name, rare: !!d.rare, wave: d.wave, difficulty: run?.difficulty, kit: d.kit || undefined });
   });
   bus.on('player:death', d => { if (run) run.cause = causeOf(d?.from); });
   bus.on('run:end', s => endRun(s, run?.cause || 'unknown'));

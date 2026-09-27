@@ -46,7 +46,7 @@ While `APP_ID` is empty, nothing leaves the device: signals are only written to 
 
 Every signal also carries `TelemetryDeck.AppInfo.version`, `TelemetryDeck.Device.platform` (`iOS` / `Web`) and
 `TelemetryDeck.Acquisition.firstSessionDate` (install day, `YYYY-MM-DD`). Buckets are labelled like `1000-2499` or `1000000+`.
-`runInfo` = `type` (`normal | daily | ranked | coop`), `difficulty` (`recruit | survivor | veteran | nightmare`), `map` (if the run has one).
+`runInfo` = `type` (`normal | daily | ranked | coop`), `difficulty` (`recruit | survivor | veteran | nightmare`), `map` (if the run has one), `startWave` (only for checkpoint runs that start past wave 1).
 
 | Signal | Payload | floatValue | Why |
 | --- | --- | --- | --- |
@@ -60,14 +60,14 @@ Every signal also carries `TelemetryDeck.AppInfo.version`, `TelemetryDeck.Device
 | `Run.waveCleared` | runInfo, `wave`, `duration` (bucket, s), `hp` (% bucket) | seconds | Same waves. Balance: how long and how hurt per wave. |
 | `Boss.encountered` | runInfo, `boss`, `wave` | — | Boss reach rate. |
 | `Boss.killed` | runInfo, `boss`, `wave`, `weapon` | — | Boss kill rate vs encounters, weapon used. |
-| `Perk.picked` | `perk`, `rare`, `wave`, `difficulty` | — | Perk pick rates. |
+| `Perk.picked` | `perk`, `rare`, `wave`, `difficulty`, `kit` (true for a checkpoint starting-kit pick) | — | Perk pick rates. |
 | `Run.ended` | runInfo, `wave`, `score`, `kills`, `accuracy` (10 % bucket), `duration`, `cause`, `perks` (comma list, ≤12), `perkCount`, `bosses`, `weapon`, `reachedWave10` | wave | Wave-of-death, cause of death (zombie kind, `acid`, `explosion`, `quit`, `unknown`), balance. |
 | `Weapon.used` | `weapon`, `slot` (`primary / secondary / other`), `difficulty`, `shots`, `kills`, `heads` (buckets), `wave`, `reachedWave10` | kills | One per weapon per run (not per shot). Weapon pick and win rates. |
 | `Purchase.completed` | `kind` (`iap / scrap`), `product` (IAP product id or scrap item key) | — | Conversion per product. No prices, no receipts. |
 | `Screen.viewed` | `screen` (element id) | — | Navigation; the same screen at most once per 30 s, gameplay excluded. |
 | `Mission.complete`, `Share`, `Revive`, `Season.*`, `Coop.*`, `Daily.*`, `Ranked.*` | sanitised event data | — | Forwarded from other features' bus events. |
 
-A "win" in an endless game is defined as reaching wave 10 (`reachedWave10`).
+A "win" in an endless game is defined as reaching wave 10 (`reachedWave10`) in a run that started at wave 1.
 
 ## Dashboard insights to create
 

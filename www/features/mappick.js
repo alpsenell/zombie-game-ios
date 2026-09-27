@@ -59,7 +59,7 @@ export default {
     };
     chip.onclick = () => { sync(); api.showScreen(el); };
     el.querySelector('#maps-back').onclick = () => api.showScreen(api.ui.menu);
-    el.querySelector('#maps-go').onclick = () => api.startGame();
+    el.querySelector('#maps-go').onclick = () => api.startGame(api.deployOpts());
     api.bus.on('map', sync);
     api.bus.on('screen', sync);
     sync();

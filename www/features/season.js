@@ -14,7 +14,7 @@ export function seasonAt(t = Date.now()) {
 export const passId = n => STORE_PREFIX + 'season.' + n + '.pass';
 export function runXP(s) {
   if (!s || !(s.score > 0)) return 0;
-  const raw = (s.wave | 0) * 25 + (s.kills | 0) * 1.5 + (s.heads | 0) + s.score / 250 + (s.bosses?.length || 0) * 50;
+  const raw = Math.max(0, (s.wave | 0) - (s.startWave || 1) + 1) * 25 + (s.kills | 0) * 1.5 + (s.heads | 0) + s.score / 250 + (s.bosses?.length || 0) * 50;
   return Math.max(0, Math.min(RUN_CAP, Math.round(raw)));
 }
 export const seasonSuit = n => SUITS.findIndex(x => x?.season === n);
