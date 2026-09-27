@@ -14,7 +14,7 @@ const ui = {
   crosshair: $('#crosshair'), hit: $('#hit'), ring: $('#reticle-ring'), message: $('#message'), toast: $('#toast'), floaters: $('#floaters'),
   damage: $('#damage'), lowhp: $('#lowhp'), edge: $('#edge'), indicators: $('#indicators'), stickZone: $('#stick-zone'), stick: $('#stick'), dot: $('#stick-dot'),
   gunName: $('#gun-name'), ammo: $('#ammo'), fire: $('#fire'), reload: $('#reload'), reloadRing: $('#reload .ring circle'),
-  grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'),
+  grenade: $('#grenade'), nades: $('#nades'), swap: $('#swap'), pause: $('#pause'), hint: $('#hint'), perkList: $('#perk-list'), perkTitle: $('#perk-title'), perkSub: $('#perk-sub'),
 };
 
 const store = {
@@ -849,7 +849,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty,
-    warpT: 0, killTimes: [], perks: [] });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -889,6 +889,8 @@ function startGame(opts = {}) {
   state.seed = opts.seed ?? null;
   state.runOpts = opts;
   if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
+  state.startWave = state.runType === 'normal' ? Math.max(1, Math.min(999, opts.startWave | 0)) : 1;
+  state.wave = state.startWave - 1;
   const S = world.map.start;
   camera.position.set(S.x, 1.64, S.z);
   look.yaw = S.yaw; look.pitch = 0; look.recoil = 0;
@@ -899,10 +901,15 @@ function startGame(opts = {}) {
   applyLoadoutToGuns();
   selectWeapon(player.slots[0], true);
   ui.swap.classList.toggle('hidden', player.slots[0] === player.slots[1]);
-  if (!state.net || state.net.host) schedule(.8, nextWave);
+  if (state.startWave > 1) {
+    state.kitTotal = Math.min(10, Math.ceil((state.startWave - 1) / 2));
+    player.nades = stats.nadeMax;
+    player.slots.forEach(i => (player.reserve[i] = WEAPONS[i].maxReserve));
+    schedule(.8, () => offerPerks(state.kitTotal));
+  } else if (!state.net || state.net.host) schedule(.8, nextWave);
   if (!tutorialDone) schedule(.3, () => hint('Drag anywhere on the left to move'));
   haptic('MEDIUM');
-  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], map: world.map.id, opts });
+  bus.emit('run:start', { type: state.runType, difficulty: diff(), difficultyId: state.runDifficulty || settings.difficulty, seed: state.seed, slots: [...player.slots], map: world.map.id, startWave: state.startWave, opts });
 }
 
 function waveComposition(w) {
@@ -949,7 +956,7 @@ function nextWave() {
   message('WAVE ' + state.wave, M ? M.name + ' — ' + M.desc : boss ? 'SOMETHING BIG IS COMING' : state.wave === 1 ? 'THE DEAD ARE COMING' : 'HOLD THE LINE', 2.4);
   sfx.wave();
   haptic('MEDIUM');
-  bus.emit('wave:start', { wave: state.wave, mod: state.mod, boss: boss });
+  bus.emit('wave:start', { wave: state.wave, mod: state.mod, boss: boss, checkpoint: state.startWave > 1 && state.wave === state.startWave });
 }
 
 function findSpawn(minD = 16, maxD = 32) {
@@ -1649,9 +1656,10 @@ const PERKS = [
   { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+45% damage, +15% fire rate', rare: true, apply: () => { stats.damage *= 1.45; stats.fireRate *= 1.15; } },
 ];
 
-function offerPerks() {
+function offerPerks(kit = 0) {
   state.mode = 'perk';
-  ui.perkTitle.textContent = 'WAVE ' + state.wave + ' CLEARED';
+  ui.perkTitle.textContent = kit ? 'STARTING KIT' : 'WAVE ' + state.wave + ' CLEARED';
+  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' : 'CHOOSE AN UPGRADE';
   const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave));
   const ok = p => !p.when || p.when();
   const pool = PERKS.filter(p => !p.legendary && ok(p) && (!p.rare || r() < .3));
@@ -1669,7 +1677,8 @@ function offerPerks() {
       if (state.mode !== 'perk') return;
       p.apply(); sfx.perk(); haptic(p.legendary ? 'HEAVY' : 'MEDIUM');
       state.perks.push(p.name);
-      bus.emit('perk', { name: p.name, icon: p.icon, rare: !!p.rare, legendary: !!p.legendary, wave: state.wave });
+      bus.emit('perk', { name: p.name, icon: p.icon, rare: !!p.rare, legendary: !!p.legendary, wave: state.wave, kit: !!kit });
+      if (kit > 1) { offerPerks(kit - 1); return; }
       showScreen(null);
       state.mode = 'playing';
       toast(p.name, 1.4);
@@ -1696,11 +1705,13 @@ function waveCleared() {
 function runSummary() {
   return {
     type: state.runType || 'normal', seed: state.seed, difficultyId: state.runDifficulty || settings.difficulty,
-    score: state.score, wave: state.wave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
+    score: state.score, wave: state.wave, startWave: state.startWave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
   };
 }
+
+const reachedWave = () => state.startWave === 1 || state.wave > state.startWave ? state.wave : 0;
 
 function gameOver() {
   state.mode = 'dead';
@@ -1726,10 +1737,10 @@ function gameOver() {
   const best = !coop && state.score > records.score;
   if (!coop) {
     records.score = Math.max(records.score, state.score);
-    records.wave = Math.max(records.wave, state.wave);
+    records.wave = Math.max(records.wave, reachedWave());
     store.set('records', records);
   }
-  $('#over-sub').textContent = 'WAVE ' + state.wave + ' · ' + diff().name + ' · ' + world.map.name;
+  $('#over-sub').textContent = 'WAVE ' + state.wave + (state.startWave > 1 ? ' · STARTED AT WAVE ' + state.startWave : '') + ' · ' + diff().name + ' · ' + world.map.name;
   $('#newbest').classList.toggle('hidden', !best || state.score === 0);
   $('#st-score').textContent = state.score.toLocaleString();
   $('#st-kills').textContent = state.kills;
@@ -1747,17 +1758,18 @@ function grantRewards() {
   const chip = (text, cls = '') => { const e = document.createElement('span'); e.textContent = text; if (cls) e.className = cls; box.appendChild(e); };
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
-  const scrap = Math.round((state.score / 150 + state.wave * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
-  const xp = Math.round(state.score / 10 + state.wave * 50);
+  const played = state.wave - state.startWave + 1;
+  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
+  const xp = Math.round(state.score / 10 + played * 50);
   profile.scrap += scrap;
   profile.xp += xp;
   profile.kills += state.kills;
   profile.heads += state.heads;
   profile.runs++;
   for (const k of state.bossKinds) profile.bosses[k] = (profile.bosses[k] || 0) + 1;
-  profile.bestWave = Math.max(profile.bestWave, state.wave);
+  profile.bestWave = Math.max(profile.bestWave, reachedWave());
   const runDiff = state.runDifficulty || settings.difficulty;
-  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, state.wave);
+  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, reachedWave());
   if (daily) profile.lastDaily = today;
   const lvlAfter = levelInfo().level;
   const fresh = [...unlockedSet()].filter(k => !before.has(k));
@@ -1921,9 +1933,9 @@ function updateHud(dt) {
   ui.hpLag.style.transform = `scaleX(${player.lagHp / stats.maxHp})`;
   ui.lowhp.classList.toggle('on', hpPct < .3 && state.mode === 'playing');
   if (hpPct < .3 && state.clock - player.lastBeat > 1 && state.mode === 'playing') { player.lastBeat = state.clock; sfx.heartbeat(); }
-  setText(ui.waveNum, 'WAVE ' + Math.max(1, state.wave));
+  setText(ui.waveNum, 'WAVE ' + Math.max(state.startWave || 1, state.wave));
   const left = state.waveTotal - state.waveDone;
-  setText(ui.alive, state.wave === 0 ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : '') + left + ' INFECTED LEFT');
+  setText(ui.alive, state.wave < (state.startWave || 1) ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : '') + left + ' INFECTED LEFT');
   ui.waveFill.style.transform = `scaleX(${state.waveTotal ? 1 - state.waveDone / state.waveTotal : 0})`;
   setText(ui.score, state.score.toLocaleString());
   const comboOn = state.combo > 1 && state.clock - state.lastKill < 3;
@@ -2353,7 +2365,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; firing =
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-$('#start').onclick = () => startGame();
+$('#start').onclick = () => startGame(api.deployOpts());
 $('#again').onclick = () => startGame(state.runOpts?.replay?.() || state.runOpts || {});
 $('#to-menu').onclick = toMenu;
 $('#resume').onclick = resume;
@@ -2390,7 +2402,7 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }
@@ -2443,7 +2455,7 @@ $('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
 function renderLocalRuns(list) {
   const runs = store.get('runs', []).filter(r => !boardView.filter || boardView.filter(r));
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
-  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave, new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
+  runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave + (r.start > 1 ? ' (FROM ' + r.start + ')' : ''), new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
 }
 async function renderBoard() {
   const token = ++boardToken, list = $('#board-list'), status = $('#board-status');
@@ -2826,7 +2838,7 @@ const api = {
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
-  offerPerks, nova, deathGuards, gameOver,
+  offerPerks, nova, deathGuards, gameOver, deployOpts: () => ({}),
 };
 Object.assign(api, { netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
