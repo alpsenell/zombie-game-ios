@@ -55,7 +55,7 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
             call.reject("Not signed in to Game Center")
             return
         }
-        let context = max(0, call.getInt("context") ?? 0)
+        let context = Self.contextValue(call)
         GKLeaderboard.submitScore(score, context: context, player: GKLocalPlayer.local, leaderboardIDs: [leaderboardId]) { error in
             if let error = error { call.reject(error.localizedDescription) } else { call.resolve() }
         }
@@ -125,11 +125,29 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
         ]
     }
 
+    private static let maxSafeInteger: UInt64 = 9_007_199_254_740_991
+
+    static func contextValue(_ call: CAPPluginCall) -> Int {
+        if let text = call.getString("context"), let bits = UInt64(text.trimmingCharacters(in: .whitespaces)) {
+            return Int(bitPattern: UInt(bits))
+        }
+        if let number = call.options["context"] as? NSNumber {
+            let value = number.doubleValue
+            if value >= 1, value <= Double(maxSafeInteger) { return Int(number.int64Value) }
+        }
+        return 0
+    }
+
+    static func contextOut(_ context: Int) -> Any {
+        let bits = UInt64(UInt(bitPattern: context))
+        return bits <= maxSafeInteger ? Int(bits) : String(bits)
+    }
+
     private func entryInfo(_ entry: GKLeaderboard.Entry) -> [String: Any] {
         return [
             "rank": entry.rank,
             "score": entry.score,
-            "context": entry.context,
+            "context": Self.contextOut(entry.context),
             "name": entry.player.displayName,
             "isLocal": entry.player.gamePlayerID == GKLocalPlayer.local.gamePlayerID
         ]
