@@ -38,8 +38,10 @@ remembers it as the menu map. Omitting `map` keeps the current one. `api.loadMap
 
 ## Perks and revive
 Perks are `{ icon, name, desc, apply, when?, rare?, legendary? }` in `api.PERKS` (`features/perks.js` adds the new ones and the HUD strip).
-Offers are drawn from a per-wave stream derived from the run seed, so a seeded run always offers the same cards. Legendary cards appear
-from wave 10 with an 8% chance per offer. `perk` events carry `{ name, icon, rare, legendary, wave }`.
+Offers are drawn from a per-wave stream derived from the run seed, so a seeded run always offers the same cards. Regular waves offer
+only minor cards (optional `max` caps how often one can be picked). Every 10th cleared wave (`MAJOR_EVERY`) is a major offer: only `rare`
+and `legendary` cards, with one legendary guaranteed while any is still available. A checkpoint kit gets one major pick per 10 skipped waves.
+`perk` events carry `{ name, icon, rare, legendary, wave }`.
 `api.deathGuards` is a list of functions called when the player dies; returning `true` takes over (the revive feature sets
 `state.mode = 'revive'` and later calls `api.gameOver()` or resumes). Revive costs scrap only, once per normal run (never `daily`/`ranked`),
 and emits `revive` `{ cost, wave }`. `api.nova(radius)` clears nearby non-boss infected and grants 1.5 s of invulnerability.
@@ -55,3 +57,20 @@ Feature state lives on `api.profile.<featureId>` and is saved with `api.saveProf
 `npm run prepare:web && node tools/smoke.mjs` plays a headless run. `tools/smoke.mjs` also exports `serve`, `launch` and
 `openGame` for feature tests; the page is opened with `?debug`, which exposes `window.__game = { api, update, scene, setFiring, gameOver, ... }`.
 Native code cannot be compiled in this environment; mock `window.Capacitor` (`PluginHeaders` + `nativePromise`) to test plugin calls.
+
+## Cosmetics
+Slots in `SLOTS` and encoded `EXTRA_SLOTS` are bit-packed into the 64-bit Game Center context, and every bit is taken. Items past a slot's
+bit range (`2 ** bits`) must declare `like`, the index of a lower item they encode as, so other players see the closest look while the
+owner sees the real one. Suits can reuse another suit's geometry with `parts` plus colour overrides (`iron`, `cloth`, `fur`, `hood`).
+Season rewards: premium tier 1 is the season suit (claimed automatically on purchase), tier 20 the season weapon skin (`req: 'seasonskin:n'`).
+
+## Live ops
+- `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
+- `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).
+- Weekend events (`events.js`): Fri 00:00 → Mon 00:00 UTC, rotating BLOOD MOON / SCRAP RUSH / HEADHUNTER / HORDE NIGHT. Clearing wave 10 (8+ waves played) during an event unlocks its weapon skin.
+- League rewards (`competitive.js`): when a new week starts, last week's league pays scrap once (`paidWeek`) and shows promotion/relegation. `league:diamond` is met only while last week's or this week's league is Diamond+, so the skin is lost after dropping.
+- SPRINT 20: time to clear wave 20 from wave 1 (normal/ranked), stored in `profile.competitive.sprint` and submitted to `deadzone.sprint20`. `api.boardView.format/local/empty` let a board show times and custom local rows.
+- Prestige (`progression.js`): a mastered weapon can prestige up to 5 times (mastery reset, +1,500 scrap, ✦ marks). Skins with `anim: 'pulse' | 'cycle'` animate through `animateGunMaterials`.
+- Comeback (`comeback.js`): 7+ days away gives a crate (scrap + XP) and `comebackXp = 2` for the next 3 runs.
+- Invite reward (`coop.js`): in a session from INVITE FRIENDS, an accepted invite or a shared room code, clearing wave 5 grants BLOOD BROTHERS + 500 scrap once.
+- Tests: `node tools/test-live.mjs`.

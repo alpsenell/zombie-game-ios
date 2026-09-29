@@ -26,7 +26,7 @@ const allErrors = [];
     const same = (a, b) => SLOTS.every(s => a[s.id] === b[s.id]);
     const res = { legacy: true, female: true, tags: true, safe: true, invalid: true };
     for (let i = 0; i < 400; i++) {
-      const l = Object.fromEntries(SLOTS.map(s => [s.id, rnd(s.items.length)])), level = 1 + rnd(63);
+      const l = Object.fromEntries(SLOTS.map(s => [s.id, rnd(Math.min(s.items.length, 2 ** s.bits))])), level = 1 + rnd(63);
       const old = legacy(l, level), d = decodeLoadout(old);
       res.legacy &&= encodeLoadout(l, level) === old && encodeLoadout({ ...l, body: 0 }, level) === old && d.body === 0 && d.loadout.body === 0 && same(d.loadout, l) && d.level === level;
       const fc = encodeLoadout({ ...l, body: 1 }, level), fd = decodeLoadout(fc);
@@ -43,8 +43,10 @@ const allErrors = [];
       && [(2n ** 64n).toString(), '-5', '12a', '', '0', '1.5', ' 5', (2n ** 64n + 1n).toString()].every(c => decodeLoadout(c) === null) && decodeLoadout(null) === null && decodeLoadout({}) === null;
     res.forms = [base, base + 2].every(c => { const a = JSON.stringify(decodeLoadout(c)); return a === JSON.stringify(decodeLoadout(String(c))) && a === JSON.stringify(decodeLoadout(BigInt(c))); });
     res.describe = describeLoadout({ ...DEFAULT_LOADOUT, body: 1 })[0].join() === 'BODY,FEMALE' && describeLoadout(DEFAULT_LOADOUT)[0].join() === 'BODY,MALE' && describeLoadout({ ...DEFAULT_LOADOUT, suit: 3, body: 1 })[0][1] === 'FEMALE';
+    res.like = SLOTS.every(sl => sl.items.every((it, v) => v < 2 ** sl.bits || (it.like != null && it.like < 2 ** sl.bits && decodeLoadout(encodeLoadout({ ...DEFAULT_LOADOUT, [sl.id]: v }, 5)).loadout[sl.id] === it.like)));
     return res;
   });
+  ok(codec.like, 'items past a slot\'s bit range declare a lower "like" and encode as it');
   ok(codec.legacy, 'existing male codes (tag 1) decode unchanged and re-encode identically');
   ok(codec.female, 'female loadouts round-trip on tag 3 without touching any slot bits');
   ok(codec.tags, 'male codes keep code % 4 === 1, female use code % 4 === 3');
@@ -61,7 +63,7 @@ const allErrors = [];
     const legacy = (l, level) => { let code = l.body === 1 ? 3 : 1, base = 4; for (const s of SLOTS) { const size = 2 ** s.bits; code += Math.max(0, Math.min(size - 1, l[s.id] | 0)) * base; base *= size; } return code + Math.max(1, Math.min(63, level | 0)) * base; };
     const res = { bits: enc.reduce((a, s) => a + s.bits, 0), roundtrip: true, above: true, oldZero: true, strings: true, localOnly: true, max: true };
     for (let i = 0; i < 400; i++) {
-      const l = { ...Object.fromEntries([...SLOTS, ...EXTRA_SLOTS].map(s => [s.id, rnd(s.items.length)])), body: rnd(2) }, level = 1 + rnd(63);
+      const l = { ...Object.fromEntries([...SLOTS, ...EXTRA_SLOTS].map(s => [s.id, rnd(s.bits ? Math.min(s.items.length, 2 ** s.bits) : s.items.length)])), body: rnd(2) }, level = 1 + rnd(63);
       const code = encodeLoadout(l, level), d = decodeLoadout(code), old = legacy(l, level), anyExt = enc.some(s => l[s.id]);
       res.roundtrip &&= [...SLOTS, ...enc].every(s => d.loadout[s.id] === l[s.id]) && d.level === level && d.body === l.body;
       res.localOnly &&= local.every(s => d.loadout[s.id] === 0);

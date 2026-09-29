@@ -19,6 +19,7 @@ const CSS = `
 .coop-players .tag{display:inline-block;margin-top:6px;padding:3px 8px;border-radius:10px;font:900 9px var(--ui);letter-spacing:1.5px;background:#ffffff12;color:var(--dim)}
 .coop-players .tag.ready{background:#6dffa022;color:var(--green)}
 .coop-players .tag.host{background:#ffc34d22;color:var(--amber)}
+.coop-invite{margin:0 0 10px;padding:7px 10px;border-radius:10px;background:#ff3a2a14;border:1px solid #ff3a2a55;color:#ffb0a8;font:800 10px var(--ui);letter-spacing:1.2px}
 .coop-status{min-height:16px;margin:6px 0 12px;font:800 11px var(--ui);letter-spacing:1.5px;color:var(--amber)}
 .coop-status.err{color:#ff8a7a}
 #coop-tags{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -115,7 +116,8 @@ export function createLobby(api, act) {
   code.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') act.join(code.value); });
   local.append(btn('HOST LOCAL', 'cta', () => act.host()), code, btn('JOIN LOCAL', 'ghost', () => act.join(code.value)));
   const note = el('div', 'coop-note', 'LOCAL PLAY LINKS BROWSER TABS ON THIS DEVICE — SHARE THE ROOM CODE');
-  pick.append(gk, local, note);
+  const perk = el('div', 'coop-invite', '🤝 INVITE A FRIEND · CLEAR WAVE 5 TOGETHER · YOU BOTH EARN THE BLOOD BROTHERS OUTFIT');
+  pick.append(perk, gk, local, note);
   const room = el('div', 'hidden');
   const head = el('div', 'coop-room-head');
   const list = el('ul', 'coop-players');

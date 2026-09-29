@@ -1,9 +1,11 @@
 import { mulberry32 } from '../core.js';
 
-export const BOARDS = { daily: 'deadzone.daily', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore' };
+export const BOARDS = { daily: 'deadzone.daily', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20' };
+export const SPRINT_WAVE = 20;
+export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
 const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime' };
-const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME' };
+const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20' };
 const DAY = 864e5, WINDOW = 30;
 
 export const LEAGUES = [
@@ -24,6 +26,22 @@ export function leagueFor(rank, total) {
 }
 
 export const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
+export const leagueRank = id => { const i = LEAGUES.findIndex(l => l.id === id); return i < 0 ? -1 : LEAGUES.length - 1 - i; };
+export function sprintTime(cs) {
+  const t = Math.max(0, Math.round(cs)), m = Math.floor(t / 6000), sec = Math.floor(t / 100) % 60, h = t % 100;
+  return m + ':' + String(sec).padStart(2, '0') + '.' + String(h).padStart(2, '0');
+}
+export function settleWeek(c, thisWeek) {
+  const l = c.league;
+  if (!l || !l.week || l.week >= thisWeek || c.paidWeek === l.week) return null;
+  const prev = c.held;
+  const lastWeek = utcDay(Date.parse(thisWeek + 'T00:00:00Z') - 7 * DAY);
+  const prevRank = prev && prev.week === utcDay(Date.parse(l.week + 'T00:00:00Z') - 7 * DAY) ? leagueRank(prev.id) : -1;
+  c.held = { id: l.id, week: l.week };
+  c.paidWeek = l.week;
+  const now = leagueRank(l.id);
+  return { id: l.id, week: l.week, scrap: LEAGUE_REWARDS[l.id] || 0, move: prevRank < 0 ? 'new' : now > prevRank ? 'up' : now < prevRank ? 'down' : 'same', from: prevRank < 0 ? null : prev.id, current: l.week === lastWeek };
+}
 export function weekStart(t = Date.now()) { const d = Math.floor(t / DAY); return (d - (d + 3) % 7) * DAY; }
 export function nextReset(board, t = Date.now()) { return board === 'daily' ? (Math.floor(t / DAY) + 1) * DAY : weekStart(t) + 7 * DAY; }
 export function timeLeft(ms) {
@@ -108,6 +126,13 @@ button.cm-badge{cursor:pointer}
 .cm-rival.pop{animation:cm-pop .6s ease-out}
 @keyframes cm-pop{0%{transform:scale(1);border-color:var(--green);box-shadow:0 0 0 #6dffa000}30%{transform:scale(1.14);border-color:var(--green);box-shadow:0 0 22px #6dffa088}100%{transform:scale(1)}}
 #hud:has(#bossbar:not(.hidden)) #hud-rival{top:calc(max(12px,var(--st)) + 96px)}
+.cm-pay{position:fixed;inset:0;z-index:35;display:grid;place-items:center;background:#010406b0;padding:16px}
+.cm-pay-card{width:min(340px,90vw);padding:18px 18px 16px;border-radius:18px;background:#081115f8;border:1px solid #ffc34d66;box-shadow:0 20px 60px #000;text-align:center;display:grid;gap:8px;justify-items:center;animation:pgIn .35s cubic-bezier(.2,1.4,.4,1) both}
+.cm-pay-card small{font:900 10px var(--ui);letter-spacing:2px;color:var(--amber)}
+.cm-pay-card h3{margin:0;font:900 28px/1 var(--display);letter-spacing:1.5px}
+.cm-pay-card p{margin:0;font:800 11px var(--ui);letter-spacing:1.2px}
+.cm-pay-card p.dim{color:var(--dim);font-size:10px}
+.cm-pay-card .cta{margin-top:6px;padding:12px 30px}
 .cm-over{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
 .cm-over span:last-child{color:var(--dim);font:800 10px var(--ui);letter-spacing:1.4px}
 @media (max-height:430px) and (orientation:landscape){#board .panel{width:min(94vw,640px);display:grid;grid-template-columns:1fr 1fr;column-gap:8px}#board .panel>*{grid-column:1/-1;order:3}#board .panel>h2{order:0}#board .panel>#cm-boards{grid-column:1;order:1;margin-bottom:6px}#board .panel>.tabs{grid-column:2;order:2;margin-bottom:6px}#board-list{max-height:30vh}}
@@ -153,6 +178,38 @@ export function init(api) {
     b.append(el('i', '', lg.icon), document.createTextNode(lg.name));
     return b;
   }
+  function heldRank() {
+    const c = comp(), lastWeek = utcDay(weekStart() - 7 * DAY), held = c.held?.week === lastWeek ? leagueRank(c.held.id) : -1;
+    return Math.max(held, leagueRank(currentLeague()?.id));
+  }
+  api.reqs.league = {
+    met: id => heldRank() >= leagueRank(id),
+    text: id => 'FINISH A WEEK IN ' + (LEAGUES.find(l => l.id === id)?.name || id.toUpperCase()) + '+ (KEEP IT BY STAYING THERE)',
+  };
+  function payWeek() {
+    const res = settleWeek(comp(), weekKey());
+    if (!res) return null;
+    const lg = LEAGUES.find(l => l.id === res.id);
+    if (res.scrap) api.grantScrap(res.scrap);
+    if (leagueRank(res.id) >= leagueRank('diamond')) { const k = 'gun:' + api.SLOTS.find(s => s.id === 'gun').items.findIndex(it => it.req === 'league:diamond'); if (!api.profile.fresh.includes(k)) api.profile.fresh.push(k); }
+    api.saveProfile();
+    api.refreshProfileUI();
+    const headline = res.move === 'up' ? 'PROMOTED' : res.move === 'down' ? 'RELEGATED' : 'WEEK COMPLETE';
+    api.queueModal(done => {
+      const wrap = el('div', 'cm-pay'), card = el('div', 'cm-pay-card'), b = badge({ id: res.id });
+      const ok = el('button', 'cta', 'COLLECT');
+      card.append(el('small', '', 'RANKED WEEKLY · ' + headline), b,
+        el('h3', '', lg.name + ' LEAGUE'),
+        el('p', '', (res.from && res.move !== 'same' ? LEAGUES.find(x => x.id === res.from).name + ' → ' + lg.name + ' · ' : '') + '+' + fmt(res.scrap) + ' 🔩 SCRAP' + (leagueRank(res.id) >= leagueRank('diamond') ? ' · DIAMOND LEAGUE SKIN' : '')),
+        el('p', 'dim', leagueRank(res.id) >= leagueRank('diamond') ? 'STAY DIAMOND OR LEGEND TO KEEP THE SKIN.' : 'REACH DIAMOND TO EARN THE DIAMOND LEAGUE SKIN.'), ok);
+      wrap.appendChild(card);
+      document.body.appendChild(wrap);
+      ok.onclick = () => { wrap.remove(); api.sfx.pickup?.(); api.haptic('MEDIUM'); done(); };
+    }, 2);
+    bus.emit('league:settled', res);
+    return res;
+  }
+
   const pctText = l => l && l.pct <= .5 ? 'TOP ' + Math.max(1, Math.ceil(l.pct * 100)) + '%' : '';
 
   async function refreshLeague() {
@@ -287,8 +344,10 @@ export function init(api) {
     daily: r => r.type === 'daily' && r.seed === daily().seed,
     weekly: r => r.type === 'ranked' && r.date >= weekStart(),
     alltime: null,
+    sprint: null,
   };
-  for (const b of ['daily', 'weekly', 'alltime']) {
+  const sprintRows = () => (comp().sprint || []).map(x => ({ title: (api.DIFFICULTIES[x.diff]?.name || 'SURVIVOR') + ' · ' + sprintTime(x.cs), sub: new Date(x.date).toLocaleDateString(), score: x.cs, code: x.code }));
+  for (const b of ['daily', 'weekly', 'alltime', 'sprint']) {
     const btn = el('button', '', BOARD_NAME[b]);
     btn.dataset.board = b;
     btn.onclick = () => { selectBoard(b); api.renderBoard(); };
@@ -299,10 +358,14 @@ export function init(api) {
     boardSel = b;
     api.boardView.id = BOARDS[b];
     api.boardView.filter = filters[b];
+    api.boardView.format = b === 'sprint' ? sprintTime : null;
+    api.boardView.local = b === 'sprint' ? sprintRows : null;
+    api.boardView.empty = b === 'sprint' ? 'No sprint yet — clear wave ' + SPRINT_WAVE + ' from wave 1 in a normal or ranked run.' : null;
     for (const btn of seg.children) btn.classList.toggle('on', btn.dataset.board === b);
     const l = currentLeague();
     boardNote.textContent = b === 'daily' ? 'DAILY CHALLENGE RUNS · RESETS IN ' + resetIn('daily')
       : b === 'weekly' ? (l ? leagueOf(l).name + ' LEAGUE · ' : '') + 'RANKED RUNS · NO PREMIUM WEAPONS · RESETS IN ' + resetIn('weekly')
+      : b === 'sprint' ? 'FASTEST TIME TO CLEAR WAVE ' + SPRINT_WAVE + ' · FROM WAVE 1 · LOWER IS BETTER'
       : 'EVERY RUN · ALL WEAPONS · NEVER RESETS';
   }
   function openBoard(b) {
@@ -411,6 +474,28 @@ export function init(api) {
   bus.on('kill', updateRival);
   bus.on('wave:clear', updateRival);
 
+  let runMeta = null;
+  bus.on('run:start', e => { runMeta = { type: e.type, start: e.startWave || e.opts?.startWave || api.state.startWave || 1, diff: e.difficultyId }; });
+  async function recordSprint(cs) {
+    const c = comp(), list = c.sprint ||= [], prevBest = list[0]?.cs;
+    list.push({ cs, date: Date.now(), diff: runMeta.diff || api.settings.difficulty, code: api.myCode() });
+    list.sort((a, b) => a.cs - b.cs);
+    c.sprint = list.slice(0, 10);
+    api.saveProfile();
+    const best = !prevBest || cs < prevBest;
+    api.toast('⏱ SPRINT ' + SPRINT_WAVE + ' · ' + sprintTime(cs) + (best ? ' · NEW BEST' : ''), 2.6);
+    if (best) { api.haptic('HEAVY'); api.sfx.perk?.(); }
+    bus.emit('sprint', { cs, best });
+    if (!(await signedIn())) return;
+    try { await gc.call('submitScore', { leaderboardId: BOARDS.sprint, score: cs, context: api.myCode() }); } catch {}
+  }
+  bus.on('wave:clear', ({ wave }) => {
+    if (wave !== SPRINT_WAVE || !runMeta || runMeta.start !== 1 || !['normal', 'ranked'].includes(runMeta.type) || api.state.net) return;
+    const cs = Math.round(api.state.clock * 100);
+    if (cs < SPRINT_WAVE * 600) return;
+    recordSprint(cs);
+  });
+
   const over = $('#over-extras'), overBox = el('div', 'cm-over'), overText = el('span');
   function renderOver(run, extra) {
     const l = currentLeague(), parts = [];
@@ -451,7 +536,8 @@ export function init(api) {
     if (type === 'ranked') setLeague(result.rank, result.total);
     renderOver(lastRun);
   });
-  bus.on('app:ready', () => { if (gc.available()) refreshLeague(); });
+  bus.on('app:ready', () => { payWeek(); if (gc.available()) refreshLeague().then(payWeek); });
+  bus.on('screen', ({ id }) => { if (id === 'menu') payWeek(); });
 
-  api.competitive = { BOARDS, LEAGUES, leagueFor, dailyChallenge: () => daily(), rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague };
+  api.competitive = { BOARDS, LEAGUES, leagueFor, dailyChallenge: () => daily(), rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague, payWeek, heldRank, sprintTime };
 }

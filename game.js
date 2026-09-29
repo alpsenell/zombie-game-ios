@@ -3,7 +3,7 @@ import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats, WOOD, woodStock } from './weapons.js';
-import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, WEAPON_SKINS, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, animateGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -842,6 +842,8 @@ function levelInfo(xp = profile.xp) {
   return { level, into: rest, need };
 }
 function myCode() { profile.loadout.primary = loadoutWeapons()[0]; return encodeLoadout(profile.loadout, levelInfo().level); }
+const REQS = {};
+const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '' };
 function reqMet(req) {
   if (!req) return true;
   const [k, v] = req.split(':'), n = +v;
@@ -853,11 +855,14 @@ function reqMet(req) {
   if (k === 'nightmare') return (profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'veteran') return Math.max(profile.bestByDiff.veteran || 0, profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'season') return !!profile.season?.suits?.[v];
+  if (k === 'seasonskin') return !!profile.season?.skins?.[v];
+  if (REQS[k]) return !!REQS[k].met(v);
   return false;
 }
 function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
-  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
+  if (REQS[k]) return REQS[k].text(v);
+  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS', seasonskin: 'SEASON ' + n + ' PASS' }[k] || req;
 }
 const ALL_SLOTS = [...SLOTS, ...EXTRA_SLOTS];
 const slotById = id => id === BODY.id ? BODY : ALL_SLOTS.find(s => s.id === id);
@@ -892,7 +897,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -946,6 +951,7 @@ function startGame(opts = {}) {
   ui.swap.classList.toggle('hidden', player.slots[0] === player.slots[1]);
   if (state.startWave > 1) {
     state.kitTotal = Math.min(10, Math.ceil((state.startWave - 1) / 2));
+    state.kitMajors = Math.min(state.kitTotal, Math.floor((state.startWave - 1) / MAJOR_EVERY));
     player.nades = stats.nadeMax;
     player.slots.forEach(i => (player.reserve[i] = WEAPONS[i].maxReserve));
     schedule(.8, () => offerPerks(state.kitTotal));
@@ -967,8 +973,8 @@ function rosterWeights(w, D = diff()) {
 function waveComposition(w) {
   const D = diff(), M = MODS[state.mod] || {}, bossWave = w % 5 === 0;
   const weights = rosterWeights(w, D), sum = Object.values(weights).reduce((a, b) => a + b, 0);
-  const total = Math.min(70, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * (bossWave ? .6 : 1)));
-  const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 : 0;
+  const total = Math.min(90, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * live.count * (bossWave ? .6 : 1)));
+  const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 + live.elite : live.elite && w >= 3 ? live.elite / 2 : 0;
   const list = [], count = {};
   for (let i = 0; i < total; i++) {
     let r = R() * sum, kind = 'walker';
@@ -1113,7 +1119,7 @@ function killZombie(z, head, noScore) {
       state.combo = state.clock - state.lastKill < 3 ? state.combo + 1 : 1;
       state.lastKill = state.clock;
       state.bestCombo = Math.max(state.bestCombo, state.combo);
-      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
+      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 * live.headScore : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
       state.score += pts;
       bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning });
       floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
@@ -1746,32 +1752,45 @@ function collect(p) {
 }
 
 const PERKS = [
-  { icon: '💥', name: 'HOLLOW POINTS', desc: '+20% weapon damage', apply: () => (stats.damage *= 1.2) },
-  { icon: '⚡', name: 'HAIR TRIGGER', desc: '+18% fire rate', apply: () => (stats.fireRate *= 1.18) },
-  { icon: '❤️', name: 'THICK SKIN', desc: '+25 max health and a full heal', apply: () => { stats.maxHp += 25; player.hp = stats.maxHp; } },
-  { icon: '🔄', name: 'SLEIGHT OF HAND', desc: '30% faster reloads', apply: () => (stats.reload *= .7) },
-  { icon: '👟', name: 'CARDIO', desc: '+12% move speed', apply: () => (stats.speed *= 1.12) },
-  { icon: '📦', name: 'EXTENDED MAGS', desc: '+40% magazine size', apply: () => { stats.mag *= 1.4; } },
-  { icon: '🎯', name: 'DEADEYE', desc: '+40% headshot damage', apply: () => (stats.headMul *= 1.4) },
-  { icon: '🩸', name: 'VAMPIRE', desc: 'Heal 4 HP on every kill', apply: () => (stats.leech += 4) },
-  { icon: '💣', name: 'DEMOLITIONS', desc: '+1 grenade slot, refill all', apply: () => { stats.nadeMax++; player.nades = stats.nadeMax; } },
-  { icon: '🛡️', name: 'KEVLAR', desc: 'Take 15% less damage', apply: () => (stats.armor *= .85) },
-  { icon: '🍀', name: 'SCAVENGER', desc: '+50% supply drop chance', apply: () => (stats.luck *= 1.5) },
+  { icon: '💥', name: 'HOLLOW POINTS', desc: '+10% weapon damage', max: 5, apply: () => (stats.damage *= 1.1) },
+  { icon: '⚡', name: 'HAIR TRIGGER', desc: '+8% fire rate', max: 5, apply: () => (stats.fireRate *= 1.08) },
+  { icon: '❤️', name: 'THICK SKIN', desc: '+15 max health, heal 25', max: 5, apply: () => { stats.maxHp += 15; player.hp = Math.min(stats.maxHp, player.hp + 25); } },
+  { icon: '🔄', name: 'SLEIGHT OF HAND', desc: '15% faster reloads', max: 4, apply: () => (stats.reload *= .85) },
+  { icon: '👟', name: 'CARDIO', desc: '+6% move speed', max: 4, apply: () => (stats.speed *= 1.06) },
+  { icon: '📦', name: 'EXTENDED MAGS', desc: '+20% magazine size', max: 4, apply: () => { stats.mag *= 1.2; } },
+  { icon: '🎯', name: 'DEADEYE', desc: '+20% headshot damage', max: 5, apply: () => (stats.headMul *= 1.2) },
+  { icon: '🩸', name: 'VAMPIRE', desc: 'Heal 2 HP on every kill', max: 4, apply: () => (stats.leech += 2) },
+  { icon: '💣', name: 'DEMOLITIONS', desc: '+1 grenade slot, refill all', max: 3, apply: () => { stats.nadeMax++; player.nades = stats.nadeMax; } },
+  { icon: '🛡️', name: 'KEVLAR', desc: 'Take 8% less damage', max: 5, apply: () => (stats.armor *= .92) },
+  { icon: '🍀', name: 'SCAVENGER', desc: '+25% supply drop chance', max: 4, apply: () => (stats.luck *= 1.25) },
   { icon: '👼', name: 'SECOND WIND', desc: 'Survive one fatal hit', rare: true, when: () => !stats.secondWind, apply: () => (stats.secondWind = true) },
-  { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+45% damage, +15% fire rate', rare: true, apply: () => { stats.damage *= 1.45; stats.fireRate *= 1.15; } },
+  { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+35% damage, +10% fire rate', rare: true, apply: () => { stats.damage *= 1.35; stats.fireRate *= 1.1; } },
 ];
+const MAJOR_EVERY = 10;
+
+function majorOffer(kit) {
+  if (kit) return state.kitTotal - kit < state.kitMajors;
+  return state.wave > 0 && state.wave % MAJOR_EVERY === 0;
+}
 
 function offerPerks(kit = 0) {
   state.mode = 'perk';
+  const major = majorOffer(kit);
   ui.perkTitle.textContent = kit ? 'STARTING KIT' : 'WAVE ' + state.wave + ' CLEARED';
-  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' : 'CHOOSE AN UPGRADE';
-  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave));
-  const ok = p => !p.when || p.when();
-  const pool = PERKS.filter(p => !p.legendary && ok(p) && (!p.rare || r() < .3));
+  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' + (major ? ' · MAJOR' : '') : major ? 'MAJOR UPGRADE — CHOOSE WISELY' : 'CHOOSE AN UPGRADE';
+  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave + (kit ? ':' + kit : '')));
+  const taken = p => state.perks.filter(n => n === p.name).length;
+  const ok = p => (!p.when || p.when()) && (!p.max || taken(p) < p.max);
+  const pool = PERKS.filter(p => (major ? p.rare || p.legendary : !p.rare && !p.legendary) && ok(p));
   const picks = [];
-  while (picks.length < 3 && pool.length) picks.push(pool.splice((r() * pool.length) | 0, 1)[0]);
-  const legends = PERKS.filter(p => p.legendary && ok(p));
-  if (state.wave >= 10 && legends.length && r() < .08) picks.splice(Math.min(1, picks.length), picks.length > 1 ? 1 : 0, legends[(r() * legends.length) | 0]);
+  const legends = pool.filter(p => p.legendary);
+  if (major && legends.length) picks.push(legends[(r() * legends.length) | 0]);
+  const rest = pool.filter(p => !picks.includes(p));
+  while (picks.length < 3 && rest.length) picks.push(rest.splice((r() * rest.length) | 0, 1)[0]);
+  if (picks.length < 3) {
+    const minors = PERKS.filter(p => !p.rare && !p.legendary && ok(p) && !picks.includes(p));
+    while (picks.length < 3 && minors.length) picks.push(minors.splice((r() * minors.length) | 0, 1)[0]);
+  }
   state.perkOffer = picks.map(p => p.name);
   ui.perkList.innerHTML = '';
   for (const p of picks) {
@@ -1864,8 +1883,8 @@ function grantRewards() {
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
   const played = state.wave - state.startWave + 1;
-  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
-  const xp = Math.round(state.score / 10 + played * 50);
+  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune * live.scrap);
+  const xp = Math.round((state.score / 10 + played * 50) * live.xp);
   profile.scrap += scrap;
   profile.xp += xp;
   profile.kills += state.kills;
@@ -1880,8 +1899,8 @@ function grantRewards() {
   const fresh = [...unlockedSet()].filter(k => !before.has(k));
   profile.fresh = [...new Set([...profile.fresh, ...fresh])];
   saveProfile();
-  chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : ''), 'gold');
-  chip('+' + xp.toLocaleString() + ' XP');
+  chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : '') + (live.scrap > 1 ? ' (' + live.label + ' x' + live.scrap + ')' : ''), 'gold');
+  chip('+' + xp.toLocaleString() + ' XP' + (live.xp > 1 ? ' (' + live.label + ' x' + live.xp + ')' : ''));
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
     const [slot, i] = fresh[0].split(':');
@@ -2353,6 +2372,11 @@ function frame() {
   else if (state.mode === 'menu') updateMenu(dt);
   else if (state.mode === 'dead') { state.clock += dt; updateZombies(dt, false, camera.position); }
   if (state.mode !== 'paused' && state.mode !== 'perk') updateEffects(dt);
+  if (WEAPON_SKINS[profile.loadout.gun]?.anim) {
+    const t = performance.now() / 1000;
+    animateGunMaterials(guns[player.weapon]?.userData.mats, profile.loadout.gun, t);
+    if (activeScreen === ui.armory) animateGunMaterials(armoryMats, profile.loadout.gun, t);
+  }
   if (state.mode === 'playing' || state.mode === 'perk' || state.mode === 'paused') updateFloaters(dt);
   if (activeScreen === ui.menu || activeScreen === ui.locker || activeScreen === ui.inspect || activeScreen === ui.armory) preview.render(dt);
   sky.position.copy(camera.position);
@@ -2524,7 +2548,7 @@ function saveRun() {
 }
 
 let boardTab = 'global', boardReturn = null, boardToken = 0;
-const boardView = { id: LEADERBOARDS.score, filter: null };
+const boardView = { id: LEADERBOARDS.score, filter: null, format: null, local: null };
 const avatarCache = new Map();
 function avatarFor(code) {
   const d = decodeLoadout(code), key = d ? encodeLoadout(d.loadout) : 0;
@@ -2541,7 +2565,7 @@ function boardRow(rank, title, sub, score, me, code, extra = {}) {
   const sm = document.createElement('small');
   sm.textContent = [d ? TITLES[d.loadout.title] + ' · LV ' + d.level : '', sub].filter(Boolean).join(' · ');
   name.appendChild(sm);
-  const sc = document.createElement('span'); sc.textContent = score.toLocaleString();
+  const sc = document.createElement('span'); sc.textContent = boardView.format ? boardView.format(score) : score.toLocaleString();
   li.append(r, img, name, sc);
   li.onclick = () => openInspect({ rank, name: title, score, code, ...extra });
   return li;
@@ -2569,6 +2593,12 @@ function openInspect(p) {
 $('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
 
 function renderLocalRuns(list) {
+  if (boardView.local) {
+    const rows = boardView.local();
+    if (!rows.length) { $('#board-status').textContent = boardView.empty || 'No runs yet — deploy and set a score.'; return; }
+    rows.forEach((r, i) => list.appendChild(boardRow(i + 1, r.title, r.sub, r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
+    return;
+  }
   const runs = store.get('runs', []).filter(r => !boardView.filter || boardView.filter(r));
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
   runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave + (r.start > 1 ? ' (FROM ' + r.start + ')' : ''), new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
@@ -2611,6 +2641,7 @@ let lockerSlot = 'top', pendingBuy = null, tryOn = null;
 function refreshProfileUI() {
   const lv = levelInfo(), l = profile.loadout;
   if (l.suit && !isOwned('suit', l.suit)) { l.suit = 0; saveProfile(); }
+  if (l.gun && !isOwned('gun', l.gun)) { l.gun = 0; saveProfile(); }
   $('#menu-level').textContent = 'LV ' + lv.level;
   $('#menu-title').textContent = TITLES[l.title];
   $('#lk-level').textContent = 'LEVEL ' + lv.level;
@@ -2959,7 +2990,7 @@ function grantXP(n) { profile.xp += Math.round(n); saveProfile(); refreshProfile
 const api = {
   THREE, bus, rng, R, hashSeed, $, ui, state, player, stats, look, move, settings, records, profile, store, scene, camera, zombies, pickups,
   WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS, boardView, renderBoard,
-  saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
+  saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, reqs: REQS, live, refreshArmory: () => renderArmory(), myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
