@@ -73,7 +73,7 @@ export function init(api) {
     chip.style.setProperty('--c', ev.color);
     chip.classList.toggle('live', ev.live);
     chipName.textContent = ev.icon + ' ' + ev.name;
-    chipSub.textContent = ev.live ? (won ? '✓ REWARD WON · ' : 'LIVE · ') + 'ENDS IN ' + timeLeft(ev.end - Date.now()) : 'WEEKEND EVENT IN ' + timeLeft(ev.start - Date.now());
+    chipSub.textContent = ev.live ? (won ? '✓ WON · ' : 'LIVE · ') + 'ENDS IN ' + timeLeft(ev.end - Date.now()) : 'STARTS IN ' + timeLeft(ev.start - Date.now());
   }
   renderChip();
 
