@@ -2,6 +2,7 @@ import { LoopbackTransport, GameKitTransport, MAX_PLAYERS } from './net.js';
 import { injectStyles, createLobby, createHud, Avatar, overTable } from './coop-view.js';
 
 export const id = 'coop';
+export const RECRUIT = { wave: 5, scrap: 500 };
 export const config = { perkTimeout: 20, perkGrace: 2, bleed: 20, reviveTime: 3, reviveRange: 2, snapHz: 10, stateHz: 15, hitHz: 20, interp: .12, joinTimeout: 3000 };
 
 const HOST_ONLY = new Set(['go', 's', 'z+', 'z-', 'sp', 'k+', 'w', 'wc', 'hu', 'rv', 'out', 'end', 'busy', 'full']);
@@ -44,7 +45,7 @@ function addPlayer(pid, name, code, me) {
 
 function newSession(t, room) {
   S = {
-    t, room, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty, map: api.currentMap,
+    t, room, invite: t.kind === 'local' || !!t.invite, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty, map: api.currentMap,
     zmap: new Map(), gone: new Set(), zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, hits: new Map(),
     stateAt: 0, snapAt: 0, hitAt: 0, pingAt: 0, fired: false, lastKillPts: 0, hitter: null,
     perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, slamZ: null,
@@ -130,6 +131,7 @@ const actions = {
     if (S) leave();
     pendingGK?.close();
     const t = pendingGK = new GameKitTransport();
+    t.invite = !!invite;
     lobby.status('OPENING GAME CENTER…');
     try {
       const r = await GameKitTransport.call('findMatch', { minPlayers: 2, maxPlayers: MAX_PLAYERS, invite });
@@ -155,7 +157,7 @@ const actions = {
 
 function onMatchFound(d) {
   if (!d?.localId) return;
-  const t = pendingGK || new GameKitTransport();
+  const t = pendingGK || Object.assign(new GameKitTransport(), { invite: true });
   pendingGK = null;
   if (S) leave();
   t.id = d.localId;
@@ -798,6 +800,20 @@ function tick() {
   }
 }
 
+function grantRecruit() {
+  const P = api.profile;
+  if (P.recruit?.done) return false;
+  const mates = [...S.players.values()].filter(p => !p.me).map(p => p.name);
+  P.recruit = { done: true, at: Date.now(), with: mates.slice(0, 3) };
+  const i = api.SLOTS.find(s => s.id === 'suit').items.findIndex(it => it.req === 'recruit:1');
+  if (i > 0 && !P.fresh.includes('suit:' + i)) P.fresh.push('suit:' + i);
+  api.grantScrap(RECRUIT.scrap);
+  api.message('SQUAD BONUS', 'BLOOD BROTHERS OUTFIT + ' + RECRUIT.scrap + ' SCRAP', 2.6);
+  api.haptic('HEAVY');
+  api.bus.emit('recruit', { with: P.recruit.with });
+  return true;
+}
+
 export function init(a) {
   api = a;
   H = api.netHooks;
@@ -838,6 +854,7 @@ export function init(a) {
     if (S?.phase !== 'run') return;
     if (isHost()) send(['wc', e.wave]);
     if (S.me.st !== 0) api.player.hp = 0;
+    if (S.invite && e.wave >= RECRUIT.wave && S.players.size >= 2) grantRecruit();
   });
   api.bus.on('screen', e => {
     if (e.id === 'menu' && S) leave();
@@ -857,5 +874,7 @@ export function init(a) {
     overBox.replaceChildren(...(coop && S?.over ? [overTable(api, S.over)] : []));
   });
 
-  api.coop = { config, net, actions, leave, open: openLobby, lobby: backToLobby, get session() { return S; } };
+  api.reqs.recruit = { met: () => !!api.profile.recruit?.done, text: () => 'CLEAR WAVE ' + RECRUIT.wave + ' IN CO-OP WITH A FRIEND YOU INVITED' };
+
+  api.coop = { config, grantRecruit, net, actions, leave, open: openLobby, lobby: backToLobby, get session() { return S; } };
 }

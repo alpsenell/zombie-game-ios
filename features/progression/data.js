@@ -80,6 +80,8 @@ export function masteryInfo(xp = 0) {
   return { level, into: max ? 0 : rest, need: max ? 0 : masteryNeed(level), max, pct: max ? 1 : rest / masteryNeed(level) };
 }
 export const masteryXP = e => 10 + (e.head ? 10 : 0) + (e.elite ? 15 : 0) + (e.boss ? 240 : 0);
+export const PRESTIGE_MAX = 5, PRESTIGE_REWARD = 1500;
+export const prestigeMark = n => n ? '✦'.repeat(n) : '';
 export const masteryReward = level => level >= MASTERY_MAX ? 1000 : level * 50;
 
 export const STREAK_DAYS = [50, 75, 100, 125, 150, 200, 400];

@@ -35,6 +35,13 @@ export const WEAPON_SKINS = [
   { name: 'PLASMA', base: 0x1a0a24, metal: 0x2a1438, dark: 0x0a0410, glow: 0xff3af0, req: 'level:40', like: 7 },
   { name: 'DARK MATTER', base: 0x06060a, metal: 0x18182a, dark: 0x000000, metallic: true, glow: 0x6a3aff, req: 'level:50', like: 13 },
   { name: 'HARVEST MOON', base: 0x3a1a08, metal: 0xc07a1a, dark: 0x1a0a02, camo: ['#4a2008', '#e06a10', '#2a1004'], glow: 0xffa02a, req: 'seasonskin:1', season: 1, like: 12 },
+  { name: 'PRESTIGE', base: 0x1a1a24, metal: 0xd8b04a, dark: 0x0a0a10, metallic: true, glow: 0xffd36a, anim: 'pulse', req: 'prestige:1', like: 14 },
+  { name: 'ASCENDANT', base: 0x0a0a14, metal: 0xe8faff, dark: 0x04040a, metallic: true, glow: 0xff3af0, anim: 'cycle', req: 'prestige:5', like: 15 },
+  { name: 'DIAMOND LEAGUE', base: 0x7fe8ff, metal: 0xe8faff, dark: 0x1a4a5a, metallic: true, glow: 0x7fe8ff, anim: 'pulse', req: 'league:diamond', like: 15 },
+  { name: 'ECLIPSE', base: 0x1a0204, metal: 0x3a0a0a, dark: 0x000000, glow: 0xff1a1a, anim: 'pulse', req: 'event:bloodmoon', like: 12 },
+  { name: 'JACKPOT', base: 0xe0b020, metal: 0x2a8a3a, dark: 0x5a4008, metallic: true, stripes: ['#e0b020', '#c08a10', '#f0d060'], req: 'event:scraprush', like: 14 },
+  { name: 'BULLSEYE', base: 0xe8e4d8, metal: 0xc0302a, dark: 0x2a0a08, stripes: ['#e8e4d8', '#c0302a', '#e8e4d8'], req: 'event:headhunter', like: 4 },
+  { name: 'HORDEBREAKER', base: 0x3a4a1a, metal: 0x5a6a2a, dark: 0x0e140a, glow: 0x9aff3a, camo: ['#3a4a1a', '#1e2a0e', '#6a7a2a'], req: 'event:hordenight', like: 10 },
   { name: 'ABYSSAL', base: 0x0a2a30, metal: 0xc08a2a, dark: 0x041418, glow: 0x3ae0d0, metallic: true, req: 'seasonskin:2', season: 2, like: 8 },
 ];
 
@@ -52,6 +59,7 @@ export const SUITS = [
   { id: 'timber-wolf', parts: 'wolf', like: 4, name: 'TIMBER WOLF', req: 'level:18', desc: 'Grey-brown pelt hood with a glowing green stare.', base: { top: 1, topColor: 15, pants: 2, boots: 2, head: 0, face: 6, hair: 7, back: 1, pantsStyle: 1, gloves: 5 }, sleeve: 0x6a5a48, glove: 0x3a2e24, accent: 0x7dff3a, fur: 0x8a7a66, hood: 0x5a5048 },
   { id: 'frost-knight', parts: 'knight', like: 2, name: 'FROST KNIGHT', req: 'level:28', desc: 'Rime-crusted plate that leaks freezing light.', base: { top: 4, topColor: 5, pants: 4, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0xb8c8d0, glove: 0x8a9aa4, accent: 0x6fe3ff, iron: 0x9aaab4, cloth: 0x1a3a5a },
   { id: 'void-spectre', parts: 'spectre', like: 3, name: 'VOID SPECTRE', req: 'level:38', desc: 'A cloak torn from the dark between stars.', base: { top: 1, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0x06040c, glove: 0x06040c, accent: 0x7dff3a, cloth: 0x0a0612 },
+  { id: 'blood-brothers', parts: 'ronin', like: 1, name: 'BLOOD BROTHERS', req: 'recruit:1', desc: 'Squad exclusive. Earned by clearing wave 5 with a friend you invited.', base: { top: 3, topColor: 2, pants: 5, boots: 0, head: 0, face: 0, hair: 1, hairColor: 0, back: 0, pantsStyle: 3, gloves: 3, accent: 5 }, sleeve: 0x3a0a0a, glove: 0x1a0a0a, accent: 0xff3a2a },
   { id: 'gilded-knight', parts: 'knight', like: 2, name: 'GILDED WARLORD', req: 'level:50', desc: 'Gold-plated war armour for those who outlasted everything.', base: { top: 4, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0x8a6a1a, glove: 0x6a4a10, accent: 0xffd36a, iron: 0xd8a72a, cloth: 0x4a0a0a },
 ];
 
@@ -363,6 +371,17 @@ export function paintGunMaterials(mats, skinIndex) {
     mt.emissive?.setHex(s.glow && k !== 'metal' ? s.glow : 0);
     mt.emissiveIntensity = s.glow ? (k === 'dark' ? .6 : .07) : 0;
     mt.needsUpdate = true;
+  }
+}
+export function animateGunMaterials(mats, skinIndex, t) {
+  const s = WEAPON_SKINS[skinIndex];
+  if (!mats || !s?.anim) return;
+  const p = .5 + .5 * Math.sin(t * 3.2);
+  for (const k of ['base', 'dark']) {
+    const mt = mats[k];
+    if (!mt?.emissive) continue;
+    if (s.anim === 'cycle') mt.emissive.setHSL((t * .12 + (k === 'dark' ? .5 : 0)) % 1, 1, .5);
+    mt.emissiveIntensity = k === 'dark' ? .4 + .9 * p : .05 + .3 * p;
   }
 }
 const GLOVES = { tactical: 0x1c1e21, leather: 0x4a2e1a, work: 0xb89a6a, fingerless: 0x1a1a1c };

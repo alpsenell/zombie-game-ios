@@ -7,6 +7,8 @@ import revive from './revive.js';
 import mappick from './mappick.js';
 import checkpoint from './checkpoint.js';
 import * as coop from './coop.js';
+import * as events from './events.js';
+import * as comeback from './comeback.js';
 
 export const FEATURES = [
   progression,
@@ -18,4 +20,6 @@ export const FEATURES = [
   mappick,
   checkpoint,
   coop,
+  events,
+  comeback,
 ];

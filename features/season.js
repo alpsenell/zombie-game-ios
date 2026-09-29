@@ -305,10 +305,10 @@ export function init(api) {
   $('#over-extras')?.appendChild(chip);
 
   api.bus.on('run:end', summary => {
-    const xp = runXP(summary);
+    const mult = (api.live?.seasonXp || 1) * (api.live?.comebackXp || 1), xp = runXP(summary) * mult;
     const { before, after } = addXP(xp);
     lastRun = { xp, before, after };
-    chip.textContent = 'SEASON +' + xp.toLocaleString() + ' XP · TIER ' + after + (after > before ? ' ▲' : '');
+    chip.textContent = 'SEASON +' + xp.toLocaleString() + ' XP' + (mult > 1 ? ' (x' + mult + ')' : '') + ' · TIER ' + after + (after > before ? ' ▲' : '');
     chip.classList.toggle('hidden', !xp);
   });
   api.bus.on('mission:complete', m => { addXP(Math.min(MISSION_CAP, Math.max(0, +m?.xp || 0))); });

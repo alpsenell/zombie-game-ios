@@ -63,3 +63,14 @@ Slots in `SLOTS` and encoded `EXTRA_SLOTS` are bit-packed into the 64-bit Game C
 bit range (`2 ** bits`) must declare `like`, the index of a lower item they encode as, so other players see the closest look while the
 owner sees the real one. Suits can reuse another suit's geometry with `parts` plus colour overrides (`iron`, `cloth`, `fur`, `hood`).
 Season rewards: premium tier 1 is the season suit (claimed automatically on purchase), tier 20 the season weapon skin (`req: 'seasonskin:n'`).
+
+## Live ops
+- `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
+- `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).
+- Weekend events (`events.js`): Fri 00:00 → Mon 00:00 UTC, rotating BLOOD MOON / SCRAP RUSH / HEADHUNTER / HORDE NIGHT. Clearing wave 10 (8+ waves played) during an event unlocks its weapon skin.
+- League rewards (`competitive.js`): when a new week starts, last week's league pays scrap once (`paidWeek`) and shows promotion/relegation. `league:diamond` is met only while last week's or this week's league is Diamond+, so the skin is lost after dropping.
+- SPRINT 20: time to clear wave 20 from wave 1 (normal/ranked), stored in `profile.competitive.sprint` and submitted to `deadzone.sprint20`. `api.boardView.format/local/empty` let a board show times and custom local rows.
+- Prestige (`progression.js`): a mastered weapon can prestige up to 5 times (mastery reset, +1,500 scrap, ✦ marks). Skins with `anim: 'pulse' | 'cycle'` animate through `animateGunMaterials`.
+- Comeback (`comeback.js`): 7+ days away gives a crate (scrap + XP) and `comebackXp = 2` for the next 3 runs.
+- Invite reward (`coop.js`): in a session from INVITE FRIENDS, an accepted invite or a shared room code, clearing wave 5 grants BLOOD BROTHERS + 500 scrap once.
+- Tests: `node tools/test-live.mjs`.

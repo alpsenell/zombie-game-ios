@@ -161,6 +161,8 @@ const started = p => p.waitForFunction(() => window.__game.api.state.mode === 'p
 check(await started(A) && await started(B), 'host starts the run on both pages (type coop)');
 const maps = [await A.evaluate(() => window.__game.api.currentMap), await B.evaluate(() => window.__game.api.currentMap)];
 check(maps[0] === 'mall' && maps[1] === 'mall', 'client loads the host map', maps);
+const inv = await B.evaluate(() => { const { api } = window.__game, before = api.reqMet('recruit:1'), scrap = api.profile.scrap; const got = api.coop.session.invite && api.coop.grantRecruit(); return { before, got, after: api.reqMet('recruit:1'), again: api.coop.grantRecruit(), scrap: api.profile.scrap - scrap, fresh: api.profile.fresh.some(k => k.startsWith('suit:')) }; });
+check(!inv.before && inv.got && inv.after && !inv.again && inv.scrap === 500 && inv.fresh, 'invited squad earns BLOOD BROTHERS once (+500 scrap)', inv);
 await raf(A, false); await raf(B, false);
 const idA = (await info(A)).id, idB = (await info(B)).id;
 check((await info(A)).host === idA && (await info(B)).host === idA, 'host is the lowest id', { idA, idB });

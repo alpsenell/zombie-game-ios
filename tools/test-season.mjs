@@ -93,7 +93,7 @@ const allErrors = [];
     return { res, bits: suitSlot.bits, n: suitSlot.items.length, seasons: SUITS.filter(s => s?.season).map(s => s.season), req: suitSlot.items[5].req, premium: !!suitSlot.items[5].premium };
   });
   ok(codec.res.every(Boolean), 'loadout round-trips through encode/decode including suits 5 and 6');
-  ok(codec.bits === 3 && codec.n === 12 && codec.seasons.join() === '1,2' && codec.req === 'season:1' && !codec.premium, 'suit slot keeps 3 bits, 2 season suits appended');
+  ok(codec.bits === 3 && codec.n === 13 && codec.seasons.join() === '1,2' && codec.req === 'season:1' && !codec.premium, 'suit slot keeps 3 bits, 2 season suits appended');
 
   await page.waitForFunction(() => window.__calls.some(c => c.method === 'getProducts' && c.opts.ids.includes('com.alpsenel.laststanddeadzone.season.1.pass')));
   ok(true, 'season pass product id requested from StoreKit');

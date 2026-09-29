@@ -10,7 +10,8 @@ const native = {
 
 function init(api) {
   const { bus, profile, WEAPONS, $ } = api;
-  const P = profile.progression = Object.assign({ daily: null, weekly: null, reroll: '', rerolls: 0, mastery: {}, ach: {}, reported: {}, stats: null, streak: {} }, profile.progression);
+  const P = profile.progression = Object.assign({ daily: null, weekly: null, reroll: '', rerolls: 0, mastery: {}, prestige: {}, ach: {}, reported: {}, stats: null, streak: {} }, profile.progression);
+  P.prestige ||= {};
   P.streak = Object.assign({ count: 0, best: 0, last: null, claimed: null, shown: null, broken: 0 }, P.streak);
   P.stats = Object.assign({
     kills: profile.kills || 0, heads: profile.heads || 0, bosses: { ...profile.bosses }, bestWave: profile.bestWave || 0,
@@ -37,7 +38,7 @@ function init(api) {
     return {
       ...P.stats, owned: WEAPONS.filter(w => api.weaponOwned(w)).length,
       scrapOwned: scrapGuns.filter(w => api.weaponOwned(w)).length, scrapTotal: scrapGuns.length,
-      maxMastery: Math.max(1, ...Object.values(P.mastery).map(x => D.masteryInfo(x).level)), streak: P.streak.best,
+      maxMastery: Object.values(P.prestige).some(n => n > 0) ? D.MASTERY_MAX : Math.max(1, ...Object.values(P.mastery).map(x => D.masteryInfo(x).level)), streak: P.streak.best,
     };
   }
 
@@ -290,11 +291,34 @@ function init(api) {
     if (n) { const b = el('button', '', 'CLAIM ' + n + (n > 1 ? ' REWARDS' : ' REWARD')); b.onclick = () => openMissions(); wrap.appendChild(b); }
   }
 
+  const topPrestige = () => Math.max(0, ...Object.values(P.prestige));
+  api.reqs.prestige = { met: n => topPrestige() >= +n, text: n => 'PRESTIGE ANY WEAPON ' + (+n > 1 ? n + ' TIMES' : 'ONCE') };
+  let prestigeArm = null;
+  function prestige(id) {
+    const info = D.masteryInfo(P.mastery[id]), n = P.prestige[id] || 0;
+    if (!info.max || n >= D.PRESTIGE_MAX) return false;
+    const before = api.reqMet('prestige:1'), before5 = api.reqMet('prestige:5');
+    P.prestige[id] = n + 1;
+    P.mastery[id] = 0;
+    api.grantScrap(D.PRESTIGE_REWARD);
+    const gun = api.SLOTS.find(s => s.id === 'gun').items;
+    for (const [was, req] of [[before, 'prestige:1'], [before5, 'prestige:5']]) {
+      const i = gun.findIndex(it => it.req === req);
+      if (!was && api.reqMet(req) && i > 0 && !profile.fresh.includes('gun:' + i)) profile.fresh.push('gun:' + i);
+    }
+    save();
+    notify('PRESTIGE ' + D.prestigeMark(n + 1), weaponName(id) + ' · +' + D.PRESTIGE_REWARD.toLocaleString() + ' 🔩', 'mastery');
+    api.haptic('HEAVY'); api.sfx.perk();
+    bus.emit('prestige', { weapon: id, level: n + 1 });
+    return true;
+  }
+
   function decorateArmory({ grid, weapon }) {
     for (const card of grid?.children || []) {
       const w = WEAPONS.find(x => x.name === card.querySelector('b')?.textContent), xp = w && P.mastery[w.id];
-      if (!w || (!xp && !api.weaponOwned(w))) continue;
+      if (!w || (!xp && !P.prestige[w.id] && !api.weaponOwned(w))) continue;
       const info = D.masteryInfo(xp), row = el('div', 'pg-wm', info.max ? '★ MASTERED' : '★ ' + info.level);
+      if (P.prestige[w.id]) row.appendChild(el('span', 'pg-pmark', D.prestigeMark(P.prestige[w.id])));
       if (!info.max) { const bar = el('i'); bar.style.setProperty('--v', Math.round(info.pct * 100) + '%'); row.appendChild(bar); }
       card.appendChild(row);
       card.classList.toggle('pg-mastered', info.max);
@@ -304,11 +328,23 @@ function init(api) {
     let d = stage.querySelector('.pg-ad');
     if (!d) { d = el('div', 'pg-ad'); stage.appendChild(d); }
     d.textContent = '';
-    const info = D.masteryInfo(P.mastery[weapon.id]), stars = el('div', 'pg-stars');
+    const info = D.masteryInfo(P.mastery[weapon.id]), stars = el('div', 'pg-stars'), pn = P.prestige[weapon.id] || 0;
     stars.append(el('span', '', '★'.repeat(info.level)), document.createTextNode('★'.repeat(D.MASTERY_MAX - info.level)));
+    if (pn) stars.appendChild(el('span', 'pg-pmark', D.prestigeMark(pn)));
     d.appendChild(stars);
     if (info.max) {
-      d.append(el('div', 'pg-badge', '★ MASTERED'), el('small', '', 'MASTERY 10/10 · ' + (P.mastery[weapon.id] || 0).toLocaleString() + ' XP'));
+      d.append(el('div', 'pg-badge', '★ MASTERED' + (pn ? ' · PRESTIGE ' + pn : '')), el('small', '', 'MASTERY 10/10 · ' + (P.mastery[weapon.id] || 0).toLocaleString() + ' XP'));
+      if (pn < D.PRESTIGE_MAX) {
+        const armed = prestigeArm === weapon.id, b = el('button', 'pg-prestige' + (armed ? ' confirm' : ''), armed ? 'TAP AGAIN · RESET MASTERY FOR ✦' : '✦ PRESTIGE · +' + D.PRESTIGE_REWARD.toLocaleString() + ' 🔩');
+        b.id = 'pg-prestige';
+        b.onclick = () => {
+          if (prestigeArm !== weapon.id) { prestigeArm = weapon.id; decorateArmory({ weapon }); return; }
+          prestigeArm = null;
+          prestige(weapon.id);
+          api.refreshArmory();
+        };
+        d.appendChild(b);
+      }
       return;
     }
     const bar = el('div', 'xp'), i = el('i');
@@ -420,6 +456,7 @@ function init(api) {
     state: P, data: D, claim, reroll, refreshMissions, openMissions, openStreak, claimStreak, streakCheck, syncNative,
     missions: () => [...(P.daily?.list || []), ...(P.weekly?.list || [])],
     mastery: id => D.masteryInfo(P.mastery[id]),
+    prestige, prestigeOf: id => P.prestige[id] || 0,
   };
 }
 

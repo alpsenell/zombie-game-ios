@@ -3,7 +3,7 @@ import { createBus, rng, R, hashSeed, mulberry32 } from './core.js';
 import { MAPS } from './maps.js';
 import { FEATURES } from './features/index.js';
 import { WEAPONS, STORE_PREFIX, buildGun, weaponIndex, weaponStats, WOOD, woodStock } from './weapons.js';
-import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, outfitColors } from './character.js';
+import { SLOTS, EXTRA_SLOTS, LOCKER_GROUPS, BODY, TITLES, DEFAULT_LOADOUT, WEAPON_SKINS, encodeLoadout, decodeLoadout, describeLoadout, createPreview, paintGunMaterials, animateGunMaterials, outfitColors } from './character.js';
 
 const $ = s => document.querySelector(s);
 const bus = createBus();
@@ -842,6 +842,8 @@ function levelInfo(xp = profile.xp) {
   return { level, into: rest, need };
 }
 function myCode() { profile.loadout.primary = loadoutWeapons()[0]; return encodeLoadout(profile.loadout, levelInfo().level); }
+const REQS = {};
+const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '' };
 function reqMet(req) {
   if (!req) return true;
   const [k, v] = req.split(':'), n = +v;
@@ -854,10 +856,12 @@ function reqMet(req) {
   if (k === 'veteran') return Math.max(profile.bestByDiff.veteran || 0, profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'season') return !!profile.season?.suits?.[v];
   if (k === 'seasonskin') return !!profile.season?.skins?.[v];
+  if (REQS[k]) return !!REQS[k].met(v);
   return false;
 }
 function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
+  if (REQS[k]) return REQS[k].text(v);
   return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS', seasonskin: 'SEASON ' + n + ' PASS' }[k] || req;
 }
 const ALL_SLOTS = [...SLOTS, ...EXTRA_SLOTS];
@@ -969,8 +973,8 @@ function rosterWeights(w, D = diff()) {
 function waveComposition(w) {
   const D = diff(), M = MODS[state.mod] || {}, bossWave = w % 5 === 0;
   const weights = rosterWeights(w, D), sum = Object.values(weights).reduce((a, b) => a + b, 0);
-  const total = Math.min(70, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * (bossWave ? .6 : 1)));
-  const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 : 0;
+  const total = Math.min(90, Math.round((4 + w * 2 + w * w * .12) * D.count * (M.count ?? 1) * live.count * (bossWave ? .6 : 1)));
+  const eliteChance = w >= 5 ? D.elite + (w - 5) * .01 + live.elite : live.elite && w >= 3 ? live.elite / 2 : 0;
   const list = [], count = {};
   for (let i = 0; i < total; i++) {
     let r = R() * sum, kind = 'walker';
@@ -1115,7 +1119,7 @@ function killZombie(z, head, noScore) {
       state.combo = state.clock - state.lastKill < 3 ? state.combo + 1 : 1;
       state.lastKill = state.clock;
       state.bestCombo = Math.max(state.bestCombo, state.combo);
-      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
+      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 * live.headScore : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
       state.score += pts;
       bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning });
       floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
@@ -1879,8 +1883,8 @@ function grantRewards() {
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
   const played = state.wave - state.startWave + 1;
-  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune);
-  const xp = Math.round(state.score / 10 + played * 50);
+  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune * live.scrap);
+  const xp = Math.round((state.score / 10 + played * 50) * live.xp);
   profile.scrap += scrap;
   profile.xp += xp;
   profile.kills += state.kills;
@@ -1895,8 +1899,8 @@ function grantRewards() {
   const fresh = [...unlockedSet()].filter(k => !before.has(k));
   profile.fresh = [...new Set([...profile.fresh, ...fresh])];
   saveProfile();
-  chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : ''), 'gold');
-  chip('+' + xp.toLocaleString() + ' XP');
+  chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : '') + (live.scrap > 1 ? ' (' + live.label + ' x' + live.scrap + ')' : ''), 'gold');
+  chip('+' + xp.toLocaleString() + ' XP' + (live.xp > 1 ? ' (' + live.label + ' x' + live.xp + ')' : ''));
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
     const [slot, i] = fresh[0].split(':');
@@ -2368,6 +2372,11 @@ function frame() {
   else if (state.mode === 'menu') updateMenu(dt);
   else if (state.mode === 'dead') { state.clock += dt; updateZombies(dt, false, camera.position); }
   if (state.mode !== 'paused' && state.mode !== 'perk') updateEffects(dt);
+  if (WEAPON_SKINS[profile.loadout.gun]?.anim) {
+    const t = performance.now() / 1000;
+    animateGunMaterials(guns[player.weapon]?.userData.mats, profile.loadout.gun, t);
+    if (activeScreen === ui.armory) animateGunMaterials(armoryMats, profile.loadout.gun, t);
+  }
   if (state.mode === 'playing' || state.mode === 'perk' || state.mode === 'paused') updateFloaters(dt);
   if (activeScreen === ui.menu || activeScreen === ui.locker || activeScreen === ui.inspect || activeScreen === ui.armory) preview.render(dt);
   sky.position.copy(camera.position);
@@ -2539,7 +2548,7 @@ function saveRun() {
 }
 
 let boardTab = 'global', boardReturn = null, boardToken = 0;
-const boardView = { id: LEADERBOARDS.score, filter: null };
+const boardView = { id: LEADERBOARDS.score, filter: null, format: null, local: null };
 const avatarCache = new Map();
 function avatarFor(code) {
   const d = decodeLoadout(code), key = d ? encodeLoadout(d.loadout) : 0;
@@ -2556,7 +2565,7 @@ function boardRow(rank, title, sub, score, me, code, extra = {}) {
   const sm = document.createElement('small');
   sm.textContent = [d ? TITLES[d.loadout.title] + ' · LV ' + d.level : '', sub].filter(Boolean).join(' · ');
   name.appendChild(sm);
-  const sc = document.createElement('span'); sc.textContent = score.toLocaleString();
+  const sc = document.createElement('span'); sc.textContent = boardView.format ? boardView.format(score) : score.toLocaleString();
   li.append(r, img, name, sc);
   li.onclick = () => openInspect({ rank, name: title, score, code, ...extra });
   return li;
@@ -2584,6 +2593,12 @@ function openInspect(p) {
 $('#inspect-close').onclick = () => showScreen(inspectReturn || ui.board);
 
 function renderLocalRuns(list) {
+  if (boardView.local) {
+    const rows = boardView.local();
+    if (!rows.length) { $('#board-status').textContent = boardView.empty || 'No runs yet — deploy and set a score.'; return; }
+    rows.forEach((r, i) => list.appendChild(boardRow(i + 1, r.title, r.sub, r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
+    return;
+  }
   const runs = store.get('runs', []).filter(r => !boardView.filter || boardView.filter(r));
   if (!runs.length) { $('#board-status').textContent = 'No runs yet — deploy and set a score.'; return; }
   runs.forEach((r, i) => list.appendChild(boardRow(i + 1, (DIFFICULTIES[r.diff]?.name || 'SURVIVOR') + ' · WAVE ' + r.wave + (r.start > 1 ? ' (FROM ' + r.start + ')' : ''), new Date(r.date).toLocaleDateString() + ' · ' + r.kills + ' KILLS', r.score, false, r.code || myCode(), { rankLabel: 'YOUR RUN #' + (i + 1), name: 'YOU' })));
@@ -2626,6 +2641,7 @@ let lockerSlot = 'top', pendingBuy = null, tryOn = null;
 function refreshProfileUI() {
   const lv = levelInfo(), l = profile.loadout;
   if (l.suit && !isOwned('suit', l.suit)) { l.suit = 0; saveProfile(); }
+  if (l.gun && !isOwned('gun', l.gun)) { l.gun = 0; saveProfile(); }
   $('#menu-level').textContent = 'LV ' + lv.level;
   $('#menu-title').textContent = TITLES[l.title];
   $('#lk-level').textContent = 'LEVEL ' + lv.level;
@@ -2974,7 +2990,7 @@ function grantXP(n) { profile.xp += Math.round(n); saveProfile(); refreshProfile
 const api = {
   THREE, bus, rng, R, hashSeed, $, ui, state, player, stats, look, move, settings, records, profile, store, scene, camera, zombies, pickups,
   WEAPONS, SLOTS, TITLES, DIFFICULTIES, MODS, ZT, PERKS, BOSS_ORDER, sfx, haptic, preview, gameCenter, storeKit, LEADERBOARDS, boardView, renderBoard,
-  saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
+  saveProfile, refreshProfileUI, refreshRecords, levelInfo, reqMet, reqText, reqs: REQS, live, refreshArmory: () => renderArmory(), myCode, loadoutWeapons, weaponOwned, weaponIndex, encodeLoadout, decodeLoadout,
   startGame, toMenu, showScreen, registerScreen, get activeScreen() { return activeScreen; }, toast, message, hint, floater, schedule, nextWave,
   makeZombie, damageZombie, hurtPlayer, explode, dropPickup, blocked, selectWeapon, runSummary, grantScrap, grantXP, diff, queueModal,
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
