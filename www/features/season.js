@@ -1,5 +1,5 @@
 import { STORE_PREFIX } from '../weapons.js';
-import { SUITS } from '../character.js';
+import { SUITS, WEAPON_SKINS } from '../character.js';
 
 export const EPOCH = Date.UTC(2026, 8, 21);
 export const SEASON_DAYS = 42, TIERS = 30, TIER_XP = 1000, RUN_CAP = 600, MISSION_CAP = 500;
@@ -18,6 +18,7 @@ export function runXP(s) {
   return Math.max(0, Math.min(RUN_CAP, Math.round(raw)));
 }
 export const seasonSuit = n => SUITS.findIndex(x => x?.season === n);
+export const seasonSkin = n => WEAPON_SKINS.findIndex(x => x.season === n);
 export function reward(n, t, track) {
   if (track === 'free') {
     if (t === 10) return { kind: 'flair', id: 'badge', label: 'SEASON BADGE' };
@@ -25,15 +26,17 @@ export function reward(n, t, track) {
     if (t % 5 === 0) return { kind: 'scrap', amount: 400 + t * 20 };
     return t % 2 ? { kind: 'scrap', amount: 100 + t * 10 } : { kind: 'xp', amount: 300 + t * 30 };
   }
-  const suit = seasonSuit(n);
-  if (t === 1) return { kind: 'flair', id: 'frame', label: 'GOLD FRAME' };
+  const suit = seasonSuit(n), skin = seasonSkin(n);
+  if (t === 1) return suit > 0 ? { kind: 'suit', suit, label: SUITS[suit].name } : { kind: 'flair', id: 'frame', label: 'GOLD FRAME' };
+  if (t === 5 && suit > 0) return { kind: 'flair', id: 'frame', label: 'GOLD FRAME' };
+  if (t === 10) return { kind: 'scrap', amount: 1500 };
   if (t === 15) return { kind: 'flair', id: 'elite', label: 'ELITE BANNER' };
-  if (t === 20 && suit > 0) return { kind: 'suit', suit, label: SUITS[suit].name };
+  if (t === 20 && skin > 0) return { kind: 'skin', skin, label: WEAPON_SKINS[skin].name + ' SKIN' };
   if (t === 30) return { kind: 'scrap', amount: 5000 };
   return { kind: 'scrap', amount: 200 + t * 20 };
 }
 const label = r => r.label || (r.kind === 'scrap' ? r.amount.toLocaleString() + ' SCRAP' : r.amount.toLocaleString() + ' XP');
-const icon = r => ({ scrap: '🔩', xp: '⚡', flair: '🎖', suit: '★' })[r.kind];
+const icon = r => ({ scrap: '🔩', xp: '⚡', flair: '🎖', suit: '★', skin: '🔫' })[r.kind];
 export function flairText(profile) {
   const f = profile.season?.flair || {};
   if (f.elite) return 'SEASON ' + f.elite + ' ELITE';
@@ -76,6 +79,8 @@ const CSS = `
 .sp-cell.ready small{color:#1a1206;background:var(--amber);padding:2px 6px;border-radius:5px}
 .sp-cell.pass small{color:var(--amber)}
 .sp-cell.big{border-width:2px}
+.sp-cell.hero{border-color:#ffd36a;background:linear-gradient(160deg,#4a3510,#1a1408 70%);box-shadow:0 0 18px #ffc34d55}
+.sp-cell.hero:before{content:"INSTANT";position:absolute;top:4px;left:50%;transform:translateX(-50%);padding:1px 6px;border-radius:4px;background:linear-gradient(180deg,#ffe08a,#e0a02a);color:#1a1206;font:900 7px var(--ui);letter-spacing:1.2px}
 .sp-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;flex-wrap:wrap}
 .sp-foot .row{gap:8px;flex-wrap:nowrap}
 .sp-foot button{white-space:nowrap}
@@ -108,7 +113,7 @@ export function init(api) {
     const cur = seasonAt();
     let s = profile.season;
     if (!s || typeof s !== 'object') s = profile.season = {};
-    s.suits ||= {}; s.flair ||= {};
+    s.suits ||= {}; s.skins ||= {}; s.flair ||= {};
     if (s.n !== cur.n) { Object.assign(s, { n: cur.n, xp: 0, free: [], premium: [] }); api.saveProfile(); }
     s.free ||= []; s.premium ||= [];
     return s;
@@ -138,6 +143,11 @@ export function init(api) {
     if (r.kind === 'suit') {
       s.suits[n] = true;
       const key = 'suit:' + r.suit;
+      if (!profile.fresh.includes(key)) profile.fresh.push(key);
+    }
+    if (r.kind === 'skin') {
+      s.skins[n] = true;
+      const key = 'gun:' + r.skin;
       if (!profile.fresh.includes(key)) profile.fresh.push(key);
     }
   }
@@ -196,7 +206,7 @@ export function init(api) {
     const r = reward(s.n, t, track), c = document.createElement('button');
     const claimed = (track === 'free' ? s.free : s.premium).includes(t), reached = t <= tier, pass = track === 'free' || hasPass(s.n);
     const st = claimed ? 'claimed' : !reached ? 'locked' : !pass ? 'pass' : 'ready';
-    c.className = 'sp-cell ' + (track === 'free' ? 'free ' : 'prem ') + st + (r.kind === 'suit' || r.kind === 'flair' ? ' big' : '');
+    c.className = 'sp-cell ' + (track === 'free' ? 'free ' : 'prem ') + st + (r.kind === 'suit' || r.kind === 'flair' || r.kind === 'skin' ? ' big' : '') + (track === 'premium' && t === 1 && r.kind === 'suit' ? ' hero' : '');
     c.dataset.track = track; c.dataset.tier = t;
     if (r.kind === 'suit') { const img = document.createElement('img'); img.alt = ''; img.src = suitThumb(r.suit); c.appendChild(img); }
     else { const i = document.createElement('i'); i.textContent = icon(r); c.appendChild(i); }
@@ -206,7 +216,7 @@ export function init(api) {
     c.onclick = () => {
       if (st === 'ready') {
         const got = claim(track, t);
-        if (got) { api.sfx.pickup?.(); api.haptic('MEDIUM'); note = 'CLAIMED ' + label(got) + (got.kind === 'suit' ? ' — EQUIP IT IN THE LOCKER' : ''); api.refreshProfileUI(); }
+        if (got) { api.sfx.pickup?.(); api.haptic('MEDIUM'); note = 'CLAIMED ' + label(got) + (got.kind === 'suit' || got.kind === 'skin' ? ' — EQUIP IT IN THE LOCKER' : ''); api.refreshProfileUI(); }
       } else if (st === 'pass') note = 'BUY THE SEASON ' + s.n + ' PASS TO UNLOCK PREMIUM REWARDS';
       else if (st === 'locked') note = 'REACH TIER ' + t + ' TO UNLOCK';
       render();
@@ -242,7 +252,7 @@ export function init(api) {
     buy.classList.toggle('hidden', owned);
     const price = api.storeKit.products[passId(s.n)]?.price;
     buy.textContent = 'BUY PASS' + (api.storeKit.available() ? price ? ' · ' + price : '' : ' · iOS APP');
-    $('#sp-note').textContent = note || (owned ? 'PREMIUM TRACK UNLOCKED. EARN SEASON XP EVERY RUN.' : api.storeKit.available() ? 'PREMIUM TRACK: EXCLUSIVE OUTFIT, GOLD FRAME AND SCRAP. COSMETIC ONLY.' : 'THE PREMIUM PASS IS AVAILABLE IN THE iOS APP.');
+    $('#sp-note').textContent = note || (owned ? 'PREMIUM TRACK UNLOCKED. EARN SEASON XP EVERY RUN.' : api.storeKit.available() ? (seasonSuit(s.n) > 0 ? 'UNLOCK ' + SUITS[seasonSuit(s.n)].name + ' INSTANTLY + EXCLUSIVE WEAPON SKIN, GOLD FRAME AND SCRAP. COSMETIC ONLY.' : 'PREMIUM TRACK: EXCLUSIVE WEAPON SKIN, GOLD FRAME AND SCRAP. COSMETIC ONLY.') : 'THE PREMIUM PASS IS AVAILABLE IN THE iOS APP.');
     if (scroll) {
       const col = track.children[tier];
       track.scrollLeft = col ? Math.max(0, col.offsetLeft - track.clientWidth / 2 + col.offsetWidth / 2) : 0;
@@ -276,7 +286,11 @@ export function init(api) {
     note = 'OPENING THE APP STORE…'; render();
     const r = await api.storeKit.purchase(passId(s.n));
     b.disabled = false;
-    note = r.status === 'purchased' || hasPass(s.n) ? 'SEASON ' + s.n + ' PASS UNLOCKED — CLAIM YOUR PREMIUM REWARDS' : api.storeKit.message(r, 'SEASON PASS').toUpperCase();
+    if (hasPass(s.n)) {
+      const got = claim('premium', 1);
+      if (got) { api.sfx.pickup?.(); api.haptic('HEAVY'); api.refreshProfileUI(); }
+      note = got?.kind === 'suit' ? 'PASS UNLOCKED — ' + got.label + ' IS YOURS. EQUIP IT IN THE LOCKER' : 'SEASON ' + s.n + ' PASS UNLOCKED — CLAIM YOUR PREMIUM REWARDS';
+    } else note = api.storeKit.message(r, 'SEASON PASS').toUpperCase();
     refresh();
     render();
   }

@@ -361,8 +361,8 @@ check(perks.explosive.boomsAfter9 === 0 && perks.explosive.boomsAfter10 === 1, '
 check(perks.pierce0 === 1 && perks.pierce1 === 2, 'RICOCHET: pierce +1', `${perks.pierce0} → ${perks.pierce1} bodies per bullet`);
 check(Math.abs(perks.berserk.ratio - 1.48) < .03, 'BERSERKER: +48% damage at 20% HP', JSON.stringify(perks.berserk));
 check(perks.refund.dmg > 60 && perks.refund.ammo === 20 && perks.noRefundAmmo === 19, 'TRIGGER DISCIPLINE: headshot refunds a round', JSON.stringify(perks.refund));
-check(Math.abs(perks.frostStat - .12) < 1e-9 && perks.chill > .5, 'FROST ROUNDS: 12% per stack, chills on proc', `chill ${perks.chill}`);
-check(Math.abs(perks.fireStat - .12) < 1e-9 && perks.burn > 2.9, 'INCENDIARY ROUNDS: 12% per stack, ignites on proc', `burnT ${perks.burn}`);
+check(Math.abs(perks.frostStat - .08) < 1e-9 && perks.chill > .5, 'FROST ROUNDS: 8% per stack, chills on proc', `chill ${perks.chill}`);
+check(Math.abs(perks.fireStat - .08) < 1e-9 && perks.burn > 2.9, 'INCENDIARY ROUNDS: 8% per stack, ignites on proc', `burnT ${perks.burn}`);
 check(perks.adrenT === 2.5 && Math.abs(perks.adrenaline.ratio - 1.3) < .03, 'ADRENALINE: kill gives +30% move speed', JSON.stringify(perks.adrenaline));
 check(perks.magnetOff === 1 && perks.magnetOn === 0 && perks.magnet === 2, 'MAGNETIC: 2x pickup range', `off ${perks.magnetOff} left, on ${perks.magnetOn} left`);
 check(perks.nadeNow === 1 && perks.nadeAfterWave === 1, 'GRENADIER: +1 grenade now and per wave');
@@ -391,23 +391,26 @@ const odds = await page.evaluate(() => {
   const { api } = window.__game, T = window.__t;
   T.freshRun({ map: 'street' });
   const legendary = new Set(api.PERKS.filter(p => p.legendary).map(p => p.name));
-  let early = 0, late = 0, lateOffers = 0, earlyOffers = 0;
-  for (let s = 1; s <= 400; s++) {
+  const major = new Set(api.PERKS.filter(p => p.legendary || p.rare).map(p => p.name));
+  let minorLeak = 0, milestoneMiss = 0, milestones = 0, offers = 0;
+  for (let s = 1; s <= 200; s++) {
     api.state.seed = s;
     for (let w = 1; w <= 20; w++) {
       api.state.wave = w;
       api.offerPerks();
-      const n = api.state.perkOffer.filter(p => legendary.has(p)).length;
-      if (w < 10) { earlyOffers++; early += n; } else { lateOffers++; late += n; }
+      offers++;
+      const o = api.state.perkOffer;
+      if (w % 10) minorLeak += o.filter(p => major.has(p)).length;
+      else { milestones++; if (!o.some(p => legendary.has(p)) || !o.every(p => major.has(p))) milestoneMiss++; }
     }
   }
   const offersFor = seed => { api.state.seed = seed; return [3, 7, 12].map(w => { api.state.wave = w; api.offerPerks(); return api.state.perkOffer.join('|'); }).join(' / '); };
   const a = offersFor(1234), b = offersFor(1234), c = offersFor(4321);
   api.state.mode = 'playing'; api.showScreen(null);
-  return { early, earlyOffers, late, lateOffers, rate: late / lateOffers, same: a === b, differs: a !== c, sample: a };
+  return { minorLeak, milestoneMiss, milestones, offers, same: a === b, differs: a !== c, sample: a };
 });
-check(odds.early === 0, 'legendaries never offered before wave 10', `${odds.earlyOffers} offers`);
-check(odds.rate > .06 && odds.rate < .10, 'legendary offer rate ~8% from wave 10', `${(odds.rate * 100).toFixed(2)}% of ${odds.lateOffers} offers`);
+check(odds.minorLeak === 0, 'major/legendary upgrades never offered off milestone waves', `${odds.offers} offers`);
+check(odds.milestoneMiss === 0, 'every 10th wave offers only major upgrades incl. a legendary', `${odds.milestones} milestone offers`);
 check(odds.same && odds.differs, 'same seed → same perk offers (different seed differs)', odds.sample);
 
 const replay = [];
@@ -496,7 +499,7 @@ if (SHOTS) {
     T.freshRun({ map: 'street', seed: 1 });
     for (const n of ['HOLLOW POINTS', 'RICOCHET', 'RICOCHET', 'FROST ROUNDS', 'MAGNETIC', 'TIME WARP', 'SECOND MAG']) T.perk(n);
     const legendary = new Set(api.PERKS.filter(p => p.legendary).map(p => p.name));
-    for (let s = 1; s < 500; s++) { api.state.seed = s; api.state.wave = 12; api.offerPerks(); if (api.state.perkOffer.some(p => legendary.has(p))) break; }
+    for (let s = 1; s < 500; s++) { api.state.seed = s; api.state.wave = 10; api.offerPerks(); if (api.state.perkOffer.some(p => legendary.has(p))) break; }
   });
   await shot(page, 'perks-legendary');
   await page.evaluate(() => {
@@ -521,7 +524,7 @@ if (SHOTS) {
     T.freshRun({ map: 'overpass', seed: 1 });
     for (const n of ['EXPLOSIVE ROUNDS', 'ADRENALINE', 'PHOENIX']) T.perk(n);
     const legendary = new Set(api.PERKS.filter(p => p.legendary).map(p => p.name));
-    for (let s = 1; s < 500; s++) { api.state.seed = s; api.state.wave = 14; api.offerPerks(); if (api.state.perkOffer.some(p => legendary.has(p))) break; }
+    for (let s = 1; s < 500; s++) { api.state.seed = s; api.state.wave = 20; api.offerPerks(); if (api.state.perkOffer.some(p => legendary.has(p))) break; }
   });
   await shot(portrait.page, 'portrait-perks');
   await portrait.page.evaluate(() => { const { api } = window.__game; api.state.mode = 'playing'; api.showScreen(null); api.hint(''); for (let f = 0; f < 30; f++) window.__game.update(1 / 30); });

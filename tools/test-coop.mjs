@@ -130,6 +130,8 @@ async function open(init, name, look) {
 const A = await open(initGameCenter);
 await A.waitForFunction(() => window.__game.api.gameCenter.player);
 const B = await open(initPage, 'BRAVO', { top: 3, topColor: 8, head: 5, hair: 2, hairColor: 3, pants: 1 });
+await A.evaluate(() => window.__game.api.loadMap('mall'));
+await B.evaluate(() => window.__game.api.loadMap('street'));
 await A.click('#coop-open');
 await button(A, 'HOST LOCAL');
 const code = await A.textContent('.coop-room-head b');
@@ -145,6 +147,7 @@ await A.waitForFunction(() => [...document.querySelectorAll('.coop-players img')
 const names = await A.$$eval('.coop-players li b', els => els.map(e => e.textContent));
 check(names.includes('ALPHA') && names.includes('BRAVO'), 'lobby lists both players with Game Center / local names', names);
 await shot(A, 'coop-lobby.png', 200);
+check(/MALL/.test(await B.textContent('.coop-room-head')), 'client lobby shows the host map', await B.textContent('.coop-room-head'));
 
 const badJoin = await open(initPage, 'ZULU');
 await badJoin.click('#coop-open');
@@ -156,6 +159,8 @@ await badJoin.close();
 await button(A, 'START');
 const started = p => p.waitForFunction(() => window.__game.api.state.mode === 'playing' && window.__game.api.state.runType === 'coop', null, { timeout: 4000 }).then(() => true, () => false);
 check(await started(A) && await started(B), 'host starts the run on both pages (type coop)');
+const maps = [await A.evaluate(() => window.__game.api.currentMap), await B.evaluate(() => window.__game.api.currentMap)];
+check(maps[0] === 'mall' && maps[1] === 'mall', 'client loads the host map', maps);
 await raf(A, false); await raf(B, false);
 const idA = (await info(A)).id, idB = (await info(B)).id;
 check((await info(A)).host === idA && (await info(B)).host === idA, 'host is the lowest id', { idA, idB });

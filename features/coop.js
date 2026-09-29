@@ -44,7 +44,7 @@ function addPlayer(pid, name, code, me) {
 
 function newSession(t, room) {
   S = {
-    t, room, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty,
+    t, room, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty, map: api.currentMap,
     zmap: new Map(), gone: new Set(), zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, hits: new Map(),
     stateAt: 0, snapAt: 0, hitAt: 0, pingAt: 0, fired: false, lastKillPts: 0, hitter: null,
     perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, slamZ: null,
@@ -68,7 +68,7 @@ function newSession(t, room) {
 }
 
 function sendHi(to) {
-  send(['hi', S.me.name, api.myCode(), S.me.ready ? 1 : 0, S.phase === 'lobby' ? 0 : 1, isHost() ? api.settings.difficulty : ''], to);
+  send(['hi', S.me.name, api.myCode(), S.me.ready ? 1 : 0, S.phase === 'lobby' ? 0 : 1, isHost() ? api.settings.difficulty : '', isHost() ? api.currentMap : ''], to);
 }
 
 function leave() {
@@ -88,7 +88,7 @@ function refresh() {
   const list = [...S.players.values()].sort(byId), host = isHost();
   const allReady = list.every(p => p.id === S.host || p.ready);
   lobby.render({
-    room: S.room, diff: api.DIFFICULTIES[S.diff]?.name || 'SURVIVOR', waiting: true,
+    room: S.room, diff: (api.DIFFICULTIES[S.diff]?.name || 'SURVIVOR') + ' · ' + (api.MAPS.find(x => x.id === (isHost() ? api.currentMap : S.map))?.name || '').toUpperCase(), waiting: true,
     players: list.map(p => ({ id: p.id, name: p.name, code: p.code, ready: p.ready, host: p.id === S.host, me: p.me })),
     mainText: host ? 'START' : S.me.ready ? 'CANCEL READY' : 'READY',
     mainDisabled: host && (list.length < 2 || !allReady),
@@ -169,24 +169,25 @@ function startMatch() {
   if (!isHost() || S.phase !== 'lobby') return;
   const list = [...S.players.values()];
   if (list.length < 2 || !list.every(p => p.me || p.ready)) return;
-  const seed = (Math.random() * 2 ** 31) | 0, diff = api.settings.difficulty, ids = list.map(p => p.id);
-  send(['go', seed, diff, ids]);
-  startRun(seed, diff, ids);
+  const seed = (Math.random() * 2 ** 31) | 0, diff = api.settings.difficulty, ids = list.map(p => p.id), map = api.currentMap;
+  send(['go', seed, diff, ids, map]);
+  startRun(seed, diff, ids, map);
 }
 
-function startRun(seed, diff, ids) {
+function startRun(seed, diff, ids, map) {
   if (!ids.includes(S.t.id)) { leave(); lobby.showPick(); lobby.status('MATCH STARTED WITHOUT YOU', true); return; }
   for (const pid of [...S.players.keys()]) if (!ids.includes(pid)) S.players.delete(pid);
-  Object.assign(S, { phase: 'run', left: [], zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, stateAt: 0, snapAt: 0, hitAt: 0, perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, diff });
+  Object.assign(S, { phase: 'run', left: [], zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, stateAt: 0, snapAt: 0, hitAt: 0, perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, diff, map });
   S.zmap.clear(); S.gone.clear(); S.hits.clear();
   const order = [...ids].sort();
+  api.state.net = net;
+  api.startGame({ type: 'coop', seed, difficulty: diff, map });
+  const sx = api.camera.position.x, sz = api.camera.position.z;
   for (const p of S.players.values()) {
     Object.assign(p, { st: 0, bleed: 0, rev: 0, kills: 0, heads: 0, revives: 0, downs: 0, shots: 0, hits: 0, perked: 0, hp: 100, maxHp: 100, left: false });
-    p.x = p.pos.x = (order.indexOf(p.id) - (order.length - 1) / 2) * 2.4;
-    p.z = p.pos.z = 30;
+    p.x = p.pos.x = sx + (order.indexOf(p.id) - (order.length - 1) / 2) * 2.4;
+    p.z = p.pos.z = sz;
   }
-  api.state.net = net;
-  api.startGame({ type: 'coop', seed, difficulty: diff });
   api.camera.position.x = S.me.x;
   hud.show(true);
 }
@@ -305,6 +306,7 @@ function onMessage(from, m) {
       if (api.decodeLoadout(m[2])) p.code = m[2];
       p.ready = !!m[3];
       if (from === S.host && m[5]) S.diff = m[5];
+      if (from === S.host && api.MAPS.some(x => x.id === m[6])) S.map = m[6];
       if (m[4] && from === S.host && S.phase === 'lobby' && !isHost()) { leave(); lobby.showPick(); lobby.status('MATCH IN PROGRESS — TRY AGAIN LATER', true); return; }
       refresh();
       return;
@@ -313,7 +315,7 @@ function onMessage(from, m) {
       leave(); lobby.showPick(); lobby.status(type === 'busy' ? 'MATCH IN PROGRESS — TRY AGAIN LATER' : 'ROOM IS FULL', true);
       return;
     case 'go':
-      if (S.phase !== 'run' && Array.isArray(m[3])) startRun(m[1] | 0, api.DIFFICULTIES[m[2]] ? m[2] : 'survivor', m[3]);
+      if (S.phase !== 'run' && Array.isArray(m[3])) startRun(m[1] | 0, api.DIFFICULTIES[m[2]] ? m[2] : 'survivor', m[3], api.MAPS.some(x => x.id === m[4]) ? m[4] : 'street');
       return;
     case 'pi': sendU(['po', m[1]], from); return;
     case 'po': p.rtt = p.rtt ? p.rtt * .7 + (now() - m[1]) * .3 : now() - m[1]; return;

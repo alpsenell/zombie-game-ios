@@ -62,7 +62,7 @@ const allErrors = [];
       xpBig: S.runXP({ score: 999999, wave: 80, kills: 5000, heads: 2000, bosses: ['a', 'b'] }),
       xpSmall: S.runXP({ score: 1000, wave: 2, kills: 10, heads: 2, bosses: [] }), xpZero: S.runXP({ score: 0, wave: 1, kills: 0, heads: 0 }),
       premiumKinds: [...new Set(Array.from({ length: 30 }, (_, i) => S.reward(1, i + 1, 'premium').kind))],
-      suitTier: S.reward(1, 20, 'premium'), suit2: S.reward(2, 20, 'premium').label, suit3: S.reward(3, 20, 'premium').kind,
+      suitTier: S.reward(1, 1, 'premium'), suit2: S.reward(2, 1, 'premium').label, suit3: S.reward(3, 1, 'premium').kind, skin1: S.reward(1, 20, 'premium'), skin3: S.reward(3, 20, 'premium').kind,
     };
   });
   ok(math.epoch.join() === '1,42', 'season 1 starts at epoch with 42 days left');
@@ -74,15 +74,16 @@ const allErrors = [];
   ok(math.pass === 'com.alpsenel.laststanddeadzone.season.3.pass', 'pass product id');
   ok(math.now === 1, 'mocked date resolves to season 1');
   ok(math.xpBig === 600 && math.xpSmall === 71 && math.xpZero === 0, 'run xp formula and per-run cap (' + [math.xpBig, math.xpSmall, math.xpZero] + ')');
-  ok(math.premiumKinds.every(k => ['scrap', 'flair', 'suit'].includes(k)), 'premium rewards are cosmetic or scrap only');
-  ok(math.suitTier.kind === 'suit' && math.suitTier.suit === 5 && math.suit2 === 'DEEP DIVER' && math.suit3 === 'scrap', 'season suits map to seasons 1 and 2');
+  ok(math.premiumKinds.every(k => ['scrap', 'flair', 'suit', 'skin'].includes(k)), 'premium rewards are cosmetic or scrap only');
+  ok(math.suitTier.kind === 'suit' && math.suitTier.suit === 5 && math.suit2 === 'DEEP DIVER' && math.suit3 === 'flair', 'season suits are the instant premium tier 1 reward for seasons 1 and 2');
+  ok(math.skin1.kind === 'skin' && math.skin1.label === 'HARVEST MOON SKIN' && math.skin3 === 'scrap', 'season weapon skin is the premium tier 20 reward');
 
   const codec = await page.evaluate(async () => {
     const { SLOTS, SUITS, encodeLoadout, decodeLoadout, DEFAULT_LOADOUT } = await import('./character.js');
     const same = (a, b) => SLOTS.every(s => a[s.id] === b[s.id]);
     const res = [];
     for (const suit of [0, 4, 5, 6]) {
-      const max = Object.fromEntries(SLOTS.map(s => [s.id, s.items.length - 1]));
+      const max = Object.fromEntries(SLOTS.map(s => [s.id, Math.min(s.items.length, 2 ** s.bits) - 1]));
       for (const l of [{ ...DEFAULT_LOADOUT, suit }, { ...max, suit }]) {
         const code = encodeLoadout(l, 63), d = decodeLoadout(code);
         res.push(Number.isSafeInteger(code) && same(d.loadout, l) && d.level === 63);
@@ -92,7 +93,7 @@ const allErrors = [];
     return { res, bits: suitSlot.bits, n: suitSlot.items.length, seasons: SUITS.filter(s => s?.season).map(s => s.season), req: suitSlot.items[5].req, premium: !!suitSlot.items[5].premium };
   });
   ok(codec.res.every(Boolean), 'loadout round-trips through encode/decode including suits 5 and 6');
-  ok(codec.bits === 3 && codec.n === 7 && codec.seasons.join() === '1,2' && codec.req === 'season:1' && !codec.premium, 'suit slot keeps 3 bits, 2 season suits appended');
+  ok(codec.bits === 3 && codec.n === 12 && codec.seasons.join() === '1,2' && codec.req === 'season:1' && !codec.premium, 'suit slot keeps 3 bits, 2 season suits appended');
 
   await page.waitForFunction(() => window.__calls.some(c => c.method === 'getProducts' && c.opts.ids.includes('com.alpsenel.laststanddeadzone.season.1.pass')));
   ok(true, 'season pass product id requested from StoreKit');
@@ -127,15 +128,16 @@ const allErrors = [];
   await page.waitForFunction(() => document.querySelector('#sp-buy').classList.contains('hidden'));
   const c2 = await page.evaluate(() => {
     const { api } = window.__game;
-    const ready = document.querySelectorAll('.sp-cell.prem.ready').length;
+    const ready = document.querySelectorAll('.sp-cell.prem.ready').length, instant = { suit: !!api.profile.season.suits[1], premium: [...api.profile.season.premium], note: document.querySelector('#sp-note').textContent };
     const scrap = api.profile.scrap;
     const got = api.season.claimAll();
-    return { ready, got: got.length, scrap: api.profile.scrap - scrap, s: api.profile.season, iap: api.profile.iap, fresh: api.profile.fresh, note: document.querySelector('#sp-note').textContent };
+    return { ready, instant, got: got.length, scrap: api.profile.scrap - scrap, s: api.profile.season, iap: api.profile.iap, fresh: api.profile.fresh, note: document.querySelector('#sp-note').textContent };
   });
   ok(c2.iap['com.alpsenel.laststanddeadzone.season.1.pass'], 'mocked StoreKit purchase grants the pass');
-  ok(c2.ready === 22, 'premium tiers 1-22 become retroactively claimable (' + c2.ready + ')');
-  ok(c2.got === 22 + 21 && c2.s.premium.length === 22 && c2.s.free.length === 22, 'claim all claims remaining free and premium tiers');
-  ok(c2.s.suits[1] === true && c2.s.flair.frame === 1 && c2.s.flair.elite === 1 && c2.s.flair.badge === 1 && c2.fresh.includes('suit:5'), 'suit and flair granted');
+  ok(c2.instant.suit && c2.instant.premium.join() === '1' && /HOLLOW JACK IS YOURS/.test(c2.instant.note), 'buying the pass grants the exclusive outfit instantly (' + c2.instant.note + ')');
+  ok(c2.ready === 21, 'premium tiers 2-22 become retroactively claimable (' + c2.ready + ')');
+  ok(c2.got === 21 + 21 && c2.s.premium.length === 22 && c2.s.free.length === 22, 'claim all claims remaining free and premium tiers');
+  ok(c2.s.suits[1] === true && c2.s.flair.frame === 1 && c2.s.flair.elite === 1 && c2.s.flair.badge === 1 && c2.fresh.includes('suit:5') && c2.s.skins[1] === true && c2.fresh.some(k => k.startsWith('gun:')), 'suit, weapon skin and flair granted');
   await page.screenshot({ path: join(shots, 'season-premium-844x390.png') });
 
   await page.click('#sp-back');

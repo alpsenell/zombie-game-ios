@@ -853,11 +853,12 @@ function reqMet(req) {
   if (k === 'nightmare') return (profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'veteran') return Math.max(profile.bestByDiff.veteran || 0, profile.bestByDiff.nightmare || 0) >= n;
   if (k === 'season') return !!profile.season?.suits?.[v];
+  if (k === 'seasonskin') return !!profile.season?.skins?.[v];
   return false;
 }
 function reqText(req) {
   const [k, v] = req.split(':'), n = (+v).toLocaleString();
-  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS' }[k] || req;
+  return { level: 'REACH LEVEL ' + n, wave: 'REACH WAVE ' + n, boss: 'DEFEAT ' + (ZT[v]?.name || v), heads: n + ' HEADSHOTS', kills: n + ' KILLS', nightmare: 'WAVE ' + n + ' ON NIGHTMARE', veteran: 'WAVE ' + n + ' ON VETERAN+', season: 'SEASON ' + n + ' PASS', seasonskin: 'SEASON ' + n + ' PASS' }[k] || req;
 }
 const ALL_SLOTS = [...SLOTS, ...EXTRA_SLOTS];
 const slotById = id => id === BODY.id ? BODY : ALL_SLOTS.find(s => s.id === id);
@@ -892,7 +893,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -946,6 +947,7 @@ function startGame(opts = {}) {
   ui.swap.classList.toggle('hidden', player.slots[0] === player.slots[1]);
   if (state.startWave > 1) {
     state.kitTotal = Math.min(10, Math.ceil((state.startWave - 1) / 2));
+    state.kitMajors = Math.min(state.kitTotal, Math.floor((state.startWave - 1) / MAJOR_EVERY));
     player.nades = stats.nadeMax;
     player.slots.forEach(i => (player.reserve[i] = WEAPONS[i].maxReserve));
     schedule(.8, () => offerPerks(state.kitTotal));
@@ -1746,32 +1748,45 @@ function collect(p) {
 }
 
 const PERKS = [
-  { icon: '💥', name: 'HOLLOW POINTS', desc: '+20% weapon damage', apply: () => (stats.damage *= 1.2) },
-  { icon: '⚡', name: 'HAIR TRIGGER', desc: '+18% fire rate', apply: () => (stats.fireRate *= 1.18) },
-  { icon: '❤️', name: 'THICK SKIN', desc: '+25 max health and a full heal', apply: () => { stats.maxHp += 25; player.hp = stats.maxHp; } },
-  { icon: '🔄', name: 'SLEIGHT OF HAND', desc: '30% faster reloads', apply: () => (stats.reload *= .7) },
-  { icon: '👟', name: 'CARDIO', desc: '+12% move speed', apply: () => (stats.speed *= 1.12) },
-  { icon: '📦', name: 'EXTENDED MAGS', desc: '+40% magazine size', apply: () => { stats.mag *= 1.4; } },
-  { icon: '🎯', name: 'DEADEYE', desc: '+40% headshot damage', apply: () => (stats.headMul *= 1.4) },
-  { icon: '🩸', name: 'VAMPIRE', desc: 'Heal 4 HP on every kill', apply: () => (stats.leech += 4) },
-  { icon: '💣', name: 'DEMOLITIONS', desc: '+1 grenade slot, refill all', apply: () => { stats.nadeMax++; player.nades = stats.nadeMax; } },
-  { icon: '🛡️', name: 'KEVLAR', desc: 'Take 15% less damage', apply: () => (stats.armor *= .85) },
-  { icon: '🍀', name: 'SCAVENGER', desc: '+50% supply drop chance', apply: () => (stats.luck *= 1.5) },
+  { icon: '💥', name: 'HOLLOW POINTS', desc: '+10% weapon damage', max: 5, apply: () => (stats.damage *= 1.1) },
+  { icon: '⚡', name: 'HAIR TRIGGER', desc: '+8% fire rate', max: 5, apply: () => (stats.fireRate *= 1.08) },
+  { icon: '❤️', name: 'THICK SKIN', desc: '+15 max health, heal 25', max: 5, apply: () => { stats.maxHp += 15; player.hp = Math.min(stats.maxHp, player.hp + 25); } },
+  { icon: '🔄', name: 'SLEIGHT OF HAND', desc: '15% faster reloads', max: 4, apply: () => (stats.reload *= .85) },
+  { icon: '👟', name: 'CARDIO', desc: '+6% move speed', max: 4, apply: () => (stats.speed *= 1.06) },
+  { icon: '📦', name: 'EXTENDED MAGS', desc: '+20% magazine size', max: 4, apply: () => { stats.mag *= 1.2; } },
+  { icon: '🎯', name: 'DEADEYE', desc: '+20% headshot damage', max: 5, apply: () => (stats.headMul *= 1.2) },
+  { icon: '🩸', name: 'VAMPIRE', desc: 'Heal 2 HP on every kill', max: 4, apply: () => (stats.leech += 2) },
+  { icon: '💣', name: 'DEMOLITIONS', desc: '+1 grenade slot, refill all', max: 3, apply: () => { stats.nadeMax++; player.nades = stats.nadeMax; } },
+  { icon: '🛡️', name: 'KEVLAR', desc: 'Take 8% less damage', max: 5, apply: () => (stats.armor *= .92) },
+  { icon: '🍀', name: 'SCAVENGER', desc: '+25% supply drop chance', max: 4, apply: () => (stats.luck *= 1.25) },
   { icon: '👼', name: 'SECOND WIND', desc: 'Survive one fatal hit', rare: true, when: () => !stats.secondWind, apply: () => (stats.secondWind = true) },
-  { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+45% damage, +15% fire rate', rare: true, apply: () => { stats.damage *= 1.45; stats.fireRate *= 1.15; } },
+  { icon: '☢️', name: 'NUCLEAR ROUNDS', desc: '+35% damage, +10% fire rate', rare: true, apply: () => { stats.damage *= 1.35; stats.fireRate *= 1.1; } },
 ];
+const MAJOR_EVERY = 10;
+
+function majorOffer(kit) {
+  if (kit) return state.kitTotal - kit < state.kitMajors;
+  return state.wave > 0 && state.wave % MAJOR_EVERY === 0;
+}
 
 function offerPerks(kit = 0) {
   state.mode = 'perk';
+  const major = majorOffer(kit);
   ui.perkTitle.textContent = kit ? 'STARTING KIT' : 'WAVE ' + state.wave + ' CLEARED';
-  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' : 'CHOOSE AN UPGRADE';
-  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave));
-  const ok = p => !p.when || p.when();
-  const pool = PERKS.filter(p => !p.legendary && ok(p) && (!p.rare || r() < .3));
+  ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' + (major ? ' · MAJOR' : '') : major ? 'MAJOR UPGRADE — CHOOSE WISELY' : 'CHOOSE AN UPGRADE';
+  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave + (kit ? ':' + kit : '')));
+  const taken = p => state.perks.filter(n => n === p.name).length;
+  const ok = p => (!p.when || p.when()) && (!p.max || taken(p) < p.max);
+  const pool = PERKS.filter(p => (major ? p.rare || p.legendary : !p.rare && !p.legendary) && ok(p));
   const picks = [];
-  while (picks.length < 3 && pool.length) picks.push(pool.splice((r() * pool.length) | 0, 1)[0]);
-  const legends = PERKS.filter(p => p.legendary && ok(p));
-  if (state.wave >= 10 && legends.length && r() < .08) picks.splice(Math.min(1, picks.length), picks.length > 1 ? 1 : 0, legends[(r() * legends.length) | 0]);
+  const legends = pool.filter(p => p.legendary);
+  if (major && legends.length) picks.push(legends[(r() * legends.length) | 0]);
+  const rest = pool.filter(p => !picks.includes(p));
+  while (picks.length < 3 && rest.length) picks.push(rest.splice((r() * rest.length) | 0, 1)[0]);
+  if (picks.length < 3) {
+    const minors = PERKS.filter(p => !p.rare && !p.legendary && ok(p) && !picks.includes(p));
+    while (picks.length < 3 && minors.length) picks.push(minors.splice((r() * minors.length) | 0, 1)[0]);
+  }
   state.perkOffer = picks.map(p => p.name);
   ui.perkList.innerHTML = '';
   for (const p of picks) {

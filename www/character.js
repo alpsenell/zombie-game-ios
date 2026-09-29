@@ -25,6 +25,17 @@ export const WEAPON_SKINS = [
   { name: 'OBSIDIAN', base: 0x0c0c10, metal: 0x2a2a34, dark: 0x050508, glow: 0xa66bff, req: 'level:20' },
   { name: 'GOLD', base: 0xd8a72a, metal: 0xf0c850, dark: 0x6a4a10, metallic: true, req: 'wave:30' },
   { name: 'DIAMOND', base: 0xbfefff, metal: 0xe8faff, dark: 0x5a8a9a, metallic: true, glow: 0x6fe3ff, req: 'level:35' },
+  { name: 'TIGER', base: 0xd9791a, metal: 0x2a2420, dark: 0x120e0a, stripes: ['#d9791a', '#1a120a', '#b85e10'], req: 'level:3', like: 1 },
+  { name: 'JUNGLE', base: 0x2f4a22, metal: 0x2a3020, dark: 0x121810, camo: ['#3a5a26', '#1e3014', '#5a7a30', '#6a5a2a'], req: 'level:6', like: 3 },
+  { name: 'MIDNIGHT', base: 0x141a3a, metal: 0x20284a, dark: 0x080a18, camo: ['#161c3e', '#0a0e22', '#2a3464'], req: 'level:9', like: 8 },
+  { name: 'HAZARD', base: 0xe0c23a, metal: 0x1a1a1a, dark: 0x0e0e0e, stripes: ['#e0c23a', '#141414', '#e0c23a'], req: 'level:12', like: 5 },
+  { name: 'EMERALD', base: 0x1a8a4a, metal: 0x3ac07a, dark: 0x0a3a1e, metallic: true, req: 'level:16', like: 10 },
+  { name: 'INFERNO', base: 0x2a0a04, metal: 0x3a1a0a, dark: 0x1a0602, glow: 0xff6a1a, req: 'level:25', like: 12 },
+  { name: 'ROSE GOLD', base: 0xe0a090, metal: 0xf0c0b0, dark: 0x7a4a40, metallic: true, req: 'level:30', like: 14 },
+  { name: 'PLASMA', base: 0x1a0a24, metal: 0x2a1438, dark: 0x0a0410, glow: 0xff3af0, req: 'level:40', like: 7 },
+  { name: 'DARK MATTER', base: 0x06060a, metal: 0x18182a, dark: 0x000000, metallic: true, glow: 0x6a3aff, req: 'level:50', like: 13 },
+  { name: 'HARVEST MOON', base: 0x3a1a08, metal: 0xc07a1a, dark: 0x1a0a02, camo: ['#4a2008', '#e06a10', '#2a1004'], glow: 0xffa02a, req: 'seasonskin:1', season: 1, like: 12 },
+  { name: 'ABYSSAL', base: 0x0a2a30, metal: 0xc08a2a, dark: 0x041418, glow: 0x3ae0d0, metallic: true, req: 'seasonskin:2', season: 2, like: 8 },
 ];
 
 export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND'];
@@ -37,6 +48,11 @@ export const SUITS = [
   { id: 'wolf', name: 'ARCTIC WOLF', premium: 'outfit.wolf', desc: 'Fur parka with a wolf-head hood, snow goggles and fur boots.', base: { top: 1, topColor: 5, pants: 4, boots: 2, head: 0, face: 6, hair: 7, back: 1, pantsStyle: 1, gloves: 5 }, sleeve: 0xe8e4d8, glove: 0x6a6258, accent: 0xffa040 },
   { id: 'hollow', name: 'HOLLOW JACK', season: 1, desc: 'Season 1 exclusive. A carved pumpkin head that burns from within, patched scarecrow coat.', base: { top: 5, topColor: 15, pants: 2, boots: 2, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 2, gloves: 5 }, sleeve: 0x3a2a1a, glove: 0xa8844a, accent: 0xff9a1a },
   { id: 'diver', name: 'DEEP DIVER', season: 2, desc: 'Season 2 exclusive. Riveted brass dive helmet, canvas suit and twin air tanks.', base: { top: 4, topColor: 4, pants: 4, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 4 }, sleeve: 0x8a7a5a, glove: 0x1a1a1a, accent: 0x3ae0d0 },
+  { id: 'crimson-ronin', parts: 'ronin', like: 1, name: 'CRIMSON RONIN', req: 'level:10', desc: 'Blood-red circuitry and a visor that never blinks.', base: { top: 2, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 6, hairColor: 0, back: 0, pantsStyle: 3, gloves: 3, accent: 1 }, sleeve: 0x16080a, glove: 0x0b0c0e, accent: 0xff2a3a },
+  { id: 'timber-wolf', parts: 'wolf', like: 4, name: 'TIMBER WOLF', req: 'level:18', desc: 'Grey-brown pelt hood with a glowing green stare.', base: { top: 1, topColor: 15, pants: 2, boots: 2, head: 0, face: 6, hair: 7, back: 1, pantsStyle: 1, gloves: 5 }, sleeve: 0x6a5a48, glove: 0x3a2e24, accent: 0x7dff3a, fur: 0x8a7a66, hood: 0x5a5048 },
+  { id: 'frost-knight', parts: 'knight', like: 2, name: 'FROST KNIGHT', req: 'level:28', desc: 'Rime-crusted plate that leaks freezing light.', base: { top: 4, topColor: 5, pants: 4, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0xb8c8d0, glove: 0x8a9aa4, accent: 0x6fe3ff, iron: 0x9aaab4, cloth: 0x1a3a5a },
+  { id: 'void-spectre', parts: 'spectre', like: 3, name: 'VOID SPECTRE', req: 'level:38', desc: 'A cloak torn from the dark between stars.', base: { top: 1, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0x06040c, glove: 0x06040c, accent: 0x7dff3a, cloth: 0x0a0612 },
+  { id: 'gilded-knight', parts: 'knight', like: 2, name: 'GILDED WARLORD', req: 'level:50', desc: 'Gold-plated war armour for those who outlasted everything.', base: { top: 4, topColor: 6, pants: 5, boots: 0, head: 0, face: 0, hair: 7, back: 0, pantsStyle: 0, gloves: 3 }, sleeve: 0x8a6a1a, glove: 0x6a4a10, accent: 0xffd36a, iron: 0xd8a72a, cloth: 0x4a0a0a },
 ];
 
 export const SLOTS = [
@@ -65,13 +81,13 @@ export const SLOTS = [
   { id: 'back', label: 'BACK', bits: 3, items: [
     { name: 'NONE' }, { name: 'BACKPACK', cost: 200 }, { name: 'BEDROLL', cost: 250 }, { name: 'RADIO PACK', cost: 500 },
     { name: 'KATANA', req: 'heads:250' }, { name: 'CAPE', cost: 1000 }, { name: 'GUITAR', cost: 800 }, { name: 'CLEAVER', req: 'boss:butcher' }] },
-  { id: 'gun', label: 'WEAPON SKIN', bits: 4, items: WEAPON_SKINS.map(s => ({ name: s.name, swatch: s.base, cost: s.cost, req: s.req })) },
+  { id: 'gun', label: 'WEAPON SKIN', bits: 4, items: WEAPON_SKINS.map(s => ({ name: s.name, swatch: s.base, cost: s.cost, req: s.req, season: s.season, like: s.like })) },
   { id: 'title', label: 'TITLE', bits: 4, items: [
     { req: '' }, { req: 'level:3' }, { cost: 300 }, { req: 'heads:100' }, { req: 'heads:500' }, { req: 'boss:abomination' }, { req: 'boss:butcher' }, { req: 'boss:plague' },
     { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' }]
     .map((it, i) => ({ ...it, name: TITLES[i] })) },
   { id: 'primary', label: 'PRIMARY', bits: 4, hidden: true, items: WEAPONS.map(w => ({ name: w.name })) },
-  { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, season: x.season, req: x.season ? 'season:' + x.season : undefined, desc: x.desc, swatch: x.accent } : { name: 'NONE' }) },
+  { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, season: x.season, req: x.season ? 'season:' + x.season : x.req, desc: x.desc, swatch: x.accent, like: x.like } : { name: 'NONE' }) },
 ];
 
 export const EXTRA_SLOTS = [
@@ -108,7 +124,11 @@ DEFAULT_LOADOUT.body = 0;
 const ENCODED = EXTRA_SLOTS.filter(s => s.bits), EXT_SHIFT = 2n ** 53n, CODE_LIMIT = 2n ** 64n;
 const ALL_IDS = ['body', ...SLOTS.map(s => s.id), ...EXTRA_SLOTS.map(s => s.id)];
 export const loadoutKey = l => ALL_IDS.map(id => l[id] | 0).join('.');
-const clampBits = (s, v) => Math.max(0, Math.min(2 ** s.bits - 1, v | 0));
+const clampBits = (s, v) => {
+  v |= 0;
+  if (v >= 2 ** s.bits) v = s.items[v]?.like ?? 0;
+  return Math.max(0, Math.min(2 ** s.bits - 1, v));
+};
 
 export function encodeLoadout(loadout, level = 1) {
   let code = loadout.body === 1 ? 3 : 1, base = 4;
@@ -309,8 +329,9 @@ export function skinTexture(skin) {
   cv.width = cv.height = 128;
   const cx = cv.getContext('2d');
   if (skin.stripes) {
-    cx.fillStyle = '#1c1e22'; cx.fillRect(0, 0, 128, 128);
-    for (let i = -128; i < 256; i += 8) { cx.fillStyle = i % 16 ? '#2a2d33' : '#16181b'; cx.beginPath(); cx.moveTo(i, 0); cx.lineTo(i + 4, 0); cx.lineTo(i + 132, 128); cx.lineTo(i + 128, 128); cx.fill(); }
+    const [bg, a, b] = Array.isArray(skin.stripes) ? skin.stripes : ['#1c1e22', '#2a2d33', '#16181b'];
+    cx.fillStyle = bg; cx.fillRect(0, 0, 128, 128);
+    for (let i = -128; i < 256; i += 8) { cx.fillStyle = i % 16 ? a : b; cx.beginPath(); cx.moveTo(i, 0); cx.lineTo(i + 4, 0); cx.lineTo(i + 132, 128); cx.lineTo(i + 128, 128); cx.fill(); }
   } else {
     cx.fillStyle = skin.camo[0]; cx.fillRect(0, 0, 128, 128);
     let seed = skin.name.length * 97;
@@ -1162,7 +1183,8 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
   const glow = m(suit.accent, { emissive: suit.accent, emissiveIntensity: 1.3, roughness: .3 });
   const black = m(0x0b0c0e, { roughness: .5 });
   const P = (th, ph, r = 1) => hp(th, ph, r, hf);
-  if (suit.id === 'ronin') {
+  const kind = suit.parts || suit.id;
+  if (kind === 'ronin') {
     const plate = m(0x16181c, { metalness: .6, roughness: .3 });
     whole(torso, merge('roninlines' + S.key, () => [
       ...[-1, 1].map(s => [tpatch('rl' + s, S, .02, .47, s * .3, s * .34, .03, .001, 8)]),
@@ -1180,8 +1202,8 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
     part(trunk, G.box, black, [.28, .55, -.15], [.035, .22, .045], [0, 0, .7]);
     part(trunk, G.cyl, plate, [.21, .45, -.15], [.03, .012, .05], [0, 0, .7 + PI / 2]);
   }
-  if (suit.id === 'knight') {
-    const iron = m(0x3a3a42, { metalness: .9, roughness: .34, tex: 'leather', bump: .3 }), bone = m(0xd9d0b4, { roughness: .6 });
+  if (kind === 'knight') {
+    const iron = m(suit.iron ?? 0x3a3a42, { metalness: .9, roughness: .34, tex: 'leather', bump: .3 }), bone = m(0xd9d0b4, { roughness: .6 });
     whole(torso, merge('kplate' + S.key, () => [[tband('kcuir', S, -.02, .49, .035, .012)], [tband('kfauld', S, -.1, -.01, .045, .01)]]), iron);
     whole(torso, merge('kcracks' + S.key, () => [[-.08, .3, .4], [-.02, .22, -.5], [.06, .34, .3], [.1, .16, -.6], [-.1, .12, .5], [.02, .42, .2]].map(([a, y, r]) => [tpatch('kc' + a + y, S, y - .045, y + .045, a + r * .1 - .012, a + r * .1 + .012, .049, .001, 8)])), glow);
     for (const s of [-1, 1]) {
@@ -1196,11 +1218,11 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
     whole(head, scalp('kslit', hf, [-.8, .8], 1.43, 1.47, 1.24, { n: 14, k: 1 }), glow);
     whole(head, merge('horns', () => [-1, 1].map(s => [hornGeo('horn' + s, [[s * .1, .24, 0], [s * .17, .28, -.01], [s * .22, .35, -.02], [s * .23, .43, .0], [s * .2, .49, .03]], .03)])), bone);
     whole(head, scalp('kcrest', hf, [-.08, .08], .05 * PI, .55 * PI, (v, ph) => 1.26 + .06 * Math.sin(PI * v) * Math.cos(ph * 18), { n: 4, k: 10 }), iron);
-    whole(torso, shell('tabard' + S.key, 6, 8, (u, v) => { const y = lerp(-.02, -.62, v), c = S.at(-.02, 0, .05); return [lerp(-.09, .09, u) * (1 + v * .2), y, c[2] + .02 * v, .9 + .1 * Math.sin(u * PI)]; }), m(0x3a0a08, { roughness: 1, side: THREE.DoubleSide, tex: 'canvas' }));
-    part(trunk, shell('kcape', 14, 10, (u, v) => [lerp(-.22, .22, u) * (1 + .35 * v), .52 - v * 1.1, -.16 - .05 * v - .025 * Math.sin(u * PI * 5) * v, .8 + .2 * Math.sin(u * PI * 5)]), m(0x3a0a08, { roughness: 1, side: THREE.DoubleSide, tex: 'canvas' }), [0, 0, 0]);
+    whole(torso, shell('tabard' + S.key, 6, 8, (u, v) => { const y = lerp(-.02, -.62, v), c = S.at(-.02, 0, .05); return [lerp(-.09, .09, u) * (1 + v * .2), y, c[2] + .02 * v, .9 + .1 * Math.sin(u * PI)]; }), m(suit.cloth ?? 0x3a0a08, { roughness: 1, side: THREE.DoubleSide, tex: 'canvas' }));
+    part(trunk, shell('kcape', 14, 10, (u, v) => [lerp(-.22, .22, u) * (1 + .35 * v), .52 - v * 1.1, -.16 - .05 * v - .025 * Math.sin(u * PI * 5) * v, .8 + .2 * Math.sin(u * PI * 5)]), m(suit.cloth ?? 0x3a0a08, { roughness: 1, side: THREE.DoubleSide, tex: 'canvas' }), [0, 0, 0]);
   }
-  if (suit.id === 'spectre') {
-    const cloth = m(0x140f1e, { roughness: 1, tex: 'cotton', side: THREE.DoubleSide }), deep = m(0x000000, { roughness: 1 });
+  if (kind === 'spectre') {
+    const cloth = m(suit.cloth ?? 0x140f1e, { roughness: 1, tex: 'cotton', side: THREE.DoubleSide }), deep = m(0x000000, { roughness: 1 });
     whole(torso, shell('cloak' + S.key, 40, 22, (u, v) => {
       const a = PI + u * TAU, y = lerp(S.top - .02, -1.0, v), t = sstep(0, 1, v), base = S.at(Math.max(y, -.1), a, .03);
       const fold = 1 + .05 * Math.sin(a * 11) * t, hem = y + (v > .95 ? .03 * Math.sin(a * 13) : 0);
@@ -1214,8 +1236,8 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
     for (const s of [-1, 1]) whole(arms[s].el, tube('bell' + f, .25, t => [.05 + .05 * t, .05 + .05 * t, 0, .8], { n: 16, k: 8, from: -.02, to: .21 }), cloth);
     whole(body, merge('wisps', () => Array.from({ length: 6 }, (_, i) => { const a = i / 6 * TAU; return [G.lowSphere, [Math.cos(a) * .45, .1 + (i % 3) * .25, Math.sin(a) * .45], [.016, .016, .016]]; })), glow);
   }
-  if (suit.id === 'wolf') {
-    const fur = m(0xe8e4d8, { roughness: 1, tex: 'fur', bump: 1.5 }), grey = m(0xa8acb0, { roughness: 1, tex: 'fur', bump: 1.5 }), amber = m(0xffb040, { emissive: 0xff8a1a, emissiveIntensity: 1.2 });
+  if (kind === 'wolf') {
+    const fur = m(suit.fur ?? 0xe8e4d8, { roughness: 1, tex: 'fur', bump: 1.5 }), grey = m(suit.hood ?? 0xa8acb0, { roughness: 1, tex: 'fur', bump: 1.5 }), amber = m(suit.fur ? suit.accent : 0xffb040, { emissive: suit.fur ? suit.accent : 0xff8a1a, emissiveIntensity: 1.2 });
     const noisy = (a, y) => .012 * Math.sin(a * 17 + y * 50) * Math.sin(a * 5 - y * 30);
     whole(torso, tsurf('ruff', S, 40, 5, (u, v) => { const a = PI + u * TAU, y = lerp(S.top + .01, S.top - .09, v); return [y, a, .045 + .03 * Math.sin(PI * v) + noisy(a, y) * 2]; }), fur);
     whole(torso, tsurf('parkahem', S, 40, 4, (u, v) => { const a = PI + u * TAU, y = lerp(-.02, -.12, v); return [y, a, .04 + .02 * Math.sin(PI * v) + noisy(a, y) * 2]; }), fur);
@@ -1228,7 +1250,7 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
     for (const s of [-1, 1]) whole(arms[s].el, lsurf('furcuff' + f, .25, () => [.04, .036], 16, 4, (u, v) => { const a = PI + u * TAU; return [lerp(.78, .96, v), a, .02 + .015 * Math.sin(PI * v) + noisy(a, v)]; }), fur);
     for (const { knee } of legs) part(knee, tube('furboot' + f, .1, () => [.075, .08, .01], { n: 18, k: 6 }), fur, [0, -.28, 0]);
   }
-  if (suit.id === 'hollow') {
+  if (kind === 'hollow') {
     const pumpkin = m(0xe06a10, { roughness: .65, bump: .8, tex: 'skin' }), stem = m(0x3a4a1a, { roughness: 1 });
     const straw = m(0xd8b45a, { roughness: 1, flatShading: true }), fire = m(0xffb02a, { emissive: suit.accent, emissiveIntensity: 2.2 });
     part(head, shell('pumpkin', 32, 16, (u, v) => {
@@ -1248,7 +1270,7 @@ function suitParts(suit, { body, torso, trunk, head, arms, legs, S, hf, f }) {
     for (const s of [-1, 1]) whole(arms[s].el, merge('strawcuff' + f, () => Array.from({ length: 6 }, (_, i) => { const a = i / 6 * TAU; return [G.cone, [Math.cos(a) * .04, -.23, Math.sin(a) * .04], [.016, .07, .016], [Math.sin(a) * .5 + PI, 0, -Math.cos(a) * .5]]; })), straw);
     whole(body, merge('embers', () => [0, 1, 2].map(i => [G.lowSphere, [Math.cos(i * 2.1) * .5, .4 + i * .35, Math.sin(i * 2.1) * .5], [.02, .02, .02]])), glow);
   }
-  if (suit.id === 'diver') {
+  if (kind === 'diver') {
     const brass = m(0xc08a2a, { metalness: .85, roughness: .28 }), copper = m(0x9a5a2a, { metalness: .8, roughness: .35 });
     const lead = m(0x4a4e52, { metalness: .6, roughness: .5 }), glass = m(0x1a3a40, { emissive: suit.accent, emissiveIntensity: .9, metalness: .4, roughness: .05 });
     whole(torso, tsurf('corselet', S, 40, 6, (u, v) => { const a = PI + u * TAU; return [lerp(S.top + .03, .4, v), a, .03 + .03 * Math.sin(PI * v)]; }), brass);
