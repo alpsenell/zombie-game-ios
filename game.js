@@ -2591,7 +2591,7 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave, event: live.event || undefined });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave, event: live.event || undefined, map: world.map.id, weapon: WEAPONS[player.slots[0]].id, time: Math.round(state.clock) });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }

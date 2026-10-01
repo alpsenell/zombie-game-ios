@@ -120,6 +120,14 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Dossier
+`features/dossier.js` is the stats screen (`#ds-open` on the title screen, `api.dossier.open(tab)`): OVERVIEW (records, career totals,
+league, season best, Sprint 20, Blitz, event skins), MAPS (best wave per map and per difficulty from `profile.maps[id] = { runs, bestWave,
+bestScore, byDiff }`, tracked by `trackRun` on `run:end`), WEAPONS (kills and headshots per weapon from `profile.weaponKills` /
+`profile.weaponHeads`, tracked by `trackKill` on `kill`, plus mastery and prestige), BOSSES (`profile.bosses` per `BOSS_ORDER`) and
+HISTORY (the 25 saved runs by date; `saveRun` now stores `map`, `weapon` and `time`). `profile.playTime` sums run seconds. Training runs
+are not tracked. All of it is cloud-merged (max per counter).
+
 ## Resume
 `features/resume.js` snapshots a normal or extraction run (`snapshotOf(api)`: run options, `state` counters, wave queue, perks by name,
 player health/ammo, camera, live zombies with health, pickups) to `store('resume')` whenever the page is hidden, the pause menu opens or
