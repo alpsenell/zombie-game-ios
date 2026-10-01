@@ -8,5 +8,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AchievementsPlugin())
         bridge?.registerPluginInstance(SharePlugin())
         bridge?.registerPluginInstance(MatchPlugin())
+        bridge?.registerPluginInstance(CloudSavePlugin())
     }
 }

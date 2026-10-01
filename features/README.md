@@ -52,6 +52,12 @@ and emits `revive` `{ cost, wave }`. `api.nova(radius)` clears nearby non-boss i
 
 ## Persistence
 Feature state lives on `api.profile.<featureId>` and is saved with `api.saveProfile()`. Rewards: `api.grantScrap(n)`, `api.grantXP(n)`.
+`features/cloudsave.js` backs up `profile`, `runs` and `records` to iCloud key-value storage through the native `CloudSave` plugin
+(`ios/App/App/CloudSavePlugin.swift`): every `api.store.set` of those keys schedules a debounced push, `app:ready`, foregrounding and the
+plugin's `changed` event pull the cloud copy, and `mergeProfile` / `mergeRuns` / `mergeRecords` combine the two (higher `runs` is the base,
+ownership and claims are unioned, counters take the max). A merged copy is applied in place with `assignDeep`, so keep holding references
+to `profile.<featureId>` objects rather than replacing them. A change that arrives mid-run waits for the next `screen` `menu`.
+Events: `cloud:pushed` `{ at }`, `cloud:restored` `{ at, device }`. `api.cloud = { pull, push, schedule, available, meta, status }`.
 
 ## Testing
 `npm run prepare:web && node tools/smoke.mjs` plays a headless run. `tools/smoke.mjs` also exports `serve`, `launch` and

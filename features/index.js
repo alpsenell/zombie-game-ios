@@ -1,3 +1,4 @@
+import * as cloudsave from './cloudsave.js';
 import progression from './progression.js';
 import * as competitive from './competitive.js';
 import * as season from './season.js';
@@ -11,6 +12,7 @@ import * as events from './events.js';
 import * as comeback from './comeback.js';
 
 export const FEATURES = [
+  cloudsave,
   progression,
   competitive,
   season,
