@@ -9,6 +9,7 @@ export const EVENTS = [
   { id: 'headhunter', name: 'HEADHUNTER', icon: '🎯', color: '#e8e4d8', desc: 'HEADSHOT KILLS SCORE DOUBLE · +50% XP', twist: 'NO AIM ASSIST', mods: { headScore: 2, xp: 1.5, noAssist: true } },
   { id: 'hordenight', name: 'HORDE NIGHT', icon: '🧟', color: '#9aff3a', desc: '+30% BIGGER WAVES · DOUBLE SEASON XP', twist: 'UP TO 24 INFECTED ON THE FIELD AT ONCE', mods: { count: 1.3, seasonXp: 2, alive: 24 } },
 ];
+const FAIR = ['ranked', 'blitz'];
 const EVENT_ONLY = ['elite', 'headScore', 'count', 'eliteHeadOnly', 'scrapBag', 'noAssist', 'alive'];
 const DEFAULTS = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, seasonXp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0 };
 
@@ -23,7 +24,7 @@ export const ladderRun = (type, t = Date.now()) => eventAt(t).live && (type || '
 export function modsFor(ev, type) {
   if (!ev?.live || type === 'daily') return { ...DEFAULTS };
   const out = { ...DEFAULTS, label: ev.name, event: ladderRun(type, ev.start) };
-  for (const [k, v] of Object.entries(ev.mods)) if (type !== 'ranked' || !EVENT_ONLY.includes(k)) out[k] = v;
+  for (const [k, v] of Object.entries(ev.mods)) if (!FAIR.includes(type) || !EVENT_ONLY.includes(k)) out[k] = v;
   return out;
 }
 export function timeLeft(ms) {
