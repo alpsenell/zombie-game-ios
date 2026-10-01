@@ -120,6 +120,16 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Blitz and Sprint 20
+`features/blitz.js` adds two short formats to the mode row. BLITZ (`type: 'blitz'`, `api.blitz.opts()`) is a `BLITZ_SECONDS` (300 s)
+score attack on `BLITZ_DIFFICULTY` (Veteran) with every weapon: `startGame` options `timeLimit`, `autoWave` and `aliveCap` make the engine
+end the run with the score banked when `state.clock` reaches the limit (`run:timeup`, `state.cleared`), skip the perk screen between waves
+(`nextWave` 1.2 s after a clear; the feature auto-applies a random minor perk per wave, a rare one on boss waves, `perk` events carry
+`auto: true`) and allow `BLITZ_ALIVE` (20) infected on the field. Blitz runs submit only to `deadzone.blitz`, get no revive and no event
+twists, and `profile.competitive.blitz` keeps `{ date, best, runs }` for the sheet. A HUD chip (`#bz-hud`) counts down. SPRINT 20 gets
+a mode button and sheet (`#sp20-open`) that starts a normal run from wave 1; the timing itself is unchanged (`competitive.js`).
+`api.blitz = { opts, open, openSprint, BLITZ_SECONDS, clockText }`.
+
 ## Black Market
 `features/market.js` is the scrap sink. `stock(dayKey, profile, SLOTS)` seeds three items from the day key: a discounted cosmetic
 (`discountPrice`, 40% off an unowned scrap cosmetic costing `MIN_DISCOUNT_COST`+), an exclusive weapon skin (`req: 'market:<id>'` in

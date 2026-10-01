@@ -69,7 +69,7 @@ export default {
 
     api.deathGuards.push(() => {
       const s = api.state;
-      if (used || s.runType === 'daily' || s.runType === 'ranked') return false;
+      if (used || s.runType === 'daily' || s.runType === 'ranked' || s.runType === 'blitz') return false;
       token = !!api.market?.hasRevive?.();
       cost = token ? 0 : reviveCost(s.wave);
       if (api.profile.scrap < cost) return false;

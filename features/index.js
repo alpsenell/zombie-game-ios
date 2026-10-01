@@ -16,6 +16,7 @@ import * as nextup from './nextup.js';
 import * as firstdeploy from './firstdeploy.js';
 import * as extract from './extract.js';
 import * as market from './market.js';
+import * as blitz from './blitz.js';
 
 export const FEATURES = [
   cloudsave,
@@ -36,4 +37,5 @@ export const FEATURES = [
   firstdeploy,
   extract,
   market,
+  blitz,
 ];

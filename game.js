@@ -898,7 +898,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12, perkRerolls: 0, perkKit: 0 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12, perkRerolls: 0, perkKit: 0, timeLimit: 0, autoWave: false, aliveCap: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -940,6 +940,9 @@ function startGame(opts = {}) {
   if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
   state.startWave = state.runType === 'normal' ? Math.max(1, Math.min(999, opts.startWave | 0)) : 1;
   state.maxWave = Math.max(0, opts.maxWave | 0);
+  state.timeLimit = Math.max(0, +opts.timeLimit || 0);
+  state.autoWave = !!opts.autoWave;
+  state.aliveCap = Math.max(0, opts.aliveCap | 0);
   state.wave = state.startWave - 1;
   const S = world.map.start;
   camera.position.set(S.x, 1.64, S.z);
@@ -1041,7 +1044,7 @@ function spawnTick(dt) {
   if (state.between || !state.queue?.length) return;
   state.spawnGap -= dt;
   const alive = zombies.filter(z => !z.userData.dead).length;
-  if (state.spawnGap > 0 || alive >= Math.min(5 + state.wave, live.alive || 16)) return;
+  if (state.spawnGap > 0 || alive >= Math.min(5 + state.wave, state.aliveCap || live.alive || 16)) return;
   const { kind, elite } = state.queue.shift();
   const T = ZT[kind];
   const p = findSpawn(T.boss ? 20 : 16);
@@ -1849,6 +1852,7 @@ function waveCleared() {
     schedule(1.8, gameOver);
     return;
   }
+  if (state.autoWave) { schedule(1.2, nextWave); return; }
   schedule(2.2, offerPerks);
 }
 
@@ -1865,6 +1869,7 @@ function runSummary() {
 const reachedWave = () => state.startWave === 1 || state.wave > state.startWave ? state.wave : 0;
 
 function gameOver() {
+  if (state.mode === 'dead') return;
   state.mode = 'dead';
   firing = false;
   bus.emit('run:end', runSummary());
@@ -1876,7 +1881,7 @@ function gameOver() {
   else if (!gameCenter.available()) rankEl.textContent = 'GLOBAL RANKINGS ARE AVAILABLE IN THE iOS APP';
   else {
     rankEl.textContent = 'SUBMITTING TO GLOBAL LEADERBOARD…';
-    const run = state.startedAt, label = { daily: 'DAILY RANK #', ranked: 'WEEKLY RANK #' }[summary.type] || 'GLOBAL RANK #';
+    const run = state.startedAt, label = { daily: 'DAILY RANK #', ranked: 'WEEKLY RANK #', blitz: 'BLITZ RANK #', extract: 'EXTRACTION RANK #' }[summary.type] || 'GLOBAL RANK #';
     gameCenter.submit(state.score, state.wave, encodeLoadout({ ...profile.loadout, primary: player.slots[0] }, levelInfo().level), summary).then(p => {
       if (state.startedAt !== run) return;
       if (p && !p.rejected && gameCenter.boards(summary.type, summary)[0] === LEADERBOARDS.score) { records.rank = p.rank; store.set('records', records); }
@@ -2372,6 +2377,14 @@ function updateEffects(dt) {
 function update(dt) {
   state.clock += dt;
   for (let k = scheduled.length - 1; k >= 0; k--) if (state.clock >= scheduled[k].at) { const s = scheduled.splice(k, 1)[0]; s.fn(); }
+  if (state.timeLimit && !state.cleared && state.mode === 'playing' && state.clock >= state.timeLimit) {
+    state.cleared = true; state.between = true; state.queue = [];
+    player.invulnUntil = state.clock + 10;
+    message('TIME', 'FINAL SCORE ' + state.score.toLocaleString(), 2.4);
+    sfx.clear(); haptic('HEAVY');
+    bus.emit('run:timeup', { score: state.score, wave: state.wave });
+    schedule(1.6, gameOver);
+  }
   updateNav(camera.position.x, camera.position.z);
   const warp = state.warpT > 0 ? .35 : 1;
   if (state.warpT > 0) state.warpT = Math.max(0, state.warpT - dt);
@@ -2549,7 +2562,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract', event: 'deadzone.event' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2562,7 +2575,7 @@ const gameCenter = {
     if (!this.player) return null;
     try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.weeklySurvivor : run?.difficultyId === 'veteran' ? LEADERBOARDS.weeklyVeteran : LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : run?.event ? [LEADERBOARDS.score, LEADERBOARDS.wave, LEADERBOARDS.event] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  boards(type, run) { return type === 'blitz' ? [LEADERBOARDS.blitz] : type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.weeklySurvivor : run?.difficultyId === 'veteran' ? LEADERBOARDS.weeklyVeteran : LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : run?.event ? [LEADERBOARDS.score, LEADERBOARDS.wave, LEADERBOARDS.event] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
   guard: null,
   async submit(score, wave, context, run) {
     const rejected = run && this.guard?.(run);
