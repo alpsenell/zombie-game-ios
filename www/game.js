@@ -2563,7 +2563,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz', dailySquad: 'deadzone.daily.squad' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },

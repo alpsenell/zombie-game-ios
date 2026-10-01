@@ -105,9 +105,11 @@ export async function drawCard(cv, d) {
     spaced(cx, k, x + bw / 2, 1142, 3);
   });
 
-  if (d.rank) { cx.fillStyle = '#ffc34d'; cx.font = `900 28px ${UI}`; spaced(cx, d.rank, W / 2, 1206, 4); }
+  let y = 1206;
+  if (d.squad) { cx.fillStyle = '#6fe3ff'; fit(cx, d.squad, W - 120, 26, UI); spaced(cx, d.squad, W / 2, y, 3); y += 36; }
+  if (d.rank) { cx.fillStyle = '#ffc34d'; cx.font = `900 28px ${UI}`; spaced(cx, d.rank, W / 2, y, 4); y += 36; }
   cx.fillStyle = '#e5483a'; fit(cx, 'CAN YOU OUTLAST ME?', W - 120, 58, DISPLAY);
-  spaced(cx, 'CAN YOU OUTLAST ME?', W / 2, d.rank ? 1272 : 1250, 3);
+  spaced(cx, 'CAN YOU OUTLAST ME?', W / 2, y === 1206 ? 1250 : y + 30, 3);
   cx.font = `800 20px ${UI}`; cx.fillStyle = '#9aa9ab';
   cx.textAlign = 'left'; spaced(cx, d.date, 60, 1322, 2);
   cx.textAlign = 'right'; spaced(cx, 'LAST STAND: DEADZONE · iOS', W - 60, 1322, 2);
@@ -144,6 +146,7 @@ export function init(api) {
       sub: 'WAVE ' + s.wave + ' · ' + diff.name,
       stats: [['KILLS', s.kills.toLocaleString()], ['HEADSHOTS', s.heads.toLocaleString()], ['ACCURACY', Math.round(s.accuracy * 100) + '%']],
       rank,
+      squad: api.squads?.bannerFor?.(s)?.text || '',
       date: new Date(s.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase(),
     };
   }

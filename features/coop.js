@@ -45,7 +45,7 @@ function addPlayer(pid, name, code, me) {
 
 function newSession(t, room) {
   S = {
-    t, room, invite: t.kind === 'local' || !!t.invite, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty, map: api.currentMap,
+    t, room, invite: t.kind === 'local' || !!t.invite, phase: 'lobby', players: new Map(), left: [], host: '', me: null, diff: api.settings.difficulty, map: api.currentMap, daily: false,
     zmap: new Map(), gone: new Set(), zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, hits: new Map(),
     stateAt: 0, snapAt: 0, hitAt: 0, pingAt: 0, fired: false, lastKillPts: 0, hitter: null,
     perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, slamZ: null,
@@ -69,7 +69,7 @@ function newSession(t, room) {
 }
 
 function sendHi(to) {
-  send(['hi', S.me.name, api.myCode(), S.me.ready ? 1 : 0, S.phase === 'lobby' ? 0 : 1, isHost() ? api.settings.difficulty : '', isHost() ? api.currentMap : ''], to);
+  send(['hi', S.me.name, api.myCode(), S.me.ready ? 1 : 0, S.phase === 'lobby' ? 0 : 1, isHost() ? api.settings.difficulty : '', isHost() ? api.currentMap : '', S.daily ? 1 : 0], to);
 }
 
 function leave() {
@@ -89,7 +89,7 @@ function refresh() {
   const list = [...S.players.values()].sort(byId), host = isHost();
   const allReady = list.every(p => p.id === S.host || p.ready);
   lobby.render({
-    room: S.room, diff: (api.DIFFICULTIES[S.diff]?.name || 'SURVIVOR') + ' · ' + (api.MAPS.find(x => x.id === (isHost() ? api.currentMap : S.map))?.name || '').toUpperCase(), waiting: true,
+    room: S.room, diff: S.daily ? squadDailyLabel() : (api.DIFFICULTIES[S.diff]?.name || 'SURVIVOR') + ' · ' + (api.MAPS.find(x => x.id === (isHost() ? api.currentMap : S.map))?.name || '').toUpperCase(), waiting: true, daily: S.daily, host,
     players: list.map(p => ({ id: p.id, name: p.name, code: p.code, ready: p.ready, host: p.id === S.host, me: p.me })),
     mainText: host ? 'START' : S.me.ready ? 'CANCEL READY' : 'READY',
     mainDisabled: host && (list.length < 2 || !allReady),
@@ -153,7 +153,22 @@ const actions = {
     if (S) { leave(); lobby.showPick(); lobby.status(''); return; }
     api.showScreen(api.ui.menu);
   },
+  daily() {
+    if (!S || !isHost() || S.phase !== 'lobby' || !api.competitive?.dailyChallenge) return;
+    S.daily = !S.daily;
+    sendHi();
+    refresh();
+  },
+  async quick() {
+    openLobby();
+    if (GameKitTransport.available()) await actions.find(false);
+    else lobby.status('QUICK MATCH NEEDS GAME CENTER — HOST OR JOIN A LOCAL ROOM', true);
+  },
 };
+function squadDailyLabel() {
+  const d = api.competitive?.dailyChallenge?.();
+  return d ? 'SQUAD DAILY · ' + (api.DIFFICULTIES[d.difficulty]?.name || 'VETERAN') + ' · ' + d.waves + ' WAVES · ' + (d.map?.name || '').toUpperCase() : 'SQUAD DAILY';
+}
 
 function onMatchFound(d) {
   if (!d?.localId) return;
@@ -171,19 +186,21 @@ function startMatch() {
   if (!isHost() || S.phase !== 'lobby') return;
   const list = [...S.players.values()];
   if (list.length < 2 || !list.every(p => p.me || p.ready)) return;
-  const seed = (Math.random() * 2 ** 31) | 0, diff = api.settings.difficulty, ids = list.map(p => p.id), map = api.currentMap;
-  send(['go', seed, diff, ids, map]);
-  startRun(seed, diff, ids, map);
+  const d = S.daily && api.competitive?.dailyChallenge?.();
+  const seed = d ? d.seed : (Math.random() * 2 ** 31) | 0, diff = d ? d.difficulty : api.settings.difficulty, ids = list.map(p => p.id), map = d ? d.map?.id || api.currentMap : api.currentMap;
+  send(['go', seed, diff, ids, map, d ? 1 : 0]);
+  startRun(seed, diff, ids, map, !!d);
 }
 
-function startRun(seed, diff, ids, map) {
+function startRun(seed, diff, ids, map, daily = false) {
   if (!ids.includes(S.t.id)) { leave(); lobby.showPick(); lobby.status('MATCH STARTED WITHOUT YOU', true); return; }
   for (const pid of [...S.players.keys()]) if (!ids.includes(pid)) S.players.delete(pid);
-  Object.assign(S, { phase: 'run', left: [], zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, stateAt: 0, snapAt: 0, hitAt: 0, perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, diff, map });
+  Object.assign(S, { phase: 'run', left: [], zseq: 0, kseq: 0, seq: 0, lastSeq: -1, offset: null, stateAt: 0, snapAt: 0, hitAt: 0, perkShownAt: 0, perkDeadline: 0, waveQueued: false, over: null, diff, map, daily });
   S.zmap.clear(); S.gone.clear(); S.hits.clear();
   const order = [...ids].sort();
   api.state.net = net;
-  api.startGame({ type: 'coop', seed, difficulty: diff, map });
+  const d = daily && api.competitive?.dailyChallenge?.();
+  api.startGame({ type: 'coop', seed, difficulty: diff, map, squad: ids.length, squadIds: [...ids].sort(), ...(d ? { slots: d.slots, maxWave: d.waves, squadDaily: d.date } : {}) });
   const sx = api.camera.position.x, sz = api.camera.position.z;
   for (const p of S.players.values()) {
     Object.assign(p, { st: 0, bleed: 0, rev: 0, kills: 0, heads: 0, revives: 0, downs: 0, shots: 0, hits: 0, perked: 0, hp: 100, maxHp: 100, left: false });
@@ -309,6 +326,7 @@ function onMessage(from, m) {
       p.ready = !!m[3];
       if (from === S.host && m[5]) S.diff = m[5];
       if (from === S.host && api.MAPS.some(x => x.id === m[6])) S.map = m[6];
+      if (from === S.host) S.daily = !!m[7];
       if (m[4] && from === S.host && S.phase === 'lobby' && !isHost()) { leave(); lobby.showPick(); lobby.status('MATCH IN PROGRESS — TRY AGAIN LATER', true); return; }
       refresh();
       return;
@@ -317,7 +335,7 @@ function onMessage(from, m) {
       leave(); lobby.showPick(); lobby.status(type === 'busy' ? 'MATCH IN PROGRESS — TRY AGAIN LATER' : 'ROOM IS FULL', true);
       return;
     case 'go':
-      if (S.phase !== 'run' && Array.isArray(m[3])) startRun(m[1] | 0, api.DIFFICULTIES[m[2]] ? m[2] : 'survivor', m[3], api.MAPS.some(x => x.id === m[4]) ? m[4] : 'street');
+      if (S.phase !== 'run' && Array.isArray(m[3])) startRun(m[1] | 0, api.DIFFICULTIES[m[2]] ? m[2] : 'survivor', m[3], api.MAPS.some(x => x.id === m[4]) ? m[4] : 'street', !!m[5]);
       return;
     case 'pi': sendU(['po', m[1]], from); return;
     case 'po': p.rtt = p.rtt ? p.rtt * .7 + (now() - m[1]) * .3 : now() - m[1]; return;
@@ -604,6 +622,7 @@ function autoPick() { document.querySelector('#perk-list .perk')?.click(); }
 
 function revived(p, by) {
   p.st = 0; p.rev = 0; p.bleed = 0;
+  api.bus.emit('coop:revive', { me: !!p.me, byMe: !!by?.me, name: p.name, by: by?.name || '' });
   if (p.me) {
     api.player.hp = api.stats.maxHp * .35;
     api.message('REVIVED', by ? 'BY ' + by.name : '', 1.6);
@@ -876,5 +895,5 @@ export function init(a) {
 
   api.reqs.recruit = { met: () => !!api.profile.recruit?.done, text: () => 'CLEAR WAVE ' + RECRUIT.wave + ' IN CO-OP WITH A FRIEND YOU INVITED' };
 
-  api.coop = { config, grantRecruit, net, actions, leave, open: openLobby, lobby: backToLobby, get session() { return S; } };
+  api.coop = { config, grantRecruit, net, actions, leave, open: openLobby, lobby: backToLobby, quick: () => actions.quick(), squadDailyLabel, get session() { return S; }, squad: () => (S ? [...S.players.values(), ...S.left].map(p => ({ id: p.id, name: p.name, code: p.code, me: !!p.me })) : []) };
 }
