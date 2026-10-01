@@ -120,6 +120,15 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Ghost pace
+`features/ghost.js` adds a ghost line under the rival ticker (`.cm-ghost` in `#hud-rival`). Every `wave:clear` records a mark
+`{ wave, t, score }`; a run that beats the stored best for its type (`profile.ghost[type]`, the Daily keyed by its seed) saves its marks
+as the player's ghost. During a run the line shows, after each clear, the time delta against the ghost at that wave and, between clears,
+the ghost's time and score for the next wave. In the Daily it also loads the board's #1 score once per run and projects their pace per
+wave with `paceShare(wave, maxWave)` (a wave-weight curve from the wave composition, boss waves heavier): `#1 PACE · W5 · 12,400 · YOU +800`.
+Events: `ghost:top` `{ board, name, score, rank }`, `ghost:mark` `{ wave, t, score, bestT, pace }`, `ghost:saved` `{ type, score, marks }`.
+`api.ghost = { paceShare, waveWeight, render, state, ghosts, text }`. Co-op and training runs have no ghost.
+
 ## Veteran novelty
 - Boss variants (`BOSS_VARIANTS`, `VARIANT_WAVE` 25 in `game.js`): from wave 25 every boss spawns as its variant (`userData.variant`):
   the Abomination SPLITTER spawns up to three bloaters when it dies, the Butcher BERSERKER has a short stun and a 1.5 s charge cooldown,

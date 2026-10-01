@@ -23,6 +23,7 @@ import * as squads from './squads.js';
 import * as mutators from './mutators.js';
 import * as mapevents from './mapevents.js';
 import * as featured from './featured.js';
+import * as ghost from './ghost.js';
 
 export const FEATURES = [
   cloudsave,
@@ -50,4 +51,5 @@ export const FEATURES = [
   mutators,
   mapevents,
   featured,
+  ghost,
 ];
