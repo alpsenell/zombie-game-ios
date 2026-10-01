@@ -1,15 +1,16 @@
 import { STORE_PREFIX } from '../weapons.js';
 import { SUITS, WEAPON_SKINS } from '../character.js';
+import { cratePool } from './levels.js';
 
 export const EPOCH = Date.UTC(2026, 8, 21);
-export const SEASON_DAYS = 42, TIERS = 30, TIER_XP = 1000, RUN_CAP = 600, MISSION_CAP = 500;
+export const SEASON_DAYS = 42, TIERS = 30, TIER_XP = 1000, RUN_CAP = 600, MISSION_CAP = 500, BONUS_XP = 2000, BONUS_CRATE_EVERY = 3, DROP_TIER = 25, DROP_DAY = 14;
 const DAY = 864e5;
 const NAMES = ['BLACK HARVEST', 'DEEP WATER', 'DEAD RECKONING', 'SCORCHED EARTH', 'NIGHT SHIFT', 'LAST LIGHT', 'COLD STORAGE', 'RED TIDE'];
 
 export function seasonAt(t = Date.now()) {
   const now = Math.max(t, EPOCH), i = Math.floor((now - EPOCH) / (SEASON_DAYS * DAY));
   const start = EPOCH + i * SEASON_DAYS * DAY, end = start + SEASON_DAYS * DAY;
-  return { n: i + 1, name: NAMES[i % NAMES.length], start, end, daysLeft: Math.max(1, Math.ceil((end - t) / DAY)) };
+  return { n: i + 1, name: NAMES[i % NAMES.length], start, end, daysLeft: Math.max(1, Math.ceil((end - t) / DAY)), day: Math.floor((now - start) / DAY) + 1 };
 }
 export const passId = n => STORE_PREFIX + 'season.' + n + '.pass';
 export function runXP(s) {
@@ -19,9 +20,12 @@ export function runXP(s) {
 }
 export const seasonSuit = n => SUITS.findIndex(x => x?.season === n);
 export const seasonSkin = n => WEAPON_SKINS.findIndex(x => x.season === n);
+export const bonusCount = xp => Math.max(0, Math.floor((xp - (TIERS - 1) * TIER_XP) / BONUS_XP));
+export const bonusReward = k => (k % BONUS_CRATE_EVERY === 0 ? { kind: 'crate', label: 'BONUS CRATE' } : { kind: 'scrap', amount: 1500 });
 export function reward(n, t, track) {
   if (track === 'free') {
     if (t === 10) return { kind: 'flair', id: 'badge', label: 'SEASON BADGE' };
+    if (t === DROP_TIER) return { kind: 'drop', label: 'MID-SEASON DROP' };
     if (t === 30) return { kind: 'flair', id: 'banner', label: 'VETERAN BANNER' };
     if (t % 5 === 0) return { kind: 'scrap', amount: 400 + t * 20 };
     return t % 2 ? { kind: 'scrap', amount: 100 + t * 10 } : { kind: 'xp', amount: 300 + t * 30 };
@@ -35,8 +39,8 @@ export function reward(n, t, track) {
   if (t === 30) return { kind: 'scrap', amount: 5000 };
   return { kind: 'scrap', amount: 200 + t * 20 };
 }
-const label = r => r.label || (r.kind === 'scrap' ? r.amount.toLocaleString() + ' SCRAP' : r.amount.toLocaleString() + ' XP');
-const icon = r => ({ scrap: '🔩', xp: '⚡', flair: '🎖', suit: '★', skin: '🔫' })[r.kind];
+const label = r => (r.got ? r.label + ': ' + r.got : r.label || (r.kind === 'scrap' ? r.amount.toLocaleString() + ' SCRAP' : r.amount.toLocaleString() + ' XP'));
+const icon = r => ({ scrap: '🔩', xp: '⚡', flair: '🎖', suit: '★', skin: '🔫', drop: '🎁', crate: '🎁' })[r.kind];
 export function flairText(profile) {
   const f = profile.season?.flair || {};
   if (f.elite) return 'SEASON ' + f.elite + ' ELITE';
@@ -114,23 +118,25 @@ export function init(api) {
     let s = profile.season;
     if (!s || typeof s !== 'object') s = profile.season = {};
     s.suits ||= {}; s.skins ||= {}; s.flair ||= {};
-    if (s.n !== cur.n) { Object.assign(s, { n: cur.n, xp: 0, free: [], premium: [] }); api.saveProfile(); }
-    s.free ||= []; s.premium ||= [];
+    if (s.n !== cur.n) { Object.assign(s, { n: cur.n, xp: 0, free: [], premium: [], bonus: [] }); api.saveProfile(); }
+    s.free ||= []; s.premium ||= []; s.bonus ||= [];
     return s;
   }
   const hasPass = n => !!profile.iap?.[passId(n)];
   const tierOf = xp => Math.min(TIERS, 1 + Math.floor(xp / TIER_XP));
+  const dropLocked = () => seasonAt().day < DROP_DAY;
   function claimable() {
     const s = state(), tier = tierOf(s.xp), out = [];
     for (let t = 1; t <= tier; t++) {
-      if (!s.free.includes(t)) out.push(['free', t]);
+      if (!s.free.includes(t) && !(t === DROP_TIER && dropLocked())) out.push(['free', t]);
       if (hasPass(s.n) && !s.premium.includes(t)) out.push(['premium', t]);
     }
+    for (let k = 1; k <= bonusCount(s.xp); k++) if (!s.bonus.includes(k)) out.push(['bonus', k]);
     return out;
   }
   function addXP(n) {
     const s = state(), before = tierOf(s.xp);
-    s.xp = Math.min((TIERS - 1) * TIER_XP, s.xp + Math.max(0, Math.round(n) || 0));
+    s.xp = Math.min(1e7, s.xp + Math.max(0, Math.round(n) || 0));
     api.saveProfile();
     refresh();
     return { before, after: tierOf(s.xp) };
@@ -150,11 +156,25 @@ export function init(api) {
       const key = 'gun:' + r.skin;
       if (!profile.fresh.includes(key)) profile.fresh.push(key);
     }
+    if (r.kind === 'drop' || r.kind === 'crate') {
+      const pool = cratePool(profile);
+      if (pool.length) { const it = pool[Math.floor(Math.random() * pool.length)], key = it.slot + ':' + it.i; profile.owned[key] = true; if (!profile.fresh.includes(key)) profile.fresh.push(key); r.got = it.name; r.item = it; }
+      else { profile.scrap += 1000; r.got = '1,000 SCRAP'; }
+    }
   }
   function claim(track, t) {
     const s = state();
+    if (track === 'bonus') {
+      if (s.bonus.includes(t) || t > bonusCount(s.xp)) return false;
+      s.bonus.push(t);
+      const r = bonusReward(t);
+      grant(r, s.n);
+      api.saveProfile();
+      api.bus.emit('season:claim', { season: s.n, tier: TIERS + t, track, reward: r });
+      return r;
+    }
     const list = track === 'free' ? s.free : s.premium;
-    if (list.includes(t) || t > tierOf(s.xp) || (track === 'premium' && !hasPass(s.n))) return false;
+    if (list.includes(t) || t > tierOf(s.xp) || (track === 'premium' && !hasPass(s.n)) || (track === 'free' && t === DROP_TIER && dropLocked())) return false;
     list.push(t);
     const r = reward(s.n, t, track);
     grant(r, s.n);
@@ -190,7 +210,7 @@ export function init(api) {
       <div class="sp-side"><span class="sp-active hidden" id="sp-active">★ PASS ACTIVE</span><div class="scrap">🔩 <span id="sp-scrap"></span></div></div>
     </div>
     <div class="sp-track" id="sp-track"></div>
-    <div class="sp-foot"><span id="sp-note"></span><div class="row"><button class="ghost" id="sp-claim">CLAIM ALL</button><button class="cta gold" id="sp-buy">BUY PASS</button><button class="cta" id="sp-back">BACK</button></div></div>
+    <div class="sp-foot"><span id="sp-note"></span><div class="row"><button class="ghost" id="sp-week">CHALLENGES</button><button class="ghost" id="sp-claim">CLAIM ALL</button><button class="cta gold" id="sp-buy">BUY PASS</button><button class="cta" id="sp-back">BACK</button></div></div>
   </div>`;
   document.body.appendChild(el);
   api.registerScreen(el);
@@ -204,33 +224,33 @@ export function init(api) {
   }
   function cell(s, t, track, tier) {
     const r = reward(s.n, t, track), c = document.createElement('button');
-    const claimed = (track === 'free' ? s.free : s.premium).includes(t), reached = t <= tier, pass = track === 'free' || hasPass(s.n);
-    const st = claimed ? 'claimed' : !reached ? 'locked' : !pass ? 'pass' : 'ready';
+    const claimed = (track === 'free' ? s.free : s.premium).includes(t), reached = t <= tier, pass = track === 'free' || hasPass(s.n), held = track === 'free' && r.kind === 'drop' && dropLocked();
+    const st = claimed ? 'claimed' : !reached || held ? 'locked' : !pass ? 'pass' : 'ready';
     c.className = 'sp-cell ' + (track === 'free' ? 'free ' : 'prem ') + st + (r.kind === 'suit' || r.kind === 'flair' || r.kind === 'skin' ? ' big' : '') + (track === 'premium' && t === 1 && r.kind === 'suit' ? ' hero' : '');
     c.dataset.track = track; c.dataset.tier = t;
     if (r.kind === 'suit') { const img = document.createElement('img'); img.alt = ''; img.src = suitThumb(r.suit); c.appendChild(img); }
     else { const i = document.createElement('i'); i.textContent = icon(r); c.appendChild(i); }
     const b = document.createElement('b'); b.textContent = label(r);
-    const sm = document.createElement('small'); sm.textContent = st === 'claimed' ? '✓ CLAIMED' : st === 'ready' ? 'CLAIM' : st === 'pass' ? '★ PASS' : '🔒';
+    const sm = document.createElement('small'); sm.textContent = st === 'claimed' ? '✓ CLAIMED' : st === 'ready' ? 'CLAIM' : st === 'pass' ? '★ PASS' : held ? 'WEEK 3' : '🔒';
     c.append(b, sm);
     c.onclick = () => {
       if (st === 'ready') {
         const got = claim(track, t);
         if (got) { api.sfx.pickup?.(); api.haptic('MEDIUM'); note = 'CLAIMED ' + label(got) + (got.kind === 'suit' || got.kind === 'skin' ? ' — EQUIP IT IN THE LOCKER' : ''); api.refreshProfileUI(); }
       } else if (st === 'pass') note = 'BUY THE SEASON ' + s.n + ' PASS TO UNLOCK PREMIUM REWARDS';
-      else if (st === 'locked') note = 'REACH TIER ' + t + ' TO UNLOCK';
+      else if (st === 'locked') note = held ? 'THE MID-SEASON DROP OPENS IN WEEK 3 — A FREE COSMETIC FOR EVERYONE AT TIER ' + DROP_TIER : 'REACH TIER ' + t + ' TO UNLOCK';
       render();
     };
     return c;
   }
   function render(scroll) {
-    const s = state(), cur = seasonAt(), tier = tierOf(s.xp), max = tier >= TIERS;
+    const s = state(), cur = seasonAt(), tier = tierOf(s.xp), max = tier >= TIERS, bonus = bonusCount(s.xp);
     $('#sp-kicker').textContent = 'SEASON ' + s.n + ' · ' + cur.daysLeft + (cur.daysLeft === 1 ? ' DAY' : ' DAYS') + ' LEFT';
     $('#sp-name').textContent = cur.name;
-    $('#sp-tier').textContent = 'TIER ' + tier + ' / ' + TIERS;
-    const into = max ? TIER_XP : s.xp % TIER_XP;
-    $('#sp-bar').style.width = (into / TIER_XP * 100).toFixed(1) + '%';
-    $('#sp-xp').textContent = max ? 'MAX TIER · ' + s.xp.toLocaleString() + ' SEASON XP' : into.toLocaleString() + ' / ' + TIER_XP.toLocaleString() + ' XP TO TIER ' + (tier + 1);
+    $('#sp-tier').textContent = 'TIER ' + tier + ' / ' + TIERS + (bonus ? ' +' + bonus : '');
+    const into = max ? (s.xp - (TIERS - 1) * TIER_XP) % BONUS_XP : s.xp % TIER_XP, need = max ? BONUS_XP : TIER_XP;
+    $('#sp-bar').style.width = (into / need * 100).toFixed(1) + '%';
+    $('#sp-xp').textContent = max ? into.toLocaleString() + ' / ' + BONUS_XP.toLocaleString() + ' XP TO BONUS TIER ' + (bonus + 1) + ' · ' + s.xp.toLocaleString() + ' SEASON XP' : into.toLocaleString() + ' / ' + TIER_XP.toLocaleString() + ' XP TO TIER ' + (tier + 1);
     $('#sp-scrap').textContent = profile.scrap.toLocaleString();
     const track = $('#sp-track'), left = track.scrollLeft;
     track.innerHTML = '';
@@ -245,7 +265,25 @@ export function init(api) {
       col.append(num, cell(s, t, 'free', tier), cell(s, t, 'premium', tier));
       track.appendChild(col);
     }
+    const bcol = document.createElement('div'), bnum = document.createElement('div'), bfree = document.createElement('button'), bprem = document.createElement('div');
+    bcol.className = 'sp-col bonus' + (max ? ' cur' : '');
+    bnum.className = 'sp-num'; bnum.textContent = 'BONUS';
+    const open = s.bonus.filter(k => k <= bonus).length, pending = bonus - open;
+    bfree.className = 'sp-cell free big ' + (pending ? 'ready' : max ? 'claimed' : 'locked');
+    bfree.dataset.track = 'bonus';
+    const bi = document.createElement('i'); bi.textContent = '🎁';
+    const bb = document.createElement('b'); bb.textContent = pending ? pending + ' BONUS TIER' + (pending > 1 ? 'S' : '') : '1,500 SCRAP · CRATE EVERY ' + BONUS_CRATE_EVERY + 'RD';
+    const bs = document.createElement('small'); bs.textContent = pending ? 'CLAIM' : max ? '✓ ' + open + ' CLAIMED' : 'PAST TIER ' + TIERS;
+    bfree.append(bi, bb, bs);
+    bfree.onclick = () => { const k = Array.from({ length: bonus }, (_, i) => i + 1).find(k => !s.bonus.includes(k)); if (k) { const got = claim('bonus', k); if (got) { api.sfx.pickup?.(); api.haptic('MEDIUM'); note = 'BONUS TIER ' + k + ' — ' + label(got); api.refreshProfileUI(); } } else note = 'EVERY ' + BONUS_XP.toLocaleString() + ' SEASON XP PAST TIER ' + TIERS + ' IS A BONUS TIER'; render(); };
+    bprem.className = 'sp-cell prem claimed';
+    bprem.append(document.createTextNode('ALL BONUS TIERS ARE FREE'));
+    bcol.append(bnum, bfree, bprem);
+    track.appendChild(bcol);
     const n = claimable().length, owned = hasPass(s.n), buy = $('#sp-buy');
+    const ch = api.progression?.challenges?.() || [], done = ch.filter(m => m.done).length;
+    $('#sp-week').textContent = ch.length ? 'CHALLENGES ' + done + '/' + ch.length : 'CHALLENGES';
+    $('#sp-week').classList.toggle('hidden', !ch.length);
     $('#sp-claim').classList.toggle('hidden', n < 2);
     $('#sp-claim').textContent = 'CLAIM ALL (' + n + ')';
     $('#sp-active').classList.toggle('hidden', !owned);
@@ -297,6 +335,7 @@ export function init(api) {
   menuBtn.onclick = open;
   $('#sp-back').onclick = () => { api.showScreen(api.ui.menu); api.preview.show(profile.loadout); api.refreshProfileUI(); };
   $('#sp-claim').onclick = claimAll;
+  $('#sp-week').onclick = () => api.progression?.openMissions?.('season');
   $('#sp-buy').onclick = buy;
 
   const chip = document.createElement('span');
@@ -311,7 +350,7 @@ export function init(api) {
     chip.textContent = 'SEASON +' + xp.toLocaleString() + ' XP' + (mult > 1 ? ' (x' + mult + ')' : '') + ' · TIER ' + after + (after > before ? ' ▲' : '');
     chip.classList.toggle('hidden', !xp);
   });
-  api.bus.on('mission:complete', m => { addXP(Math.min(MISSION_CAP, Math.max(0, +m?.xp || 0))); });
+  api.bus.on('mission:complete', m => { addXP(m?.seasonXp != null ? Math.max(0, +m.seasonXp || 0) : Math.min(MISSION_CAP, Math.max(0, +m?.xp || 0))); });
   api.bus.on('purchase', () => { refresh(); if (api.activeScreen === el) render(); });
   document.getElementById('board-list')?.addEventListener('click', e => {
     inspectMine = !!e.target.closest('li')?.classList.contains('me');
@@ -332,5 +371,5 @@ export function init(api) {
   api.storeKit.register?.([passId(seasonAt().n)]);
   state();
   refresh();
-  api.season = { seasonAt, runXP, reward, passId, state, claim, claimAll, claimable, addXP, open, render, tierOf, get lastRun() { return lastRun; } };
+  api.season = { seasonAt, runXP, reward, passId, state, claim, claimAll, claimable, addXP, open, render, tierOf, bonusCount, bonusReward, dropLocked, DROP_TIER, DROP_DAY, BONUS_XP, get lastRun() { return lastRun; } };
 }

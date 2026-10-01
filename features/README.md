@@ -74,6 +74,11 @@ Slots in `SLOTS` and encoded `EXTRA_SLOTS` are bit-packed into the 64-bit Game C
 bit range (`2 ** bits`) must declare `like`, the index of a lower item they encode as, so other players see the closest look while the
 owner sees the real one. Suits can reuse another suit's geometry with `parts` plus colour overrides (`iron`, `cloth`, `fur`, `hood`).
 Season rewards: premium tier 1 is the season suit (claimed automatically on purchase), tier 20 the season weapon skin (`req: 'seasonskin:n'`).
+Past tier 30 every `BONUS_XP` (2,000) season XP is a free bonus tier (`bonusCount`, claimed in `profile.season.bonus`): 1,500 scrap, and every
+`BONUS_CRATE_EVERY` (3rd) a crate with a random unowned cosmetic. Free tier `DROP_TIER` (25) is the mid-season drop, a random cosmetic that only
+opens from season day `DROP_DAY` (14). Three weekly season challenges (`TEMPLATES` with a `season` array, generated like missions under
+`profile.progression.season`, SEASON tab in MISSIONS, no reroll) pay `SEASON_CHALLENGE` (300 scrap, 1,000 XP, 1,500 season XP via
+`mission:complete.seasonXp`, which bypasses `MISSION_CAP`).
 
 ## Streak
 `streakVisit(s, today, now)` in `features/progression/data.js` counts one visit per UTC day. Reaching a multiple of `SHIELD_EVERY` (7) days earns a

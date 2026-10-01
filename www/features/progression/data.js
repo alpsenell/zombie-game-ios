@@ -11,7 +11,7 @@ export function weekKey(t = Date.now()) {
 }
 export function resetAt(period, t = Date.now()) {
   const d = dayNum(t);
-  return (period === 'weekly' ? d + 7 - (d + 3) % 7 : d + 1) * DAY;
+  return (period !== 'daily' ? d + 7 - (d + 3) % 7 : d + 1) * DAY;
 }
 export function timeLeft(ms) {
   const h = Math.floor(ms / 3600000), m = Math.max(1, Math.ceil(ms % 3600000 / 60000));
@@ -41,7 +41,16 @@ export const TEMPLATES = [
   { id: 'runs', ev: 'run:end', weekly: [5, 8, 10], w: 1, fn: add(e => e.kills > 0), text: n => 'PLAY ' + n + ' RUNS' },
   { id: 'clears', ev: 'wave:clear', weekly: [40, 60, 90], w: 1.1, fn: add(() => true), text: n => 'CLEAR ' + n + ' WAVES' },
   { id: 'missions', ev: 'mission:complete', weekly: [6, 9, 12], w: 1, fn: add(e => e.period === 'daily'), text: n => 'COMPLETE ' + n + ' DAILY MISSIONS' },
+  { id: 'smap', ev: 'wave:start', season: [10, 13, 16], w: 1, fn: (e, m, run) => (run.map === m.arg ? Math.max(m.p, e.wave) : m.p), arg: (c, r) => { const maps = c.maps?.length ? c.maps : [{ id: 'street' }]; return maps[(r() * maps.length) | 0].id; }, text: (n, a, c) => 'REACH WAVE ' + n + ' ON ' + (c.maps?.find(m => m.id === a)?.name || String(a).toUpperCase()) },
+  { id: 'sboss', ev: 'kill', season: [2, 3, 4], w: 1, fn: add((e, m) => e.boss && e.weapon === m.arg), arg: (c, r) => c.owned[(r() * c.owned.length) | 0].id, avail: c => c.bestWave >= 4, text: (n, a, c) => 'KILL ' + n + ' BOSSES WITH THE ' + (c.weaponName(a) || a) },
+  { id: 'sdaily', ev: 'run:end', season: [1, 2, 3], w: 1, fn: add(e => e.type === 'daily' && e.cleared), avail: c => c.hasDaily, text: n => 'CLEAR ' + n + ' DAILY CHALLENGE' + (n > 1 ? 'S' : '') },
+  { id: 'sextract', ev: 'run:end', season: [10, 20, 20], w: 1, fn: (e, m) => (e.type === 'extract' && e.extracted >= m.n ? m.n : m.p), text: n => 'EXTRACT AT WAVE ' + n + ' OR LATER' },
+  { id: 'sranked', ev: 'run:end', season: [2, 3, 4], w: 1, fn: add(e => e.type === 'ranked' && e.kills > 0), avail: c => c.hasDaily, text: n => 'PLAY ' + n + ' RANKED RUNS' },
+  { id: 'sheads', ev: 'kill', season: [150, 250, 400], w: 1, fn: add(e => e.head), text: n => n0(n) + ' HEADSHOTS THIS WEEK' },
+  { id: 'selite', ev: 'kill', season: [15, 25, 40], w: 1, fn: add(e => e.elite), avail: c => c.tier >= 1, text: n => 'KILL ' + n + ' ELITES THIS WEEK' },
+  { id: 'swaves', ev: 'wave:clear', season: [60, 90, 120], w: 1, fn: add(() => true), text: n => 'CLEAR ' + n + ' WAVES THIS WEEK' },
 ];
+export const SEASON_CHALLENGE = { scrap: 300, xp: 1000, seasonXp: 1500 };
 export const template = id => TEMPLATES.find(t => t.id === id);
 
 const round = (v, s) => Math.round(v / s) * s;
@@ -50,10 +59,9 @@ function build(t, period, key, slot, ctx, rnd, rr = 0) {
   let n = t[period][ctx.tier];
   if (t.drop && arg) n -= (DIFF_RANK[arg] - 1) * t.drop[period];
   const k = t.w * (1 + ctx.tier * .25);
-  return {
-    id: period + ':' + key + ':' + slot + (rr ? ':r' + rr : ''), t: t.id, n, arg, p: 0, done: false, claimed: false,
-    scrap: period === 'daily' ? round(100 * k, 5) : round(600 * k, 10), xp: period === 'daily' ? round(400 * k, 50) : round(2500 * k, 50),
-  };
+  const base = { id: period + ':' + key + ':' + slot + (rr ? ':r' + rr : ''), t: t.id, n, arg, p: 0, done: false, claimed: false };
+  if (period === 'season') return { ...base, ...SEASON_CHALLENGE };
+  return { ...base, scrap: period === 'daily' ? round(100 * k, 5) : round(600 * k, 10), xp: period === 'daily' ? round(400 * k, 50) : round(2500 * k, 50) };
 }
 function pool(period, ctx, exclude = []) {
   return TEMPLATES.filter(t => t[period] && (!t.avail || t.avail(ctx)) && !exclude.includes(t.id));
