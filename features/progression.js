@@ -10,7 +10,7 @@ const native = {
 
 function init(api) {
   const { bus, profile, WEAPONS, $ } = api;
-  const P = profile.progression = Object.assign({ daily: null, weekly: null, reroll: '', rerolls: 0, mastery: {}, prestige: {}, ach: {}, reported: {}, stats: null, streak: {} }, profile.progression);
+  const P = profile.progression = Object.assign({ daily: null, weekly: null, season: null, reroll: '', rerolls: 0, mastery: {}, prestige: {}, ach: {}, reported: {}, stats: null, streak: {} }, profile.progression);
   P.prestige ||= {};
   P.streak = Object.assign({ count: 0, best: 0, last: null, claimed: null, shown: null, broken: 0 }, P.streak);
   P.stats = Object.assign({
@@ -28,7 +28,7 @@ function init(api) {
   function ctx() {
     const bestWave = Math.max(profile.bestWave || 0, P.stats.bestWave || 0);
     return {
-      tier: bestWave >= 15 ? 2 : bestWave >= 8 ? 1 : 0, bestWave, weaponName,
+      tier: bestWave >= 15 ? 2 : bestWave >= 8 ? 1 : 0, bestWave, weaponName, maps: api.MAPS,
       owned: WEAPONS.filter(w => api.weaponOwned(w)),
       hasDaily: FEATURES.some(f => f.id !== 'progression' && /daily|competitive/i.test(f.id)),
     };
@@ -63,7 +63,7 @@ function init(api) {
 
   function refreshMissions() {
     let collected = 0;
-    for (const [period, key] of [['daily', D.dayKey()], ['weekly', D.weekKey()]]) {
+    for (const [period, key] of [['daily', D.dayKey()], ['weekly', D.weekKey()], ['season', D.weekKey()]]) {
       const cur = P[period];
       if (cur?.key === key) continue;
       for (const m of cur?.list || []) if (m.done && !m.claimed) { collected += m.scrap; payout(m, period); }
@@ -78,13 +78,13 @@ function init(api) {
     P.stats.missions++;
     api.grantScrap(m.scrap);
     api.grantXP(m.xp);
-    bus.emit('mission:complete', { id: m.id, period, xp: m.xp, scrap: m.scrap });
+    bus.emit('mission:complete', { id: m.id, period, xp: m.xp, scrap: m.scrap, seasonXp: m.seasonXp });
     const now = api.levelInfo().level;
     if (now > lvl) notify('LEVEL UP', 'LEVEL ' + now);
     checkAch();
   }
   function claim(id, anchor) {
-    for (const period of ['daily', 'weekly']) {
+    for (const period of ['daily', 'weekly', 'season']) {
       const m = P[period]?.list.find(x => x.id === id);
       if (!m || !m.done || m.claimed) continue;
       payout(m, period);
@@ -112,7 +112,7 @@ function init(api) {
   }
   function track(ev, e) {
     const rc = run || { difficultyId: api.settings.difficulty, type: 'normal' };
-    for (const period of ['daily', 'weekly']) for (const m of P[period]?.list || []) {
+    for (const period of ['daily', 'weekly', 'season']) for (const m of P[period]?.list || []) {
       const t = D.template(m.t);
       if (m.done || !t || t.ev !== ev) continue;
       m.p = Math.min(m.n, t.fn(e, m, rc));
@@ -195,7 +195,7 @@ function init(api) {
   const screen = el('section', 'screen');
   screen.id = 'missions';
   screen.innerHTML = '<div class="panel pg-panel"><div class="pg-head"><h2>MISSIONS</h2><div class="scrap">🔩 <span class="pg-scrap">0</span></div></div>' +
-    '<div class="pg-tabs"><button data-pg="daily">DAILY<span class="badge"></span></button><button data-pg="weekly">WEEKLY<span class="badge"></span></button><button data-pg="ach">ACHIEVEMENTS</button></div>' +
+    '<div class="pg-tabs"><button data-pg="daily">DAILY<span class="badge"></span></button><button data-pg="weekly">WEEKLY<span class="badge"></span></button><button data-pg="season">SEASON<span class="badge"></span></button><button data-pg="ach">ACHIEVEMENTS</button></div>' +
     '<div class="pg-sub"></div><div class="pg-list"></div><div class="pg-foot"><button class="ghost hidden pg-gc">GAME CENTER</button><button class="cta pg-close">BACK</button></div></div>';
   document.body.appendChild(screen);
   api.registerScreen(screen);
@@ -206,7 +206,7 @@ function init(api) {
 
   function claimable(period) { return (P[period]?.list || []).filter(m => m.done && !m.claimed).length; }
   function updateBadges() {
-    const n = claimable('daily') + claimable('weekly');
+    const n = claimable('daily') + claimable('weekly') + claimable('season');
     menuBadge.textContent = n || '';
     menuBtn.classList.toggle('hot', n > 0);
     const S = P.streak, today = D.dayNum();
@@ -215,6 +215,7 @@ function init(api) {
     streakBtn.classList.toggle('hot', !!streakBadge.textContent);
     q('[data-pg=daily] .badge').textContent = claimable('daily') || '';
     q('[data-pg=weekly] .badge').textContent = claimable('weekly') || '';
+    q('[data-pg=season] .badge').textContent = claimable('season') || '';
   }
 
   function progressText(m) {
@@ -223,7 +224,7 @@ function init(api) {
   function render() {
     refreshMissions();
     screen.querySelectorAll('.pg-tabs button').forEach(b => b.classList.toggle('on', b.dataset.pg === tab));
-    q('h2').textContent = tab === 'ach' ? 'ACHIEVEMENTS' : 'MISSIONS';
+    q('h2').textContent = tab === 'ach' ? 'ACHIEVEMENTS' : tab === 'season' ? 'SEASON CHALLENGES' : 'MISSIONS';
     q('.pg-scrap').textContent = profile.scrap.toLocaleString();
     q('.pg-head .scrap').classList.toggle('hidden', tab === 'ach');
     q('.pg-gc').classList.toggle('hidden', !native.ok() || tab !== 'ach');
@@ -245,8 +246,8 @@ function init(api) {
       }
       return;
     }
-    subPart('NEW ' + tab.toUpperCase() + ' MISSIONS IN ', D.timeLeft(D.resetAt(tab) - Date.now()));
-    subPart(rerollFree() ? '1 FREE REROLL TODAY' : 'REROLL USED TODAY');
+    subPart('NEW ' + (tab === 'season' ? 'CHALLENGES' : tab.toUpperCase() + ' MISSIONS') + ' IN ', D.timeLeft(D.resetAt(tab) - Date.now()));
+    if (tab === 'season') subPart('⚡ ' + D.SEASON_CHALLENGE.seasonXp.toLocaleString() + ' SEASON XP EACH'); else subPart(rerollFree() ? '1 FREE REROLL TODAY' : 'REROLL USED TODAY');
     const c = ctx();
     P[tab].list.forEach((m, idx) => {
       const row = el('div', 'pg-m' + (m.claimed ? ' claimed' : m.done ? ' done' : '')), mid = el('div');
@@ -254,18 +255,18 @@ function init(api) {
       i.style.setProperty('--v', Math.round(m.p / m.n * 100) + '%');
       bar.appendChild(i);
       const info = el('small', '', progressText(m) + ' · ');
-      info.appendChild(el('em', '', '🔩 ' + m.scrap.toLocaleString() + ' · ' + m.xp.toLocaleString() + ' XP'));
+      info.appendChild(el('em', '', '🔩 ' + m.scrap.toLocaleString() + ' · ' + m.xp.toLocaleString() + ' XP' + (m.seasonXp ? ' · ⚡ ' + m.seasonXp.toLocaleString() + ' SEASON XP' : '')));
       mid.append(el('b', '', D.missionText(m, c)), bar, info);
       row.appendChild(mid);
       if (m.done && !m.claimed) { const b = el('button', 'cta gold', 'CLAIM'); b.onclick = () => claim(m.id, b); row.appendChild(b); }
-      else if (!m.done && rerollFree()) { const b = el('button', 'ghost', 'REROLL'); b.onclick = () => reroll(tab, idx); row.appendChild(b); }
+      else if (!m.done && tab !== 'season' && rerollFree()) { const b = el('button', 'ghost', 'REROLL'); b.onclick = () => reroll(tab, idx); row.appendChild(b); }
       list.appendChild(row);
     });
   }
   function openMissions(which) {
     returnTo = api.activeScreen === screen ? returnTo : api.activeScreen;
     refreshMissions();
-    tab = which || (claimable('daily') ? 'daily' : claimable('weekly') ? 'weekly' : tab);
+    tab = which || (claimable('daily') ? 'daily' : claimable('weekly') ? 'weekly' : claimable('season') ? 'season' : tab);
     render();
     api.showScreen(screen);
     loadNative();
@@ -278,7 +279,7 @@ function init(api) {
     if (!wrap) { wrap = el('div', 'pg-over'); box.appendChild(wrap); }
     wrap.textContent = '';
     if (!lastRun) return;
-    const c = ctx(), all = [...(P.daily?.list || []), ...(P.weekly?.list || [])];
+    const c = ctx(), all = [...(P.daily?.list || []), ...(P.weekly?.list || []), ...(P.season?.list || [])];
     for (const id of lastRun.missions) { const m = all.find(x => x.id === id); if (m) wrap.appendChild(el('span', 'm', '✔ ' + D.missionText(m, c))); }
     for (const slug of lastRun.ach) { const a = D.ACHIEVEMENTS.find(x => x.slug === slug); if (a) wrap.appendChild(el('span', 'a', '🏆 ' + a.title)); }
     Object.entries(lastRun.mastery).sort((a, b) => b[1] - a[1]).slice(0, 2).forEach(([id]) => {
@@ -440,7 +441,7 @@ function init(api) {
     return count;
   }
 
-  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', missions: [], ach: [], mastery: {}, levels: {} }; }
+  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', map: e?.map || api.currentMap, missions: [], ach: [], mastery: {}, levels: {} }; }
   bus.on('run:start', e => { closeStreak(); refreshMissions(); run = newRun(e); });
   bus.on('kill', e => {
     const s = P.stats;
@@ -482,7 +483,8 @@ function init(api) {
 
   api.progression = {
     state: P, data: D, claim, reroll, refreshMissions, openMissions, openStreak, claimStreak, repairStreak, streakCheck, syncNative,
-    missions: () => [...(P.daily?.list || []), ...(P.weekly?.list || [])],
+    missions: () => [...(P.daily?.list || []), ...(P.weekly?.list || []), ...(P.season?.list || [])],
+    challenges: () => P.season?.list || [],
     mastery: id => D.masteryInfo(P.mastery[id]),
     prestige, prestigeOf: id => P.prestige[id] || 0,
   };
