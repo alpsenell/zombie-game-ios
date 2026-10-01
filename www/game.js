@@ -2524,7 +2524,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', extract: 'deadzone.extract' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2537,7 +2537,7 @@ const gameCenter = {
     if (!this.player) return null;
     try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.weeklySurvivor : run?.difficultyId === 'veteran' ? LEADERBOARDS.weeklyVeteran : LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
   guard: null,
   async submit(score, wave, context, run) {
     const rejected = run && this.guard?.(run);

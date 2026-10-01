@@ -45,6 +45,10 @@ function mergeCompetitive(a, b) {
   if (b.held && (!a.held || String(b.held.week) > String(a.held.week))) c.held = b.held;
   c.paidWeek = later(a.paidWeek, b.paidWeek);
   c.resets = { ...b.resets, ...a.resets };
+  if (a.placement || b.placement) c.placement = num(b.placement?.season) > num(a.placement?.season) ? b.placement : num(a.placement?.season) > num(b.placement?.season) ? a.placement : { season: num(a.placement?.season), runs: Math.max(num(a.placement?.runs), num(b.placement?.runs)) };
+  if (a.seasonBest || b.seasonBest) c.seasonBest = !a.seasonBest ? b.seasonBest : !b.seasonBest ? a.seasonBest : num(b.seasonBest.season) > num(a.seasonBest.season) ? b.seasonBest : a.seasonBest;
+  c.seasonPaid = Math.max(num(a.seasonPaid), num(b.seasonPaid)) || undefined;
+  c.seasonHistory = { ...b.seasonHistory, ...a.seasonHistory };
   return c;
 }
 

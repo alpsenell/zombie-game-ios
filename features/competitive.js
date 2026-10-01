@@ -1,6 +1,9 @@
 import { mulberry32 } from '../core.js';
+import { seasonAt } from './season.js';
 
-export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract' };
+export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract' };
+export const PLACEMENT_RUNS = 3;
+export const SEASON_REWARDS = { bronze: 500, silver: 1000, gold: 2000, platinum: 3500, diamond: 5000, legend: 8000 };
 export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFICULTY = 'survivor';
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
@@ -10,20 +13,32 @@ export const EXTRACT_MAX_MULT = 2;
 const DAY = 864e5, WINDOW = 30;
 
 export const LEAGUES = [
-  { id: 'legend', name: 'LEGEND', icon: '♛', color: '#ff6ad5', rule: 'TOP 100' },
-  { id: 'diamond', name: 'DIAMOND', icon: '◆', color: '#7fe8ff', max: .03, rule: 'TOP 3%' },
-  { id: 'platinum', name: 'PLATINUM', icon: '⬢', color: '#bff5e3', max: .10, rule: 'TOP 10%' },
-  { id: 'gold', name: 'GOLD', icon: '⬣', color: '#ffc34d', max: .25, rule: 'TOP 25%' },
-  { id: 'silver', name: 'SILVER', icon: '⬣', color: '#cfd8dc', max: .50, rule: 'TOP 50%' },
-  { id: 'bronze', name: 'BRONZE', icon: '⬣', color: '#d8925a', max: 1, rule: 'RANKED' },
+  { id: 'legend', name: 'LEGEND', icon: '♛', color: '#ff6ad5', rule: 'NIGHTMARE · TOP 100' },
+  { id: 'diamond', name: 'DIAMOND', icon: '◆', color: '#7fe8ff', max: .03, rule: 'NIGHTMARE' },
+  { id: 'platinum', name: 'PLATINUM', icon: '⬢', color: '#bff5e3', max: .10, rule: 'VETERAN' },
+  { id: 'gold', name: 'GOLD', icon: '⬣', color: '#ffc34d', max: .25, rule: 'VETERAN' },
+  { id: 'silver', name: 'SILVER', icon: '⬣', color: '#cfd8dc', max: .50, rule: 'SURVIVOR' },
+  { id: 'bronze', name: 'BRONZE', icon: '⬣', color: '#d8925a', max: 1, rule: 'SURVIVOR' },
 ];
+export const BRACKETS = {
+  survivor: { id: 'survivor', name: 'SURVIVOR', board: 'weeklySurvivor', leagues: ['bronze', 'silver'], up: 'TOP 25% → GOLD', down: '', bands: [['gold', 0, .25], ['silver', .25, .5], ['bronze', .5, 1]] },
+  veteran: { id: 'veteran', name: 'VETERAN', board: 'weeklyVeteran', leagues: ['gold', 'platinum'], up: 'TOP 10% → DIAMOND', down: 'BOTTOM 25% → SILVER', bands: [['diamond', 0, .1], ['platinum', .1, .5], ['gold', .5, .75], ['silver', .75, 1]] },
+  nightmare: { id: 'nightmare', name: 'NIGHTMARE', board: 'weekly', leagues: ['diamond', 'legend'], up: 'TOP 100 & TOP 3% → LEGEND', down: 'BOTTOM 40% → PLATINUM', bands: [['legend', 0, .03], ['diamond', .03, .6], ['platinum', .6, 1]] },
+};
+export const bracketOf = leagueId => (leagueRank(leagueId) >= leagueRank('diamond') ? 'nightmare' : leagueRank(leagueId) >= leagueRank('gold') ? 'veteran' : 'survivor');
 const UNRANKED = { id: 'unranked', name: 'UNRANKED', icon: '○', color: '#9aa9ab', rule: '' };
 
-export function leagueFor(rank, total) {
+export function leagueFor(rank, total, bracket) {
   if (!rank || !total) return null;
-  const pct = Math.min(1, rank / total);
-  if (rank <= 100 && pct <= .03) return LEAGUES[0];
-  return LEAGUES.slice(1).find(l => pct <= l.max);
+  const pct = Math.min(1, rank / total), L = id => LEAGUES.find(l => l.id === id);
+  if (!bracket) { if (rank <= 100 && pct <= .03) return LEAGUES[0]; return LEAGUES.slice(1).find(l => pct <= l.max); }
+  const B = BRACKETS[bracket] || BRACKETS.survivor;
+  for (const [id, , hi] of B.bands) if (pct <= hi && (id !== 'legend' || rank <= 100)) return L(id);
+  return L(B.bands[B.bands.length - 1][0]);
+}
+export function withinLeague(rank, total, bracket, leagueId) {
+  const band = (BRACKETS[bracket] || BRACKETS.survivor).bands.find(b => b[0] === leagueId);
+  return band ? Math.max(1, rank - Math.floor(total * band[1])) : rank;
 }
 
 export const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
@@ -76,6 +91,7 @@ export function plausible(run, api, now = Date.now()) {
   const start = run.startWave ?? 1, played = run.wave - start + 1;
   if (!Number.isInteger(start) || start < 1 || played < 1) return 'INVALID START WAVE';
   if (start > 1 && run.type !== 'normal') return 'CHECKPOINT START IN A FAIR-PLAY RUN';
+  if (run.type === 'ranked' && !BRACKETS[run.difficultyId]) return 'NOT A RANKED DIFFICULTY';
   if (run.wave > 999 || run.heads > run.kills) return 'IMPOSSIBLE STATS';
   if (run.kills > played * 160 + 40) return 'TOO MANY KILLS FOR WAVE ' + run.wave;
   if (run.time < (played - 1) * 2 || run.kills > run.time * 25 + 30) return 'RUN TOO FAST';
@@ -158,7 +174,7 @@ export function init(api) {
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fmt = n => Math.round(n).toLocaleString();
-  const boardId = b => (b === 'daily' && dailyBracket(api.levelInfo().level) === 'rookie' ? BOARDS.dailyRookie : BOARDS[b]);
+  const boardId = b => (b === 'daily' && dailyBracket(api.levelInfo().level) === 'rookie' ? BOARDS.dailyRookie : b === 'weekly' ? BOARDS[BRACKETS[bracket()].board] : BOARDS[b]);
   const resetIn = board => { const t = comp().resets[boardId(board)]; return timeLeft((t && t > Date.now() ? t : nextReset(board)) - Date.now()); };
   const signedIn = async () => gc.available() && (gc.player || await gc.signIn());
   const loadBoard = async (board, opts = {}) => {
@@ -168,16 +184,21 @@ export function init(api) {
   };
   const weekKey = () => utcDay(weekStart());
   const currentLeague = () => { const l = comp().league; return l && l.week === weekKey() ? l : null; };
+  const bracket = () => (comp().held?.id ? bracketOf(comp().held.id) : 'survivor');
+  const placement = () => { const c = comp(), n = seasonAt().n; if (c.placement?.season !== n) c.placement = { season: n, runs: 0 }; return c.placement; };
+  const placementsLeft = () => (comp().held?.id ? 0 : Math.max(0, PLACEMENT_RUNS - placement().runs));
   function setLeague(rank, total) {
-    const lg = leagueFor(rank, total);
-    comp().league = lg ? { id: lg.id, rank, total, pct: rank / total, week: weekKey(), at: Date.now() } : null;
+    const lg = leagueFor(rank, total, bracket());
+    comp().league = lg ? { id: lg.id, rank, total, pct: rank / total, week: weekKey(), at: Date.now(), bracket: bracket() } : null;
     api.saveProfile();
     renderMenu();
     return lg;
   }
   const leagueOf = l => (l && LEAGUES.find(x => x.id === l.id)) || UNRANKED;
+  const PLACING = () => ({ id: 'placement', name: 'PLACEMENT ' + placement().runs + '/' + PLACEMENT_RUNS, icon: '◌', color: '#9aa9ab', rule: '' });
+  const shownLeague = l => (l && placementsLeft() > 0 ? PLACING() : leagueOf(l));
   function badge(l, tag = 'span') {
-    const lg = leagueOf(l), b = el(tag, 'cm-badge');
+    const lg = l?.id === 'placement' ? l : shownLeague(l), b = el(tag, 'cm-badge');
     b.style.setProperty('--c', lg.color);
     b.append(el('i', '', lg.icon), document.createTextNode(lg.name));
     return b;
@@ -193,7 +214,9 @@ export function init(api) {
   function payWeek() {
     const res = settleWeek(comp(), weekKey());
     if (!res) return null;
-    const lg = LEAGUES.find(l => l.id === res.id);
+    const lg = LEAGUES.find(l => l.id === res.id), c = comp(), sn = seasonAt(Date.parse(res.week + 'T00:00:00Z')).n;
+    if (!c.seasonBest || c.seasonBest.season < sn || (c.seasonBest.season === sn && leagueRank(res.id) > leagueRank(c.seasonBest.id))) c.seasonBest = { season: sn, id: res.id };
+    (c.seasonHistory ||= {})[sn] = c.seasonBest.season === sn ? c.seasonBest.id : res.id;
     if (res.scrap) api.grantScrap(res.scrap);
     if (leagueRank(res.id) >= leagueRank('diamond')) { const k = 'gun:' + api.SLOTS.find(s => s.id === 'gun').items.findIndex(it => it.req === 'league:diamond'); if (!api.profile.fresh.includes(k)) api.profile.fresh.push(k); }
     api.saveProfile();
@@ -213,6 +236,23 @@ export function init(api) {
     bus.emit('league:settled', res);
     return res;
   }
+  function paySeason() {
+    const c = comp(), best = c.seasonBest, now = seasonAt().n;
+    if (!best || best.season >= now || c.seasonPaid === best.season) return null;
+    const lg = LEAGUES.find(l => l.id === best.id), scrap = SEASON_REWARDS[best.id] || 0;
+    c.seasonPaid = best.season;
+    if (scrap) api.grantScrap(scrap);
+    api.saveProfile();
+    api.queueModal(done => {
+      const wrap = el('div', 'cm-pay'), card = el('div', 'cm-pay-card'), ok = el('button', 'cta', 'COLLECT');
+      card.append(el('small', '', 'SEASON ' + best.season + ' COMPLETE'), badge({ id: best.id }), el('h3', '', 'BEST LEAGUE: ' + lg.name), el('p', '', '+' + fmt(scrap) + ' 🔩 SEASON REWARD'), el('p', 'dim', 'YOUR BRACKET CARRIES OVER. NEW SEASON, NEW PLACEMENTS FOR NEWCOMERS.'), ok);
+      wrap.appendChild(card);
+      document.body.appendChild(wrap);
+      ok.onclick = () => { wrap.remove(); api.sfx.pickup?.(); api.haptic('MEDIUM'); done(); };
+    }, 2);
+    bus.emit('season:league', { season: best.season, id: best.id, scrap });
+    return { season: best.season, id: best.id, scrap };
+  }
 
   const pctText = l => l && l.pct <= .5 ? 'TOP ' + Math.max(1, Math.ceil(l.pct * 100)) + '%' : '';
 
@@ -223,7 +263,8 @@ export function init(api) {
 
   const daily = () => dailyChallenge(api);
   const dailyOpts = () => { const d = daily(); return { type: 'daily', seed: d.seed, difficulty: d.difficulty, slots: d.slots, maxWave: d.waves, ...(d.map ? { map: d.map.id } : {}), replay: dailyOpts }; };
-  const rankedOpts = () => ({ type: 'ranked', difficulty: api.settings.difficulty, slots: rankedLoadout(api).slots, replay: rankedOpts });
+  const rankedOpts = () => ({ type: 'ranked', difficulty: BRACKETS[bracket()].id, slots: rankedLoadout(api).slots, replay: rankedOpts });
+  const inLeague = l => (l ? '#' + fmt(withinLeague(l.rank, l.total, l.bracket || bracket(), l.id)) + ' IN ' + leagueOf(l).name : '');
   const slotNames = slots => slots.map(i => api.WEAPONS[i].name).join(' + ');
 
   const modes = $('#menu-modes');
@@ -264,7 +305,7 @@ export function init(api) {
   }
   const setCell = (k, v) => { if (cells[k]) cells[k].textContent = v; };
   function renderLadder(active) {
-    ladder.replaceChildren(...[...LEAGUES].reverse().map(l => { const s = el('span', l.id === active ? 'on' : '', l.name + (l.id === 'bronze' ? '' : ' · ' + l.rule)); s.style.setProperty('--c', l.color); return s; }));
+    ladder.replaceChildren(...[...LEAGUES].reverse().map(l => { const s = el('span', l.id === active ? 'on' : '', l.name + ' · ' + l.rule); s.style.setProperty('--c', l.color); return s; }));
   }
 
   function openDaily() {
@@ -306,22 +347,22 @@ export function init(api) {
   }
 
   function openRanked() {
-    const { slots, swapped } = rankedLoadout(api), c = comp(), l = currentLeague(), D = api.DIFFICULTIES[api.settings.difficulty], token = ++sheetToken;
-    const wk = c.weekly?.week === weekKey() ? c.weekly : null;
+    const { slots, swapped } = rankedLoadout(api), c = comp(), l = currentLeague(), B = BRACKETS[bracket()], D = api.DIFFICULTIES[B.id], token = ++sheetToken;
+    const wk = c.weekly?.week === weekKey() ? c.weekly : null, left = placementsLeft();
     sheetMode = 'ranked';
     title.textContent = 'RANKED';
-    sub.textContent = 'WEEKLY LEAGUE · RESETS IN ' + resetIn('weekly');
+    sub.textContent = B.name + ' BRACKET · ' + B.leagues.map(id => leagueOf({ id }).name).join(' & ') + ' · RESETS IN ' + resetIn('weekly');
     setCells([
       ['loadout', 'YOUR LOADOUT', slotNames(slots)],
-      ['diff', 'DIFFICULTY', D.name + ' · x' + D.score],
-      ['league', 'LEAGUE', leagueOf(l).name + (pctText(l) ? ' · ' + pctText(l) : '')],
-      ['rank', 'WEEKLY RANK', l ? '#' + fmt(l.rank) + ' / ' + fmt(l.total) : gc.available() ? '…' : 'iOS APP'],
+      ['diff', 'DIFFICULTY · SET BY BRACKET', D.name + ' · x' + D.score],
+      ['league', left ? 'PLACEMENT' : 'LEAGUE', left ? placement().runs + ' / ' + PLACEMENT_RUNS + ' RUNS' : leagueOf(l).name + (pctText(l) ? ' · ' + pctText(l) : '')],
+      ['rank', 'RANK', l ? (left ? '#' + fmt(l.rank) + ' / ' + fmt(l.total) : inLeague(l)) : gc.available() ? '…' : 'iOS APP'],
       ['best', 'BEST THIS WEEK', wk?.best ? fmt(wk.best) : '—'],
       ['reset', 'RESETS IN', resetIn('weekly')],
     ]);
     note.textContent = swapped.length ? swapped.join(' + ') + (swapped.length > 1 ? ' ARE' : ' IS') + ' OFF IN RANKED — USING ' + slotNames(slots) : '';
     renderLadder(l?.id);
-    rules.textContent = 'FAIR PLAY: iOS EXCLUSIVE WEAPONS ARE OFF, SCRAP WEAPONS ARE ALLOWED. SCORES GO TO THE WEEKLY BOARD AND SET YOUR LEAGUE. NORMAL DEPLOY KEEPS EVERY WEAPON AND COUNTS FOR THE ALL-TIME BOARD.';
+    rules.textContent = 'YOUR BRACKET SETS THE DIFFICULTY: BRONZE & SILVER PLAY SURVIVOR, GOLD & PLATINUM VETERAN, DIAMOND & LEGEND NIGHTMARE. ' + B.up + (B.down ? ' · ' + B.down : '') + '. ' + (left ? 'PLAY ' + PLACEMENT_RUNS + ' RANKED RUNS TO GET PLACED. ' : '') + 'iOS EXCLUSIVE WEAPONS ARE OFF, SCRAP WEAPONS ARE ALLOWED. NORMAL DEPLOY KEEPS EVERY WEAPON AND COUNTS FOR THE ALL-TIME BOARD.';
     go.textContent = 'START RANKED';
     go.onclick = () => {
       api.startGame(rankedOpts());
@@ -330,8 +371,9 @@ export function init(api) {
     api.showScreen(sheet);
     refreshLeague().then(nl => {
       if (token !== sheetToken) return;
-      setCell('league', leagueOf(nl).name + (pctText(nl) ? ' · ' + pctText(nl) : ''));
-      setCell('rank', nl ? '#' + fmt(nl.rank) + ' / ' + fmt(nl.total) : gc.available() ? '—' : 'iOS APP');
+      const pl = placementsLeft();
+      setCell('league', pl ? placement().runs + ' / ' + PLACEMENT_RUNS + ' RUNS' : leagueOf(nl).name + (pctText(nl) ? ' · ' + pctText(nl) : ''));
+      setCell('rank', nl ? (pl ? '#' + fmt(nl.rank) + ' / ' + fmt(nl.total) : inLeague(nl)) : gc.available() ? '—' : 'iOS APP');
       setCell('reset', resetIn('weekly'));
       renderLadder(nl?.id);
     });
@@ -515,7 +557,9 @@ export function init(api) {
       if (d?.attempts) parts.push('ATTEMPT ' + d.attempts);
       if (run.difficultyId === ROOKIE_DIFFICULTY) parts.push('ROOKIE BRACKET');
     } else if (run.type === 'ranked') {
-      if (l) parts.push(...[pctText(l)].filter(Boolean), 'WEEKLY #' + fmt(l.rank) + ' / ' + fmt(l.total));
+      const left = placementsLeft();
+      if (left) parts.push('PLACEMENT ' + placement().runs + '/' + PLACEMENT_RUNS, left + ' MORE RUN' + (left > 1 ? 'S' : '') + ' TO GET PLACED');
+      else if (l) parts.push(inLeague(l), ...[pctText(l)].filter(Boolean), BRACKETS[l.bracket || bracket()].name + ' BRACKET');
       else parts.push(gc.available() ? 'WEEKLY BEST ' + fmt(comp().weekly?.best || run.score) : 'LEAGUES USE GAME CENTER');
     } else parts.push(l ? 'PLAY RANKED TO CLIMB' : 'PLAY ⚔ RANKED TO EARN A LEAGUE');
     if (extra) parts.push(extra);
@@ -538,6 +582,7 @@ export function init(api) {
     if (run.type === 'ranked') {
       if (c.weekly?.week !== weekKey()) c.weekly = { week: weekKey(), best: 0 };
       c.weekly.best = Math.max(c.weekly.best || 0, run.score);
+      placement().runs++;
     }
     api.saveProfile();
     if (BOARD_OF[run.type]) selectBoard(BOARD_OF[run.type]);
@@ -549,8 +594,8 @@ export function init(api) {
     if (type === 'ranked') setLeague(result.rank, result.total);
     renderOver(lastRun);
   });
-  bus.on('app:ready', () => { payWeek(); if (gc.available()) refreshLeague().then(payWeek); });
-  bus.on('screen', ({ id }) => { if (id === 'menu') payWeek(); });
+  bus.on('app:ready', () => { payWeek(); paySeason(); if (gc.available()) refreshLeague().then(() => { payWeek(); paySeason(); }); });
+  bus.on('screen', ({ id }) => { if (id === 'menu') { payWeek(); paySeason(); } });
 
-  api.competitive = { BOARDS, LEAGUES, leagueFor, dailyChallenge: () => daily(), dailyBracket: () => dailyBracket(api.levelInfo().level), boardId, rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague, payWeek, heldRank, sprintTime };
+  api.competitive = { BOARDS, LEAGUES, BRACKETS, leagueFor, bracketOf, withinLeague, bracket, placement, placementsLeft, paySeason, rankedOpts, dailyChallenge: () => daily(), dailyBracket: () => dailyBracket(api.levelInfo().level), boardId, rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague, payWeek, heldRank, sprintTime };
 }

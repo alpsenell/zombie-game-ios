@@ -12,6 +12,8 @@ function mockGameCenter() {
     'deadzone.daily': { others: others(40), me: null },
     'deadzone.daily.rookie': { others: others(40), me: null },
     'deadzone.weekly': { others: others(200), me: null },
+    'deadzone.weekly.veteran': { others: others(120), me: null },
+    'deadzone.weekly.survivor': { others: others(200), me: null },
   };
   const calls = [];
   const list = b => [...b.others, ...(b.me ? [{ ...b.me, isLocal: true }] : [])].sort((a, c) => c.score - a.score).map((e, i) => ({ ...e, rank: i + 1, isLocal: !!e.isLocal }));
@@ -34,7 +36,7 @@ function mockGameCenter() {
         const res = { total: all.length, start, entries: all.slice(start - 1, start - 1 + count) };
         const me = all.find(e => e.isLocal);
         if (me) res.player = me;
-        if (opts.leaderboardId === 'deadzone.daily' || opts.leaderboardId === 'deadzone.weekly') Object.assign(res, { recurring: true, nextStart: Date.now() + 5 * 3600e3 });
+        if (/^deadzone\.(daily|weekly)/.test(opts.leaderboardId)) Object.assign(res, { recurring: true, nextStart: Date.now() + 5 * 3600e3 });
         return res;
       }
       throw new Error('unknown ' + method);
@@ -182,12 +184,13 @@ try {
   await shot(page, 'hud-ranked-844');
   await resetCalls(page);
   await endRun(page);
-  assert.deepEqual((await submits(page)).sort(), ['deadzone.bestwave', 'deadzone.highscore', 'deadzone.weekly']);
-  await page.waitForFunction(() => /WEEKLY #/.test(document.querySelector('#over-extras').textContent));
-  const lg = await page.evaluate(() => { const { api } = window.__game, l = api.profile.competitive.league; return { league: l, expect: api.competitive.leagueFor(l.rank, l.total).id, text: document.querySelector('#over-extras').textContent }; });
+  assert.deepEqual((await submits(page)).sort(), ['deadzone.bestwave', 'deadzone.highscore', 'deadzone.weekly.survivor']);
+  await page.waitForFunction(() => /PLACEMENT 1\/3/.test(document.querySelector('#over-extras').textContent));
+  const lg = await page.evaluate(() => { const { api } = window.__game, l = api.profile.competitive.league; return { league: l, expect: api.competitive.leagueFor(l.rank, l.total, 'survivor').id, text: document.querySelector('#over-extras').textContent }; });
   assert.equal(lg.league.total, 201);
   assert.equal(lg.league.id, lg.expect);
-  assert.match(lg.text, new RegExp(lg.league.id.toUpperCase()));
+  assert.equal(lg.league.bracket, 'survivor');
+  assert.match(lg.text, /PLACEMENT 1\/3/);
   await shot(page, 'over-ranked-844');
   ok('ranked run submits to weekly + all-time and shows league on game over');
 
@@ -223,7 +226,7 @@ try {
 
   await page.click('#over [data-open="board"]');
   await page.click('#cm-boards [data-board="weekly"]');
-  await page.waitForFunction(() => window.__gc.calls.some(c => c.method === 'loadScores' && c.opts.leaderboardId === 'deadzone.weekly' && c.opts.count === 25));
+  await page.waitForFunction(() => window.__gc.calls.some(c => c.method === 'loadScores' && c.opts.leaderboardId === 'deadzone.weekly.survivor' && c.opts.count === 25));
   await page.waitForFunction(() => document.querySelectorAll('#board-list li').length > 5);
   assert.match(await page.textContent('.cm-board-note'), /RANKED RUNS/);
   await shot(page, 'board-844');
