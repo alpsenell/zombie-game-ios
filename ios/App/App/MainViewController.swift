@@ -9,5 +9,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(SharePlugin())
         bridge?.registerPluginInstance(MatchPlugin())
         bridge?.registerPluginInstance(CloudSavePlugin())
+        bridge?.registerPluginInstance(NotifyPlugin())
     }
 }

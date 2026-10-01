@@ -17,6 +17,7 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - `mission:complete` `{ id, period: 'daily' | 'weekly', xp, scrap }` — a mission reward was claimed (progression)
 - `run:submitted` `{ type, board, result }` — after a Game Center submit; `result` is `{ rank, score, total, ... }`, `{ rejected: reason }` or `null`
 - `rival:passed` `{ name, rank, score, count, board }` (competitive)
+- `streak:claim` `{ count, total }` — the daily streak reward was claimed (progression)
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
@@ -80,3 +81,12 @@ Season rewards: premium tier 1 is the season suit (claimed automatically on purc
 - Comeback (`comeback.js`): 7+ days away gives a crate (scrap + XP) and `comebackXp = 2` for the next 3 runs.
 - Invite reward (`coop.js`): in a session from INVITE FRIENDS, an accepted invite or a shared room code, clearing wave 5 grants BLOOD BROTHERS + 500 scrap once.
 - Tests: `node tools/test-live.mjs`.
+
+## Notifications
+`features/notify.js` schedules local reminders through the native `Notify` plugin (`ios/App/App/NotifyPlugin.swift`, `UNUserNotificationCenter`;
+no server, no push entitlement). `planFor(state, now, tz)` is pure: it builds candidates (streak deadline, Daily closing, league settlement,
+weekend event start, lapse on day 3 and 7), moves anything outside 08:00–22:00 local to 09:00 (the Daily reminder is dropped instead) and
+keeps at most one per local day, highest priority first. The plan is rebuilt on `app:ready`, every return to the menu, `run:submitted` and when the
+app goes to the background; identical plans are not resent. Permission is requested once, after the first `streak:claim`; Settings has a
+Reminders toggle. Device state lives in `store` under `notify` (not on the profile, so it is never cloud-synced). Events: `notify:planned` `{ list }`.
+`api.notify = { planFor, plan, request, refreshStatus, stateFor, allowed, available, state }`.

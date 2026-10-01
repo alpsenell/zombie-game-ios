@@ -10,6 +10,7 @@ import checkpoint from './checkpoint.js';
 import * as coop from './coop.js';
 import * as events from './events.js';
 import * as comeback from './comeback.js';
+import * as notify from './notify.js';
 
 export const FEATURES = [
   cloudsave,
@@ -24,4 +25,5 @@ export const FEATURES = [
   coop,
   events,
   comeback,
+  notify,
 ];

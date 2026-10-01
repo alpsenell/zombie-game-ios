@@ -405,6 +405,7 @@ function init(api) {
     const r = D.streakReward(S.count);
     api.grantScrap(r.total);
     save();
+    bus.emit('streak:claim', { count: S.count, total: r.total });
     api.haptic('HEAVY'); api.sfx.init(); api.sfx.clear();
     if (anchor) { pop(anchor, '+' + r.total.toLocaleString() + ' 🔩'); anchor.disabled = true; }
     updateBadges();
