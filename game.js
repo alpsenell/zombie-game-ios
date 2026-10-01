@@ -1841,11 +1841,11 @@ function gameOver() {
   state.mode = 'dead';
   firing = false;
   bus.emit('run:end', runSummary());
-  const coop = state.runType === 'coop';
-  if (!coop) saveRun();
+  const coop = state.runType === 'coop', training = state.runType === 'tutorial';
+  if (!coop && !training) saveRun();
   grantRewards();
   const rankEl = $('#over-rank'), summary = runSummary();
-  if (!state.score || coop) rankEl.textContent = '';
+  if (!state.score || coop || training) rankEl.textContent = '';
   else if (!gameCenter.available()) rankEl.textContent = 'GLOBAL RANKINGS ARE AVAILABLE IN THE iOS APP';
   else {
     rankEl.textContent = 'SUBMITTING TO GLOBAL LEADERBOARD…';
@@ -1858,8 +1858,8 @@ function gameOver() {
     });
   }
   const secs = Math.round(state.clock);
-  const best = !coop && state.score > records.score;
-  if (!coop) {
+  const best = !coop && !training && state.score > records.score;
+  if (!coop && !training) {
     records.score = Math.max(records.score, state.score);
     records.wave = Math.max(records.wave, reachedWave());
     store.set('records', records);
@@ -1891,9 +1891,11 @@ function grantRewards() {
   profile.heads += state.heads;
   profile.runs++;
   for (const k of state.bossKinds) profile.bosses[k] = (profile.bosses[k] || 0) + 1;
-  profile.bestWave = Math.max(profile.bestWave, reachedWave());
   const runDiff = state.runDifficulty || settings.difficulty;
-  profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, reachedWave());
+  if (state.runType !== 'tutorial') {
+    profile.bestWave = Math.max(profile.bestWave, reachedWave());
+    profile.bestByDiff[runDiff] = Math.max(profile.bestByDiff[runDiff] || 0, reachedWave());
+  }
   if (daily) profile.lastDaily = today;
   const lvlAfter = levelInfo().level;
   const fresh = [...unlockedSet()].filter(k => !before.has(k));

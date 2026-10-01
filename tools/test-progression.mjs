@@ -23,6 +23,7 @@ function initScript({ now = T0, profile = null, nativeMock = true } = {}) {
       return Promise.resolve(method === 'loadProgress' ? { achievements: [{ id: 'deadzone.ach.wave_10', percent: 100, completed: true }] } : {});
     } };` : ''}
     ${profile ? `if (!localStorage.getItem('deadzone.profile')) localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(profile))});` : ''}
+    localStorage.setItem('deadzone.tutorial', 'true');
   `;
 }
 async function open(opts = {}, size = {}) {
@@ -194,8 +195,14 @@ const P = page => page.evaluate(() => JSON.parse(JSON.stringify(window.__game.ap
 
 {
   const page = await open({ now: T0 });
+  const s0 = await page.evaluate(() => ({ st: { ...window.__game.api.profile.progression.streak }, modal: !!document.querySelector('.pg-modal') }));
+  check(s0.st.count === 1 && !s0.modal, 'first visit counts the streak but holds the popup until the first run', s0);
+  await page.evaluate(() => { const g = window.__game, { api } = g; api.startGame({ map: 'street' }); api.state.score = 100; api.state.wave = 1; g.gameOver(); });
+  await page.waitForTimeout(1100);
+  await page.evaluate(() => window.__game.api.toMenu());
+  await page.waitForTimeout(700);
   const s1 = await page.evaluate(() => ({ st: { ...window.__game.api.profile.progression.streak }, modal: !!document.querySelector('.pg-modal'), text: document.querySelector('.pg-card')?.textContent }));
-  check(s1.st.count === 1 && s1.modal && /DAY 1 STREAK/.test(s1.text), 'first visit: day 1 popup', s1);
+  check(s1.st.count === 1 && s1.modal && /DAY 1 STREAK/.test(s1.text), 'after the first run: day 1 popup', s1);
   await shot(page, 'streak-landscape');
   const deployClickable = await page.evaluate(() => { const r = document.querySelector('#start').getBoundingClientRect(); return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.id; });
   check(deployClickable === 'start', 'streak popup does not block DEPLOY', deployClickable);

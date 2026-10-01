@@ -360,7 +360,7 @@ function init(api) {
     const S = P.streak, today = D.dayNum();
     if (D.streakVisit(S, today, Date.now())) { checkAch(); save(); }
     updateBadges();
-    if (S.shown !== today) { S.shown = today; save(); setTimeout(() => api.queueModal(done => { if (api.activeScreen !== api.ui.menu) return done(); openStreak(); modalDone = done; }), 450); }
+    if (S.shown !== today && (profile.runs || 0) > 0) { S.shown = today; save(); setTimeout(() => api.queueModal(done => { if (api.activeScreen !== api.ui.menu) return done(); openStreak(); modalDone = done; }), 450); }
   }
   function openStreak() {
     closeStreak();

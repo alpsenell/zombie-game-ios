@@ -33,6 +33,7 @@ const initGameCenter = () => {
   };
 };
 const initMatch = () => {
+  localStorage.setItem('deadzone.tutorial', 'true');
   window.__calls = [];
   window.__listeners = {};
   window.Capacitor = {
