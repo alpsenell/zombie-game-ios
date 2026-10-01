@@ -11,6 +11,7 @@ import * as coop from './coop.js';
 import * as events from './events.js';
 import * as comeback from './comeback.js';
 import * as notify from './notify.js';
+import * as levels from './levels.js';
 
 export const FEATURES = [
   cloudsave,
@@ -26,4 +27,5 @@ export const FEATURES = [
   events,
   comeback,
   notify,
+  levels,
 ];

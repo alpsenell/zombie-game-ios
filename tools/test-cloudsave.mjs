@@ -87,7 +87,7 @@ const CLOUD_PROFILE = {
   check(m.events.won.bloodmoon && m.events.won.scraprush && m.checkpoint.cleared.survivor === 5 && m.checkpoint.cleared.veteran === 8 && m.checkpoint.pick.veteran === 5, 'events and checkpoints union', { events: m.events, checkpoint: m.checkpoint });
   check(pure.pristine === 8 && pure.noCloud === 3, 'a pristine local profile takes the cloud copy; no cloud keeps local', [pure.pristine, pure.noCloud]);
   check(pure.runs.join() === '50,30,10' && pure.rec.score === 500 && pure.rec.wave === 5 && pure.rec.rank === 12, 'runs dedupe and sort, records take the best', { runs: pure.runs, rec: pure.rec });
-  check(pure.deep.same && pure.deep.target.a.b === 2 && pure.deep.target.a.keep.y === 3 && !('gone' in pure.deep.target) && pure.deep.target.added[0] === 1, 'assignDeep keeps nested object identity', pure.deep);
+  check(pure.deep.same && pure.deep.target.a.b === 2 && pure.deep.target.a.keep.y === 3 && pure.deep.target.gone === 1 && pure.deep.target.added[0] === 1, 'assignDeep keeps nested object identity and local-only keys', pure.deep);
 
   await page.evaluate(() => window.__game.api.grantScrap(10));
   await page.waitForTimeout(2200);
@@ -120,7 +120,7 @@ const CLOUD_PROFILE = {
   const r = await page.evaluate(async () => {
     const { api } = window.__game;
     api.startGame({ map: 'street' });
-    const newer = { v: 1, at: Date.now(), device: 'otherdev', profile: { ...JSON.parse(JSON.stringify(api.profile)), scrap: 5000, runs: 9, xp: 9000 }, runs: [], records: { score: 1, wave: 1, rank: 0 } };
+    const newer = { v: 1, at: Date.now(), device: 'otherdev', profile: { ...JSON.parse(JSON.stringify(api.profile)), scrap: 5000, runs: 9, xp: 9000, levels: { paid: 4 } }, runs: [], records: { score: 1, wave: 1, rank: 0 } };
     window.__cloud = JSON.stringify(newer);
     window.__listeners.find(l => l.name === 'changed')?.fn({ reason: 0, keys: ['deadzone.save'] });
     const r = await api.cloud.pull('external');

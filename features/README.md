@@ -78,6 +78,13 @@ streak shield (`s.shields`, at most `SHIELD_MAX`); a missed day is covered by a 
 offer with the restored `count`; `repairStreak(s, now)` applies it. The modal shows shields held, the next shield day and the RESTORE button;
 `api.progression.repairStreak()` performs the purchase.
 
+## Level rewards
+`features/levels.js` pays every player level once: `levelScrap(level)` scrap (100 × level, capped at 1,500) and, every `CRATE_EVERY` (5) levels, a
+level crate holding a random scrap cosmetic the player does not own (`cratePool`, marked NEW in the locker; 1,000 scrap when the pool is empty).
+`profile.levels.paid` is the highest level already rewarded; a profile that predates the feature starts paid up to its current level. Rewards are
+checked after `run:end` (chips on the game-over screen), on `mission:complete`, `season:claim` and every screen change (reward card). Event:
+`level:reward` `{ levels: [{ level, rewards }] }`. `api.levels = { check, rewardsFor, cratePool, state }`.
+
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
 - `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).

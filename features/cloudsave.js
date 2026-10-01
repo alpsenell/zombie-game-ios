@@ -79,6 +79,7 @@ export function mergeProfile(local, cloud) {
   if (isObj(a.events) || isObj(b.events)) a.events = { ...b.events, ...a.events, won: union(a.events?.won, b.events?.won) };
   if (isObj(a.comeback) || isObj(b.comeback)) { const c = num(b.comeback?.last) > num(a.comeback?.last) ? b.comeback : a.comeback; a.comeback = { ...c, count: Math.max(num(a.comeback?.count), num(b.comeback?.count)) }; }
   if (isObj(a.checkpoint) || isObj(b.checkpoint)) a.checkpoint = { ...b.checkpoint, ...a.checkpoint, cleared: maxMap(a.checkpoint?.cleared, b.checkpoint?.cleared), pick: a.checkpoint?.pick || b.checkpoint?.pick || {} };
+  if (isObj(a.levels) || isObj(b.levels)) a.levels = { ...b.levels, ...a.levels, paid: Math.max(num(a.levels?.paid), num(b.levels?.paid)) };
   for (const k in b) if (!(k in a)) a[k] = b[k];
   return a;
 }
@@ -94,7 +95,6 @@ export function mergeAll(local, cloud) {
   return { profile: mergeProfile(local.profile, cloud.profile), runs: mergeRuns(local.runs, cloud.runs), records: mergeRecords(local.records, cloud.records), at: num(cloud.at), device: cloud.device || '' };
 }
 export function assignDeep(target, source) {
-  for (const k of Object.keys(target)) if (!(k in source)) delete target[k];
   for (const k in source) { const v = source[k]; if (isObj(v) && isObj(target[k])) assignDeep(target[k], v); else target[k] = clone(v); }
   return target;
 }
@@ -158,9 +158,9 @@ export function init(api) {
     api.saveProfile();
     meta.restoredAt = Date.now(); saveMeta();
     api.refreshProfileUI(); api.refreshRecords();
+    bus.emit('cloud:restored', { at: merged.at, device: merged.device });
     if (api.activeScreen === api.ui.menu) api.showScreen(api.ui.menu);
     say('☁︎ PROGRESS RESTORED FROM iCLOUD');
-    bus.emit('cloud:restored', { at: merged.at, device: merged.device });
     status.last = 'restored';
     schedule();
   }
