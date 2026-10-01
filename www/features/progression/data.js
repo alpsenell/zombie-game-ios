@@ -90,14 +90,32 @@ export function streakReward(count) {
   const base = STREAK_DAYS[(count - 1) % 7], bonus = STREAK_MILESTONES[count] || 0;
   return { base, bonus, total: base + bonus };
 }
-export function streakVisit(s, today) {
+export const SHIELD_EVERY = 7, SHIELD_MAX = 2, REPAIR_MS = DAY;
+export const repairCost = count => Math.min(2000, 100 + count * 25);
+export const nextShieldDay = count => (Math.floor(count / SHIELD_EVERY) + 1) * SHIELD_EVERY;
+export function streakVisit(s, today, now = today * DAY) {
   if (s.last === today || (s.last != null && s.last > today)) return false;
-  const prev = s.count || 0;
-  s.broken = s.last != null && s.last < today - 1 && prev > 0 ? prev : 0;
-  s.count = s.last === today - 1 ? prev + 1 : 1;
+  const prev = s.count || 0, missed = s.last == null || !prev ? 0 : today - s.last - 1;
+  s.shields = s.shields || 0;
+  s.shielded = 0; s.shieldEarned = 0; s.broken = 0;
+  if (s.last == null || !prev) s.count = 1;
+  else if (!missed) s.count = prev + 1;
+  else if (missed <= s.shields) { s.shields -= missed; s.shielded = missed; s.count = prev + 1; }
+  else { s.broken = prev; s.count = 1; s.repair = { was: prev, day: today, until: now + REPAIR_MS, cost: repairCost(prev) }; }
+  if (s.count > 1 && s.count % SHIELD_EVERY === 0 && s.shields < SHIELD_MAX) { s.shields++; s.shieldEarned = today; }
   s.last = today;
   s.best = Math.max(s.best || 0, s.count);
   return true;
+}
+export const repairOffer = (s, now = Date.now()) => (s.repair && now <= s.repair.until && dayNum(now) >= s.repair.day ? { ...s.repair, count: s.repair.was + (dayNum(now) - s.repair.day) + 1 } : null);
+export function repairStreak(s, now = Date.now()) {
+  const r = repairOffer(s, now);
+  if (!r) return 0;
+  s.count = r.count;
+  s.best = Math.max(s.best || 0, s.count);
+  s.broken = 0; s.repair = null;
+  if (s.count % SHIELD_EVERY === 0 && (s.shields || 0) < SHIELD_MAX) { s.shields = (s.shields || 0) + 1; s.shieldEarned = dayNum(now); }
+  return s.count;
 }
 export function nextMilestone(count) {
   const d = Object.keys(STREAK_MILESTONES).map(Number).find(x => x > count);

@@ -61,6 +61,9 @@ export const CSS = `
 .pg-card h3 em{color:var(--amber);font-style:normal}
 .pg-card>small{display:block;margin:5px 0 12px;font:800 10px var(--ui);letter-spacing:1.4px;color:var(--dim)}
 .pg-card>small.warn{color:#ffb0a8}
+.pg-card>small.shield{color:#7fe8ff}
+.pg-repair{display:block;width:100%;margin:8px 0 0;padding:10px 12px;border-color:#ffc34d66;color:var(--amber);font-size:11px;letter-spacing:1.4px}
+.pg-repair small{display:block;margin-top:3px;font:700 8.5px var(--ui);letter-spacing:1.2px;color:var(--dim)}
 .pg-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:10px}
 .pg-cal div{padding:7px 2px 6px;border-radius:9px;background:#ffffff08;border:1px solid var(--line);font:800 8px var(--ui);letter-spacing:.8px;color:var(--dim);min-width:0}
 .pg-cal div b{display:block;margin:3px 0 1px;font:900 14px var(--display);color:#cfd9d6}

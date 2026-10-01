@@ -25,7 +25,7 @@ export function planFor(s, now = Date.now(), tz = -new Date().getTimezoneOffset(
     let at = deadline - 4 * H;
     if (!inWindow(at)) { at = atLocal(localDay(deadline - 4 * H), 20); if (at > deadline - H) at -= DAY; }
     const next = streakReward(st.count + 1).total;
-    if (st.count >= 2) add('streak', at, 'Your ' + st.count + '-day streak is about to end', 'One run before ' + fmtTime(deadline, tz) + ' keeps it going. Day ' + (st.count + 1) + ' pays ' + next.toLocaleString() + ' scrap.');
+    if (st.count >= 2) add('streak', at, 'Your ' + st.count + '-day streak is about to end', 'One run before ' + fmtTime(deadline, tz) + ' keeps it going. Day ' + (st.count + 1) + ' pays ' + next.toLocaleString() + ' scrap.' + (st.shields ? ' You hold ' + st.shields + ' shield' + (st.shields > 1 ? 's' : '') + '.' : ''));
     else add('streak', at, 'Day 2 reward is waiting', 'Play before ' + fmtTime(deadline, tz) + ' to claim ' + next.toLocaleString() + ' scrap and start a streak.');
   }
   if (s.daily && s.daily.date === utcDay(now) && s.daily.rank) {
@@ -76,7 +76,7 @@ export function init(api) {
     const c = profile.competitive || {}, st = profile.progression?.streak, ev = eventAt(), week = utcDay(weekStart());
     const skin = api.SLOTS.find(s => s.id === 'gun').items.find(it => it.req === 'event:' + ev.id);
     return {
-      streak: st ? { count: st.count, last: st.last } : null,
+      streak: st ? { count: st.count, last: st.last, shields: st.shields || 0 } : null,
       daily: c.daily || null,
       league: c.league && c.league.week === week ? { id: c.league.id } : null,
       event: { ...ev, won: !!profile.events?.won?.[ev.id], skin: skin?.name },
