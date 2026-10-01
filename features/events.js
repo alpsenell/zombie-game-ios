@@ -11,7 +11,7 @@ export const EVENTS = [
 ];
 const FAIR = ['ranked', 'blitz'];
 const EVENT_ONLY = ['elite', 'headScore', 'count', 'eliteHeadOnly', 'scrapBag', 'noAssist', 'alive'];
-const DEFAULTS = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, seasonXp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0 };
+const DEFAULTS = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, seasonXp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0, mutScore: 1, noRadar: false, noPickups: false, runners: 1, featured: 1 };
 
 export function eventAt(t = Date.now()) {
   const k = Math.floor((t - EVENT_EPOCH) / WEEK), start = EVENT_EPOCH + k * WEEK, end = start + EVENT_DAYS * DAY;

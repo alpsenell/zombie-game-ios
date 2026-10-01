@@ -120,6 +120,24 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Veteran novelty
+- Boss variants (`BOSS_VARIANTS`, `VARIANT_WAVE` 25 in `game.js`): from wave 25 every boss spawns as its variant (`userData.variant`):
+  the Abomination SPLITTER spawns up to three bloaters when it dies, the Butcher BERSERKER has a short stun and a 1.5 s charge cooldown,
+  the Plague King HERALD raises a screamer with every summon, and the Goliath IRONCLAD carries a `HELMET_HP` helmet that soaks headshots
+  (`userData.helmetHp`, 30% damage through) until it breaks (`boss:helmet`, `userData.armor = 1` so body shots then do full damage).
+- Map events (`features/mapevents.js` + `startMapEvent/endMapEvent` in `game.js`): every `EVENT_EVERY` (7th) wave, `EVENT_DELAY` seconds in,
+  the current map fires its event for `secs` seconds (`state.mapEvent = { id, at, until }`, `state.mapEventLog`, summary `mapEvents`):
+  Street BLACKOUT (dark fog), Mall FLOOD (blue fog, crawlers at half speed), Overpass COLLAPSE (a wreck prop is dropped near the player,
+  marked in `obstacles` with `prop: true`, the nav grid is re-marked and the prop is cleared on the next run) and Base SEARCHLIGHTS (stalkers
+  cannot hide). Events: `map:event` `{ id, name, map, wave, secs }`, `map:start`, `map:end`. Host only in co-op, never in training.
+  `api.mapEvents = { MAP_EVENTS, eventWave, eventFor, fire, log }`.
+- Mutator deck (`features/mutators.js`): the MUTATORS chip next to DEPLOY picks up to `MAX_PICK` of `MUTATORS` (no radar, double runners,
+  no pickups, glass cannon, iron sights); `deployOpts()` adds `mutators`, normal solo deploys apply them through `api.live`
+  (`mutScore`, `noRadar`, `noPickups`, `runners`, `noAssist`) and the kill score is multiplied by `mutScore` (`plausible` allows up to
+  `MUT_MAX`). The summary carries `mutators` and `mutScore`, the game-over screen and run card show them. Stored in `store('mutators')`.
+- Featured map (`features/featured.js`): `featuredId(MAPS)` rotates weekly from `EPOCH` (Mondays UTC); runs on it get `live.featured`
+  (×1.5 XP, shown on the map picker, the map chip and the reward chips). `api.featured = { id, name, weekEnd, isFeatured }`.
+
 ## Squads
 `features/squads.js` adds squad bonds, the Squad Daily and quick-join. Bonds: every co-op run with the same mates (`squadKey`: Game Center
 ids, or names in local play) counts in `profile.squads[key] = { runs, names, best, last }`; crossing `BONDS` (3, 10, 25 runs) pays a title

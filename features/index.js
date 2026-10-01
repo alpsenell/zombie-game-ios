@@ -20,6 +20,9 @@ import * as blitz from './blitz.js';
 import * as resume from './resume.js';
 import * as dossier from './dossier.js';
 import * as squads from './squads.js';
+import * as mutators from './mutators.js';
+import * as mapevents from './mapevents.js';
+import * as featured from './featured.js';
 
 export const FEATURES = [
   cloudsave,
@@ -44,4 +47,7 @@ export const FEATURES = [
   resume,
   dossier,
   squads,
+  mutators,
+  mapevents,
+  featured,
 ];
