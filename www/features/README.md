@@ -120,6 +120,15 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Friends first
+`features/friends.js` makes the game-over screen social when Game Center is signed in. At `run:start` it notes the player's previous best
+on the run's board (records, daily, weekly, blitz or extract); after `run:submitted` it loads the friends scope of that board and shows a
+line in `#over-extras`: `YOU PASSED 2 FRIENDS` (friends whose score sits between the old best and the new score), the next friend to
+catch with the gap, or `YOU LEAD YOUR FRIENDS`. It stores the friends count (`store('friendsCount')`) and `game.js` opens the RANKS
+screen on the FRIENDS tab by default while the player is signed in and has friends on the board, until a tab is picked by hand
+(`api.boardTab()`, `api.setBoardTab(tab)`). Events: `friends:passed` `{ board, count, names, next }`.
+`api.friends = { lastResult, prevBest }`.
+
 ## Ghost pace
 `features/ghost.js` adds a ghost line under the rival ticker (`.cm-ghost` in `#hud-rival`). Every `wave:clear` records a mark
 `{ wave, t, score }`; a run that beats the stored best for its type (`profile.ghost[type]`, the Daily keyed by its seed) saves its marks

@@ -2674,7 +2674,8 @@ function saveRun() {
   store.set('runs', runs.slice(0, 25));
 }
 
-let boardTab = 'global', boardReturn = null, boardToken = 0;
+let boardTab = 'global', boardReturn = null, boardToken = 0, boardTabPicked = false;
+const friendsFirst = () => { if (!boardTabPicked && gameCenter.player && store.get('friendsCount', 0) > 1 && boardTab === 'global') boardTab = 'friends'; };
 const boardView = { id: LEADERBOARDS.score, filter: null, format: null, local: null };
 const avatarCache = new Map();
 function avatarFor(code) {
@@ -2748,6 +2749,7 @@ async function renderBoard() {
   try {
     const r = await gameCenter.call('loadScores', { leaderboardId: boardView.id, count: 25, scope: boardTab });
     if (token !== boardToken) return;
+    if (boardTab === 'friends') store.set('friendsCount', (r.entries || []).filter(e => !e.isLocal).length);
     status.textContent = r.total ? r.total.toLocaleString() + ' SURVIVORS RANKED' : 'No scores yet — be the first.';
     for (const e of r.entries || []) list.appendChild(boardRow(e.rank, e.name, '', e.score, e.isLocal, e.context));
     if (r.player && !(r.entries || []).some(e => e.isLocal)) {
@@ -2759,8 +2761,8 @@ async function renderBoard() {
     if (token === boardToken) status.textContent = 'Could not load rankings: ' + e.message;
   }
 }
-document.querySelectorAll('[data-open="board"]').forEach(b => (b.onclick = () => { boardReturn = activeScreen; showScreen(ui.board); renderBoard(); }));
-document.querySelectorAll('.tabs button').forEach(b => (b.onclick = () => { boardTab = b.dataset.tab; renderBoard(); }));
+document.querySelectorAll('[data-open="board"]').forEach(b => (b.onclick = () => { boardReturn = activeScreen; friendsFirst(); showScreen(ui.board); renderBoard(); }));
+document.querySelectorAll('.tabs button').forEach(b => (b.onclick = () => { boardTab = b.dataset.tab; boardTabPicked = true; renderBoard(); }));
 $('#board-close').onclick = () => showScreen(boardReturn || ui.menu);
 $('#gc-open').onclick = () => gameCenter.call('showLeaderboard', {}).catch(() => {});
 
@@ -3123,7 +3125,7 @@ const api = {
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
   offerPerks, nova, deathGuards, gameOver, deployOpts: () => ({}),
 };
-Object.assign(api, { MUTATIONS, rosterWeights, applyMod, BOSS_VARIANTS, VARIANT_WAVE, HELMET_HP, startMapEvent, endMapEvent, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
+Object.assign(api, { boardTab: () => boardTab, setBoardTab: t => { boardTab = t; boardTabPicked = true; }, MUTATIONS, rosterWeights, applyMod, BOSS_VARIANTS, VARIANT_WAVE, HELMET_HP, startMapEvent, endMapEvent, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
 if ($('#cm-league')) $('#menu .records').appendChild($('#cm-league'));
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };
