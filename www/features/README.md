@@ -85,6 +85,14 @@ level crate holding a random scrap cosmetic the player does not own (`cratePool`
 checked after `run:end` (chips on the game-over screen), on `mission:complete`, `season:claim` and every screen change (reward card). Event:
 `level:reward` `{ levels: [{ level, rewards }] }`. `api.levels = { check, rewardsFor, cratePool, state }`.
 
+## Next up
+`features/nextup.js` adds a 🎯 NEXT UP chip to the menu dock showing the closest unmet unlock and opens a sheet with the nearest goals.
+`goals(api)` scans every locker item and weapon with a requirement or a scrap price, `progress(api, req)` turns a requirement into
+`{ cur, need, pct }` (level uses the XP fraction, boss requirements count up to the boss's first wave, league uses held rank; event, recruit and
+season requirements have their own surfaces and are skipped). Goals sort by completion, then by size; a weapon the player can already afford
+shows READY and opens the Armory, a cosmetic opens the Locker. Refreshes on every return to the menu, `run:end`, `purchase` and `level:reward`.
+`api.nextup = { goals, progress, open, close, render }`.
+
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
 - `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).

@@ -12,6 +12,7 @@ import * as events from './events.js';
 import * as comeback from './comeback.js';
 import * as notify from './notify.js';
 import * as levels from './levels.js';
+import * as nextup from './nextup.js';
 
 export const FEATURES = [
   cloudsave,
@@ -28,4 +29,5 @@ export const FEATURES = [
   comeback,
   notify,
   levels,
+  nextup,
 ];
