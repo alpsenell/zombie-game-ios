@@ -6,7 +6,7 @@ export const WAVES = [
   [['walker', 6], ['crawler', 2], ['runner', 2]],
 ];
 export const HIDE = {
-  0: ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip', '#ex-open', '#mk-open', '#bz-open', '#sp20-open', 'missions'],
+  0: ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip', '#ex-open', '#mk-open', '#bz-open', '#sp20-open', '#ds-open', 'missions'],
   1: ['#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#sp20-open'],
   2: [],
 };

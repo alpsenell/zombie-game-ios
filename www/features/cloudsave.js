@@ -21,6 +21,14 @@ function mergeMarket(a = {}, b = {}) {
   const base = (a.day || '') >= (b.day || '') ? a : b, sameDay = !!a.day && a.day === b.day;
   return { ...b, ...a, day: base.day || '', stock: base.stock || null, sold: sameDay ? union(a.sold, b.sold) : base.sold || {}, crates: Math.max(num(a.crates), num(b.crates)), pity: Math.max(num(a.pity), num(b.pity)), shards: Math.max(num(a.shards), num(b.shards)), revives: Math.max(num(a.revives), num(b.revives)), rerolls: Math.max(num(a.rerolls), num(b.rerolls)), seen: later(a.seen, b.seen) };
 }
+function mergeMaps(a = {}, b = {}) {
+  const out = {};
+  for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const x = a[id] || {}, y = b[id] || {};
+    out[id] = { ...y, ...x, runs: Math.max(num(x.runs), num(y.runs)), bestWave: Math.max(num(x.bestWave), num(y.bestWave)), bestScore: Math.max(num(x.bestScore), num(y.bestScore)), byDiff: maxMap(x.byDiff, y.byDiff) };
+  }
+  return out;
+}
 const later = (a, b) => (a == null ? b : b == null ? a : a >= b ? a : b);
 
 export const isPristine = p => !isObj(p) || (!num(p.runs) && !num(p.xp) && !num(p.kills) && !Object.keys(p.owned || {}).length && !Object.keys(p.arsenal?.owned || {}).length);
@@ -98,6 +106,10 @@ export function mergeProfile(local, cloud) {
   if (isObj(a.comeback) || isObj(b.comeback)) { const c = num(b.comeback?.last) > num(a.comeback?.last) ? b.comeback : a.comeback; a.comeback = { ...c, count: Math.max(num(a.comeback?.count), num(b.comeback?.count)) }; }
   if (isObj(a.checkpoint) || isObj(b.checkpoint)) a.checkpoint = { ...b.checkpoint, ...a.checkpoint, cleared: maxMap(a.checkpoint?.cleared, b.checkpoint?.cleared), pick: a.checkpoint?.pick || b.checkpoint?.pick || {} };
   if (isObj(a.market) || isObj(b.market)) a.market = mergeMarket(a.market, b.market);
+  if (isObj(a.maps) || isObj(b.maps)) a.maps = mergeMaps(a.maps, b.maps);
+  if (isObj(a.weaponKills) || isObj(b.weaponKills)) a.weaponKills = maxMap(a.weaponKills, b.weaponKills);
+  if (isObj(a.weaponHeads) || isObj(b.weaponHeads)) a.weaponHeads = maxMap(a.weaponHeads, b.weaponHeads);
+  if (a.playTime != null || b.playTime != null) a.playTime = Math.max(num(a.playTime), num(b.playTime));
   if (isObj(a.levels) || isObj(b.levels)) a.levels = { ...b.levels, ...a.levels, paid: Math.max(num(a.levels?.paid), num(b.levels?.paid)) };
   for (const k in b) if (!(k in a)) a[k] = b[k];
   return a;
