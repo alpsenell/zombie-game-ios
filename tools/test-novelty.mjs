@@ -1,0 +1,203 @@
+import { serve, launch, openGame } from './smoke.mjs';
+
+const failures = [];
+const check = (ok, name, info) => { console.log((ok ? 'ok   ' : 'FAIL ') + name + (ok || info === undefined ? '' : ' → ' + JSON.stringify(info))); if (!ok) failures.push(name); };
+const NOW = Date.UTC(2026, 9, 1, 12);
+
+const { server, url } = await serve();
+const browser = await launch();
+const pageErrors = [];
+
+const PROFILE = { runs: 8, bestWave: 30, scrap: 2000, xp: 0, kills: 500, owned: {}, loadout: {}, arsenal: { owned: { mp7: true } }, bestByDiff: { survivor: 30 } };
+async function open({ now = NOW } = {}) {
+  const init = `
+    window.__now = ${now};
+    Date.now = () => window.__now;
+    localStorage.clear();
+    localStorage.setItem('deadzone.tutorial', 'true');
+    localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(PROFILE))});`;
+  const { page, errors } = await openGame(browser, url, { init: { content: init } });
+  page.on('close', () => pageErrors.push(...errors));
+  await page.waitForTimeout(900);
+  await page.evaluate(() => { const m = document.querySelector('.pg-modal'); (m?.querySelector('.ghost') || m?.querySelector('.cta'))?.click(); const { api } = window.__game; api.levels.state.paid = 99; api.settings.sound = false; });
+  return page;
+}
+const tick = (page, secs) => page.evaluate(s => { const g = window.__game; for (let i = 0; i < s * 30; i++) { if (g.api.state.mode !== 'playing') break; g.update(1 / 30); } return g.api.state.mode; }, secs);
+
+{
+  const page = await open();
+  const deck = await page.evaluate(() => {
+    const { api } = window.__game, chip = document.querySelector('#mut-chip');
+    const off = chip.textContent;
+    chip.click();
+    const cards = [...document.querySelectorAll('.mut-card')];
+    const n = cards.length;
+    for (const id of ['noradar', 'runners', 'nopickups']) document.querySelector('[data-mut="' + id + '"]').click();
+    const fourth = document.querySelector('[data-mut="glass"]').disabled, total = document.querySelector('#mut-total').textContent;
+    const stored = JSON.parse(localStorage.getItem('deadzone.mutators'));
+    document.querySelector('#mut-done').click();
+    return { off, n, fourth, total, stored, chip: chip.textContent, opts: api.deployOpts(), mult: api.mutators.multiplier(), menu: !document.querySelector('#menu').classList.contains('hidden') };
+  });
+  check(/OFF/.test(deck.off) && deck.n === 5 && deck.fourth && /3 ACTIVE · SCORE ×1.73/.test(deck.total) && deck.stored.join() === 'noradar,runners,nopickups' && /×1.73/.test(deck.chip) && deck.opts.mutators.join() === 'noradar,runners,nopickups' && deck.mult === 1.73 && deck.menu, 'up to three mutators stack into a score multiplier and ride the deploy options', deck);
+  await page.evaluate(() => document.querySelector('#mut-chip').click());
+  await page.screenshot({ path: '/tmp/mutators.png' });
+  await page.evaluate(() => document.querySelector('#mut-done').click());
+
+  const run = await page.evaluate(async () => {
+    const g = window.__game, { api } = g, kills = [];
+    api.bus.on('kill', e => kills.push(e));
+    api.startGame({ ...api.deployOpts(), map: 'street' });
+    const live = { ...api.live }, radar = document.querySelector('#radar').classList.contains('hidden');
+    const w2 = api.rosterWeights(12).runner;
+    api.live.runners = 1; const w1 = api.rosterWeights(12).runner; api.live.runners = 2;
+    const n0 = api.pickups.length;
+    api.dropPickup(api.camera.position.x + 2, api.camera.position.z + 2, 'health');
+    const noDrop = api.pickups.length === n0;
+    api.dropPickup(api.camera.position.x + 2, api.camera.position.z + 2, 'scrap');
+    const bagDrops = api.pickups.length === n0 + 1;
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    const z = api.makeZombie('walker', api.camera.position.x + 3, api.camera.position.z + 3, false, false);
+    api.state.combo = 0; api.state.lastKill = -9;
+    api.netHooks.killZombie(z, false, false);
+    const summary0 = api.runSummary();
+    g.gameOver();
+    await new Promise(r => setTimeout(r, 60));
+    const chips = [...document.querySelectorAll('#over-rewards span')].map(s => s.textContent);
+    const guard = api.competitive.plausible({ ...summary0, score: 600000, kills: 50, heads: 10, time: 300, wave: 5, bosses: [] });
+    const guard2 = api.competitive.plausible({ ...summary0, score: 600000, kills: 50, heads: 10, time: 300, wave: 5, bosses: [], mutScore: 1, mutators: [] });
+    api.toMenu();
+    api.startGame({ type: 'ranked', map: 'street', mutators: ['noradar', 'runners'] });
+    const ranked = { ...api.live };
+    const rankedRadar = document.querySelector('#radar').classList.contains('hidden');
+    g.gameOver(); api.toMenu();
+    return { live, radar, w1, w2, noDrop, bagDrops, points: kills[0]?.points, mutators: summary0.mutators, mutScore: summary0.mutScore, chips, guard, guard2, ranked, rankedRadar };
+  });
+  check(run.live.mutScore === 1.73 && run.live.noRadar && run.live.noPickups && run.live.runners === 2 && run.radar && Math.abs(run.w2 - run.w1 * 2) < 1e-9 && run.noDrop && run.bagDrops, 'mutators hide the radar, double runners and stop drops', { live: run.live, radar: run.radar, w: [run.w1, run.w2] });
+  check(run.points === 173 && run.mutators.join() === 'noradar,runners,nopickups' && run.mutScore === 1.73 && run.chips.some(c => /NO RADAR \+ DOUBLE RUNNERS \+ NO PICKUPS · SCORE ×1.73/.test(c)) && run.guard === null && /TOO HIGH/.test(run.guard2), 'kills score ×1.73, the game-over chip lists the mutators and anti-cheat allows the multiplier', { points: run.points, chips: run.chips, guard: run.guard, guard2: run.guard2 });
+  check(run.ranked.mutScore === 1 && run.ranked.runners === 1 && !run.ranked.noRadar && !run.rankedRadar, 'ranked runs ignore mutators', run.ranked);
+  await page.evaluate(() => window.__game.api.mutators.clear());
+
+  const feat = await page.evaluate(() => {
+    const g = window.__game, { api } = g;
+    const id = api.featured.id();
+    document.querySelector('#map-chip').click();
+    const tag = document.querySelector('.map-card[data-map="' + id + '"] .mp-feat')?.textContent, note = document.querySelector('#ft-note').textContent, tags = document.querySelectorAll('.mp-feat').length;
+    api.showScreen(api.ui.menu);
+    api.startGame({ map: id });
+    const live = api.live.featured;
+    Object.assign(api.state, { wave: 4, score: 10000, kills: 50 });
+    g.gameOver();
+    const chips = [...document.querySelectorAll('#over-rewards span')].map(s => s.textContent);
+    api.toMenu();
+    api.startGame({ map: id === 'street' ? 'mall' : 'street' });
+    const other = api.live.featured;
+    g.gameOver(); api.toMenu();
+    return { id, tag, note, tags, live, chips, other };
+  });
+  check(feat.id === 'mall' && /FEATURED · XP ×1.5/.test(feat.tag) && /FEATURED THIS WEEK: DEAD MALL/.test(feat.note) && feat.tags === 1 && feat.live === 1.5 && feat.chips.some(c => /\+1,800 XP/.test(c)) && feat.chips.some(c => /FEATURED MAP · XP x1.5/.test(c)) && feat.other === 1, 'the featured map of the week pays 1.5× XP', feat);
+  await page.screenshot({ path: '/tmp/featured.png' });
+
+  const bosses = await page.evaluate(() => {
+    const g = window.__game, { api } = g, events = [];
+    api.bus.on('boss:helmet', e => events.push(e));
+    api.startGame({ map: 'street' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    api.state.wave = 10;
+    const early = api.makeZombie('goliath', api.camera.position.x + 6, api.camera.position.z, false, false).userData;
+    api.state.wave = 30;
+    const cx = api.camera.position.x, cz = api.camera.position.z;
+    const gol = api.makeZombie('goliath', cx + 6, cz, false, false), u = gol.userData;
+    const hp0 = u.hp, helmet0 = u.helmetHp;
+    const pt = { x: gol.position.x, y: 2, z: gol.position.z };
+    api.damageZombie(gol, 300, pt, true, null);
+    const afterHead = { hp: hp0 - u.hp, helmet: u.helmetHp };
+    api.damageZombie(gol, 300, pt, true, null);
+    const broken = { helmet: u.helmetHp, armor: u.armor, name: document.querySelector('#boss-name').textContent, hp: u.hp };
+    api.damageZombie(gol, 100, pt, false, null);
+    const body = broken.hp - u.hp;
+    const abo = api.makeZombie('abomination', cx - 6, cz, false, false), bl0 = api.zombies.filter(z => z.userData.kind === 'bloater' && !z.userData.dead).length;
+    api.netHooks.killZombie(abo, false, false);
+    const bloaters = api.zombies.filter(z => z.userData.kind === 'bloater' && !z.userData.dead).length - bl0;
+    const but = api.makeZombie('butcher', cx, cz + 6, false, false), bu = but.userData;
+    bu.cs = 'stun'; bu.ct = .01;
+    g.update(1 / 30);
+    const recharge = bu.nextCharge - api.state.clock;
+    const pk = api.makeZombie('plague', cx, cz - 7, false, false), pu = pk.userData;
+    pu.nextSummon = 0;
+    const sc0 = api.zombies.filter(z => z.userData.kind === 'screamer' && !z.userData.dead).length;
+    for (let i = 0; i < 20 && api.zombies.filter(z => z.userData.kind === 'screamer' && !z.userData.dead).length === sc0; i++) g.update(1 / 30);
+    const screamers = api.zombies.filter(z => z.userData.kind === 'screamer' && !z.userData.dead).length - sc0;
+    g.gameOver(); api.toMenu();
+    return { early: { variant: early.variant, helmet: early.helmetHp }, variant: u.variant, helmet0, afterHead, broken, body, events: events.length, abo: abo.userData.variant, bloaters, but: bu.variant, recharge, pk: pu.variant, screamers, names: Object.values(api.BOSS_VARIANTS).map(v => v.name) };
+  });
+  check(bosses.early.variant === null && bosses.early.helmet === 0 && bosses.variant === 'ironclad' && bosses.helmet0 === 450 && bosses.afterHead.hp === 90 && bosses.afterHead.helmet === 150, 'from wave 25 the Goliath is an Ironclad whose helmet soaks headshots', bosses);
+  check(bosses.broken.helmet === 0 && bosses.broken.armor === 1 && /HELMET DESTROYED/.test(bosses.broken.name) && bosses.body === 100 && bosses.events === 1, 'breaking the helmet removes the armour', bosses.broken);
+  check(bosses.abo === 'splitter' && bosses.bloaters >= 1 && bosses.but === 'berserker' && Math.abs(bosses.recharge - 1.5) < .05 && bosses.pk === 'herald' && bosses.screamers === 1 && bosses.names.join() === 'SPLITTER,BERSERKER,HERALD,IRONCLAD', 'the Splitter, Berserker and Herald variants change the fight', { abo: bosses.abo, bloaters: bosses.bloaters, recharge: bosses.recharge, screamers: bosses.screamers });
+
+  const mapev = await page.evaluate(() => {
+    const g = window.__game, { api } = g, log = [];
+    api.bus.on('map:event', e => log.push(e.id)); api.bus.on('map:end', e => log.push('end:' + e.id));
+    const out = {};
+    api.startGame({ map: 'mall' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    const fog0 = api.scene.fog.color.getHex();
+    api.state.wave = 7;
+    api.bus.emit('wave:start', { wave: 7, mod: null, mutation: null, boss: false });
+    for (let i = 0; i < 30 * 5; i++) g.update(1 / 30);
+    out.early = api.state.mapEvent;
+    for (let i = 0; i < 30 * 2; i++) g.update(1 / 30);
+    out.flood = api.state.mapEvent?.id; out.fog = api.scene.fog.color.getHex(); out.hud = document.querySelector('#me-hud').textContent; out.hudHidden = document.querySelector('#me-hud').classList.contains('hidden');
+    const cr = api.makeZombie('crawler', api.camera.position.x + 12, api.camera.position.z, false, false), wk = api.makeZombie('walker', api.camera.position.x - 12, api.camera.position.z, false, false);
+    cr.userData.speed = 2; wk.userData.speed = 2; cr.userData.rise = 0; wk.userData.rise = 0;
+    const cx0 = cr.position.x, wx0 = wk.position.x;
+    for (let i = 0; i < 30; i++) g.update(1 / 30);
+    out.crawlMoved = Math.abs(cr.position.x - cx0); out.walkMoved = Math.abs(wk.position.x - wx0);
+    api.state.clock += 30;
+    g.update(1 / 30);
+    out.after = api.state.mapEvent; out.fogBack = api.scene.fog.color.getHex() === fog0;
+    out.summary = api.runSummary().mapEvents;
+    g.gameOver(); api.toMenu();
+    api.startGame({ map: 'base' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    const st = api.makeZombie('stalker', api.camera.position.x + 14, api.camera.position.z, false, false);
+    st.userData.hidden = true; st.userData.rise = 0;
+    api.mapEvents.fire(7);
+    g.update(1 / 30);
+    out.searchlights = api.state.mapEvent?.id; out.exposed = st.userData.hidden === false;
+    g.gameOver(); api.toMenu();
+    api.startGame({ map: 'overpass' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    const obs0 = g.obstacles.length, sol0 = g.solids.length;
+    const ev = api.mapEvents.fire(7);
+    out.collapse = { id: ev?.id, obstacles: g.obstacles.length - obs0, solids: g.solids.length - sol0, prop: g.obstacles.some(o => o.prop) };
+    g.gameOver(); api.toMenu();
+    api.startGame({ map: 'overpass' });
+    out.cleared = { obstacles: g.obstacles.length - obs0, props: g.obstacles.filter(o => o.prop).length };
+    g.gameOver(); api.toMenu();
+    api.startGame({ map: 'street' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    api.mapEvents.fire(14);
+    out.blackout = { id: api.state.mapEvent?.id, density: api.scene.fog.density };
+    api.startGame({ type: 'daily', map: 'street', seed: 'd' });
+    for (let i = 0; i < 60; i++) g.update(1 / 30);
+    api.state.wave = 7;
+    api.bus.emit('wave:start', { wave: 7 });
+    for (let i = 0; i < 30 * 8; i++) g.update(1 / 30);
+    out.dailyEvent = api.state.mapEvent?.id || null;
+    g.gameOver(); api.toMenu();
+    out.log = log;
+    return out;
+  });
+  check(mapev.early === null && mapev.flood === 'flood' && mapev.fog === 0x0a2a3a && /THE FOUNTAIN FLOODS/.test(mapev.hud) && !mapev.hudHidden, 'the Mall floods six seconds into wave 7', { early: mapev.early, flood: mapev.flood, hud: mapev.hud });
+  check(mapev.crawlMoved > 0 && mapev.walkMoved > mapev.crawlMoved * 1.6 && mapev.after === null && mapev.fogBack && mapev.summary.join() === 'flood' && mapev.log[0] === 'flood' && mapev.log[1] === 'end:flood', 'crawlers slow in the water and the flood ends after twenty seconds', { crawl: mapev.crawlMoved, walk: mapev.walkMoved, summary: mapev.summary, log: mapev.log });
+  check(mapev.searchlights === 'searchlights' && mapev.exposed && mapev.collapse.id === 'collapse' && mapev.collapse.obstacles === 1 && mapev.collapse.solids === 1 && mapev.collapse.prop && mapev.cleared.props === 0 && mapev.cleared.obstacles === 0 && mapev.blackout.id === 'blackout' && mapev.blackout.density === .065, 'searchlights expose stalkers, the overpass pile-up drops a wreck that clears next run, and the street blacks out', { s: mapev.searchlights, exposed: mapev.exposed, collapse: mapev.collapse, cleared: mapev.cleared, blackout: mapev.blackout });
+  check(mapev.dailyEvent === 'blackout', 'map events also fire in the Daily so every player gets the same run', mapev.dailyEvent);
+  await page.close();
+}
+
+const errs = pageErrors.filter(e => !/favicon|net::ERR|navigator.vibrate/.test(e));
+check(!errs.length, 'no page errors', errs.slice(0, 3));
+await browser.close();
+server.close();
+console.log(failures.length ? failures.length + ' FAILED' : 'ALL NOVELTY CHECKS PASSED');
+process.exit(failures.length ? 1 : 0);

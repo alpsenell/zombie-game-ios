@@ -143,7 +143,7 @@ export function init(api) {
       name: api.TITLES[profile.loadout.title] + ' · LV ' + api.levelInfo().level,
       flair: flairText(profile), elite: !!profile.season?.flair?.elite, frame: !!profile.season?.flair?.frame,
       score: s.score.toLocaleString(),
-      sub: 'WAVE ' + s.wave + ' · ' + diff.name,
+      sub: 'WAVE ' + s.wave + ' · ' + diff.name + (s.mutators?.length ? ' · ' + s.mutators.length + ' MUTATOR' + (s.mutators.length > 1 ? 'S' : '') + ' ×' + (s.mutScore || 1).toFixed(2) : ''),
       stats: [['KILLS', s.kills.toLocaleString()], ['HEADSHOTS', s.heads.toLocaleString()], ['ACCURACY', Math.round(s.accuracy * 100) + '%']],
       rank,
       squad: api.squads?.bannerFor?.(s)?.text || '',

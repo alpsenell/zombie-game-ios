@@ -5,6 +5,7 @@ import { eventAt } from './events.js';
 export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz', squad: 'deadzone.daily.squad' };
 export const PLACEMENT_RUNS = 3;
 export const SEASON_REWARDS = { bronze: 500, silver: 1000, gold: 2000, platinum: 3500, diamond: 5000, legend: 8000 };
+export const MUT_MAX = 2.5;
 export const BLITZ_SECONDS = 300, BLITZ_DIFFICULTY = 'veteran', BLITZ_ALIVE = 20;
 export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFICULTY = 'survivor';
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
@@ -99,7 +100,7 @@ export function plausible(run, api, now = Date.now()) {
   if (run.time < (played - 1) * 2 || run.kills > run.time * 25 + 30) return 'RUN TOO FAST';
   const bosses = Math.min(run.bosses?.length || 0, Math.floor(run.wave / 5) - Math.floor((start - 1) / 5) + 1);
   const cap = (125 * (run.wave * (run.wave + 1) - start * (start - 1)) + run.kills * 7100 * D.score + bosses * 94000 * D.score) * 1.5 + 1000;
-  if (run.score > cap * (run.type === 'extract' ? EXTRACT_MAX_MULT : 1)) return 'SCORE TOO HIGH FOR THIS RUN';
+  if (run.score > cap * (run.type === 'extract' ? EXTRACT_MAX_MULT : 1) * (run.type === 'normal' && run.mutScore > 1 ? Math.min(run.mutScore, MUT_MAX) : 1)) return 'SCORE TOO HIGH FOR THIS RUN';
   if (run.type === 'blitz') {
     if (run.difficultyId !== BLITZ_DIFFICULTY) return 'NOT THE BLITZ DIFFICULTY';
     if (run.time > BLITZ_SECONDS + 15) return 'BLITZ RUNS ARE ' + BLITZ_SECONDS / 60 + ' MINUTES';

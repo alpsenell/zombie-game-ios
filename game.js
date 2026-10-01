@@ -702,7 +702,7 @@ function makeZombie(kind, x, z, rise = true, elite = false) {
   const hp = T.hp * (1 + (state.wave - 1) * (T.boss ? .08 : .12)) * D.hp * (M.hp ?? 1) * (X.hp ?? 1) * (elite ? 2.2 : 1) * bossTier;
   const now = state.clock;
   root.userData = {
-    zombie: true, kind, T, P, meshes, hp, maxHp: hp, elite, sc,
+    zombie: true, kind, T, P, meshes, hp, maxHp: hp, elite, sc, variant: T.boss && state.wave >= VARIANT_WAVE ? BOSS_VARIANTS[kind]?.id || null : null, helmetHp: T.boss && state.wave >= VARIANT_WAVE && BOSS_VARIANTS[kind]?.id === 'ironclad' ? HELMET_HP : 0,
     speed: T.speed * (1 + Math.min(.45, (state.wave - 1) * .035)) * D.speed * (M.speed ?? 1) * (X.speed ?? 1) * (elite ? 1.1 : 1) * (.9 + R() * .2),
     walk: Math.random() * 6, phase: Math.random() * 6, flash: 0, nextAttack: 0, swing: 0, dead: false, deathT: 0, rise: rise ? 1 : 0,
     side: R() > .5 ? 1 : -1, kx: 0, kz: 0, radius: .34 * sc * T.bulk, groanAt: Math.random() * 5,
@@ -843,7 +843,15 @@ function levelInfo(xp = profile.xp) {
 }
 function myCode() { profile.loadout.primary = loadoutWeapons()[0]; return encodeLoadout(profile.loadout, levelInfo().level); }
 const REQS = {};
-const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0 };
+const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0, mutScore: 1, noRadar: false, noPickups: false, runners: 1, featured: 1 };
+const VARIANT_WAVE = 25;
+const BOSS_VARIANTS = {
+  abomination: { id: 'splitter', name: 'SPLITTER', desc: 'SPLITS INTO BLOATERS WHEN IT DIES' },
+  butcher: { id: 'berserker', name: 'BERSERKER', desc: 'CHARGES TWICE — KEEP MOVING' },
+  plague: { id: 'herald', name: 'HERALD', desc: 'RAISES A SCREAMER WITH THE DEAD' },
+  goliath: { id: 'ironclad', name: 'IRONCLAD', desc: 'SHOOT THE HELMET OFF, THEN THE HEAD' },
+};
+const HELMET_HP = 450;
 const SCRAP_BAG = 50;
 function reqMet(req) {
   if (!req) return true;
@@ -900,6 +908,10 @@ function resetRun() {
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
     warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12, perkRerolls: 0, perkKit: 0, timeLimit: 0, autoWave: false, aliveCap: 0 });
   scheduled.length = 0;
+  state.mapEvent = null; state.mapEventLog = [];
+  const hadProps = eventProps.length > 0;
+  clearEventProps();
+  if (hadProps && NAV.solid) buildNav();
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
   projectiles.length = 0;
@@ -972,7 +984,7 @@ function rosterWeights(w, D = diff()) {
   for (const k in ZT) {
     const m = ZT[k].mix;
     if (!m || D.rank < m[0] || e < m[1]) continue;
-    out[k] = Math.min(m[3], (e - m[1] + 1) * m[2]) * (k === 'walker' ? 1 : D.mix);
+    out[k] = Math.min(m[3], (e - m[1] + 1) * m[2]) * (k === 'walker' ? 1 : D.mix) * (k === 'runner' ? live.runners || 1 : 1);
   }
   return out;
 }
@@ -994,6 +1006,50 @@ function waveComposition(w) {
   return list;
 }
 
+const eventProps = [];
+function startMapEvent(id, secs = 20) {
+  if (state.mode !== 'playing' || state.mapEvent) return null;
+  state.mapEvent = { id, at: state.clock, until: secs ? state.clock + secs : state.clock + .5 };
+  (state.mapEventLog ||= []).push(id);
+  if (id === 'blackout') { scene.fog.color.setHex(0x05080a); scene.fog.density = .065; }
+  if (id === 'flood') { scene.fog.color.setHex(0x0a2a3a); scene.fog.density = Math.max(scene.fog.density, .03); }
+  if (id === 'collapse') {
+    let placed = null;
+    for (let i = 0; i < 48 && !placed; i++) {
+      const a = i < 24 ? look.yaw + (Math.random() - .5) * 1.8 : Math.random() * Math.PI * 2, dist = 5 + Math.random() * 7;
+      const x = camera.position.x - Math.sin(a) * dist, z = camera.position.z - Math.cos(a) * dist;
+      if (blocked(x, z, 1.8) || Math.hypot(x - camera.position.x, z - camera.position.z) < 4) continue;
+      placed = { x, z };
+    }
+    if (!placed) { state.mapEvent = null; return null; }
+    const w = 2.6, d = 5, g = new THREE.Group();
+    mesh(new THREE.BoxGeometry(w, 1.3, d), mat(0x3a3a3e, { roughness: .9 }), 0, .65, 0, g);
+    mesh(new THREE.BoxGeometry(w * .8, .7, d * .5), mat(0x2a2a2e, { roughness: .9 }), 0, 1.6, -.3, g);
+    g.position.set(placed.x, 0, placed.z);
+    g.rotation.y = Math.random() * .5 - .25;
+    scene.add(g); solids.push(g); eventProps.push(g);
+    obstacles.push({ x: placed.x, z: placed.z, w: w + .6, d: d + .6, prop: true });
+    for (let j = 0; j < NAV.h; j++) for (let i = 0; i < NAV.w; i++) { const c = j * NAV.w + i; if (!NAV.solid[c] && blocked(NAV.minX + i, NAV.minZ + j, .5)) NAV.solid[c] = 1; }
+    NAV.cell = -1;
+    for (const zb of zombies) { const u = zb.userData; if (!u.dead && Math.abs(zb.position.x - placed.x) < w / 2 + 1 && Math.abs(zb.position.z - placed.z) < d / 2 + 1) damageZombie(zb, u.hp + 1, null, false, null); }
+    explode(placed.x, placed.z, { hostile: false, radius: 2.5, zdmg: 0, pdmg: 0, color: 0x8a8a8a });
+    look.shake = Math.max(look.shake, .6); sfx.boom(); haptic('HEAVY');
+  }
+  bus.emit('map:start', { id, until: state.mapEvent.until });
+  return state.mapEvent;
+}
+function endMapEvent() {
+  if (!state.mapEvent) return;
+  const id = state.mapEvent.id;
+  state.mapEvent = null;
+  if (id === 'blackout' || id === 'flood') applyMod(state.mod);
+  bus.emit('map:end', { id });
+}
+function clearEventProps() {
+  for (const g of eventProps) { scene.remove(g); const i = solids.indexOf(g); if (i >= 0) solids.splice(i, 1); }
+  eventProps.length = 0;
+  for (let i = obstacles.length - 1; i >= 0; i--) if (obstacles[i].prop) obstacles.splice(i, 1);
+}
 function applyMod(id) {
   const M = MODS[id] || {};
   scene.fog.color.setHex(M.fog ?? world.map.fog.color);
@@ -1058,8 +1114,9 @@ function spawnTick(dt) {
   if (T.boss) {
     state.boss = z;
     ui.bossBar.classList.remove('hidden');
-    ui.bossName.textContent = T.name;
-    message(T.name, T.intro.toUpperCase(), 3);
+    const V = z.userData.variant && BOSS_VARIANTS[kind];
+    ui.bossName.textContent = T.name + (V ? ' · ' + V.name : '');
+    message(T.name + (V ? ' · ' + V.name : ''), (V ? V.desc : T.intro).toUpperCase(), 3);
     sfx.roar(); look.shake = .6; haptic('HEAVY');
   }
 }
@@ -1125,7 +1182,7 @@ function killZombie(z, head, noScore) {
       state.combo = state.clock - state.lastKill < 3 ? state.combo + 1 : 1;
       state.lastKill = state.clock;
       state.bestCombo = Math.max(state.bestCombo, state.combo);
-      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 * live.headScore : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1));
+      const pts = Math.round(T.score * (u.elite ? 2 : 1) * (head ? 1.5 * live.headScore : 1) * comboMult() * diff().score * (MODS[state.mod]?.score ?? 1) * (live.mutScore || 1));
       state.score += pts;
       bus.emit('kill', { kind: u.kind, head, elite: u.elite, boss: !!T.boss, points: pts, weapon: WEAPONS[player.weapon].id, combo: state.combo, frozen: false, burning });
       floater(z.position.x, 2.2 * u.sc, z.position.z, '+' + pts, head ? 'head' : '');
@@ -1138,6 +1195,16 @@ function killZombie(z, head, noScore) {
       const eliteKind = live.eliteHeadOnly && u.elite && !T.boss ? (head ? 'health' : R() < .8 ? 'ammo' : 'grenade') : null;
       for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : eliteKind);
       if (T.boss) { state.bossKinds.push(u.kind); message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
+      if (u.variant === 'splitter' && (!state.net || state.net.host)) {
+        let n = 0;
+        for (let i = 0; i < 6 && n < 3; i++) {
+          const a = Math.random() * Math.PI * 2, r = 1.8 + Math.random() * 1.5, sx = z.position.x + Math.cos(a) * r, sz = z.position.z + Math.sin(a) * r;
+          if (blocked(sx, sz, .6)) continue;
+          makeZombie('bloater', sx, sz, true); n++;
+        }
+        state.waveTotal += n;
+        if (n) { toast('THE ABOMINATION SPLITS', 1.8); sfx.roar(); }
+      }
     }
   }
   sfx.kill();
@@ -1181,7 +1248,13 @@ function damageZombie(z, amount, point, head, dir) {
   if (u.dead) return;
   const armored = point && !head && T.armor && (!T.shield || shieldFacing(z));
   const remote = state.net?.claim(z, amount, head, !!armored, point);
-  if (armored) amount *= T.armor;
+  if (armored) amount *= u.armor ?? T.armor;
+  if (head && u.helmetHp > 0) {
+    u.helmetHp -= amount;
+    amount *= .3;
+    if (point) sparks.emit(point.x, point.y, point.z, 8, { speed: 3, spread: 1.5, life: .3, grav: 10, colors: [0xcfe6ff, 0xffd080] });
+    if (u.helmetHp <= 0) { u.helmetHp = 0; u.armor = 1; ui.bossName.textContent = T.name + ' · HELMET DESTROYED'; toast('HELMET DESTROYED — GO FOR THE HEAD', 1.8); sfx.boom(); haptic('HEAVY'); bus.emit('boss:helmet', { kind: u.kind }); }
+  }
   if (u.cs === 'stun') amount *= 2;
   if (u.frozenT > 0) amount *= 1.3;
   if (!remote) u.hp -= amount;
@@ -1593,11 +1666,11 @@ function bossAbilities(z, dt, d, dx, dz) {
       const a = Math.random() * Math.PI * 2, r = 2.5 + Math.random() * 2.5;
       const x = z.position.x + Math.cos(a) * r, zz = z.position.z + Math.sin(a) * r;
       if (blocked(x, zz, .6)) continue;
-      makeZombie(Math.random() < .5 ? 'crawler' : 'walker', x, zz, true);
+      makeZombie(u.variant === 'herald' && n === 0 ? 'screamer' : Math.random() < .5 ? 'crawler' : 'walker', x, zz, true);
       n++;
     }
     state.waveTotal += n;
-    if (n) { toast(T.name + ' RAISES THE DEAD', 1.6); sfx.roar(); }
+    if (n) { toast(T.name + (u.variant === 'herald' ? ' RAISES A SCREAMER' : ' RAISES THE DEAD'), 1.6); sfx.roar(); }
   }
   if (T.slam && !u.cs) {
     if (u.slamT > 0) {
@@ -1635,7 +1708,7 @@ function bossAbilities(z, dt, d, dx, dz) {
       u.walk += dt * T.stride * 3;
       u.moving = true;
       if (blocked(nx, nz, u.radius)) {
-        u.cs = 'stun'; u.ct = 2.4; look.shake = Math.max(look.shake, .3); sfx.boom();
+        u.cs = 'stun'; u.ct = u.variant === 'berserker' ? 1.1 : 2.4; look.shake = Math.max(look.shake, .3); sfx.boom();
         toast(T.name + ' IS STUNNED — HIT HIM!', 1.6);
       } else {
         z.position.x = nx; z.position.z = nz;
@@ -1650,13 +1723,13 @@ function bossAbilities(z, dt, d, dx, dz) {
           if (blocked(px, pz, .36)) break;
           camera.position.x = px; camera.position.z = pz;
         }
-        u.cs = ''; u.nextCharge = state.clock + 6;
-      } else if (u.cs === 'run' && u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + (u.enraged ? 4.5 : 6.5); }
+        u.cs = ''; u.nextCharge = state.clock + (u.variant === 'berserker' ? 1.5 : 6);
+      } else if (u.cs === 'run' && u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + (u.variant === 'berserker' ? 1.5 : u.enraged ? 4.5 : 6.5); }
       return true;
     }
     if (u.cs === 'stun') {
       u.ct -= dt; u.moving = false;
-      if (u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + 5; }
+      if (u.ct <= 0) { u.cs = ''; u.nextCharge = state.clock + (u.variant === 'berserker' ? 1.5 : 5); }
       return true;
     }
     if (d > 5.5 && d < 28 && state.clock > u.nextCharge && u.slamT <= 0) {
@@ -1676,7 +1749,8 @@ function specialAbilities(z, dt, d) {
   }
   if (T.stalk) {
     u.stalkT -= dt;
-    if (d < 6 || u.burnT > 0 || u.chill > .3 || state.clock - u.hitAt < 1) { if (u.hidden) { u.hidden = false; u.stalkT = 1.6; if (d < 14) sfx.hiss(); } }
+    if (state.mapEvent?.id === 'searchlights') { if (u.hidden) { u.hidden = false; u.stalkT = 1.6; } }
+    else if (d < 6 || u.burnT > 0 || u.chill > .3 || state.clock - u.hitAt < 1) { if (u.hidden) { u.hidden = false; u.stalkT = 1.6; if (d < 14) sfx.hiss(); } }
     else if (u.stalkT <= 0) { u.hidden = !u.hidden; u.stalkT = u.hidden ? 2.4 + Math.random() : 1.1 + Math.random() * .6; if (!u.hidden && d < 14) sfx.hiss(); }
   }
   if (T.lunge && diff().rank >= T.lunge) {
@@ -1721,6 +1795,7 @@ const PICKUP_KINDS = {
   scrap: { color: 0xffc34d, label: '+' + SCRAP_BAG + ' SCRAP' },
 };
 function dropPickup(x, z, kind) {
+  if (live.noPickups && kind !== 'scrap') return;
   if (!kind) {
     const r = R(), lowHp = player.hp < stats.maxHp * .5;
     kind = r < (lowHp ? .5 : .3) ? 'health' : r < .82 ? 'ammo' : 'grenade';
@@ -1864,6 +1939,7 @@ function runSummary() {
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
     maxWave: state.maxWave || 0, cleared: !!state.cleared, extracted: state.extracted || 0, event: !!live.event, bonusScrap: state.bonusScrap || 0,
+    mutators: (state.runType || 'normal') === 'normal' && Array.isArray(state.runOpts?.mutators) ? [...state.runOpts.mutators] : [], mutScore: live.mutScore || 1, mapEvents: state.mapEventLog ? [...state.mapEventLog] : [],
   };
 }
 
@@ -1918,7 +1994,7 @@ function grantRewards() {
   const played = state.wave - state.startWave + 1;
   const bags = state.bonusScrap || 0;
   const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune * live.scrap) + bags;
-  const xp = Math.round((state.score / 10 + played * 50) * live.xp);
+  const xp = Math.round((state.score / 10 + played * 50) * live.xp * (live.featured || 1));
   profile.scrap += scrap;
   profile.xp += xp;
   profile.kills += state.kills;
@@ -1937,6 +2013,7 @@ function grantRewards() {
   saveProfile();
   chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : '') + (live.scrap > 1 ? ' (' + live.label + ' x' + live.scrap + ')' : ''), 'gold');
   if (bags) chip('+' + bags.toLocaleString() + ' 🔩 FROM SCRAP BAGS', 'gold');
+  if (live.featured > 1) chip('⭐ FEATURED MAP · XP x' + live.featured, 'hot');
   chip('+' + xp.toLocaleString() + ' XP' + (live.xp > 1 ? ' (' + live.label + ' x' + live.xp + ')' : ''));
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
@@ -2275,7 +2352,7 @@ function updateZombies(dt, playing, target0 = menuTarget) {
     if (busy && u.cs === 'run') u.moving = true;
     if (u.moving && !busy) {
       let ax = dx / d, az = dz / d;
-      const step = u.speed * (playing ? 1 : .6) * (1 - (u.chill || 0) * .6) * (u.hasteT > 0 ? 1.35 : 1) * (u.lungeGo > 0 ? 3.4 : 1) * (u.hidden ? 1.2 : 1) * dt;
+      const step = u.speed * (playing ? 1 : .6) * (1 - (u.chill || 0) * .6) * (u.hasteT > 0 ? 1.35 : 1) * (u.lungeGo > 0 ? 3.4 : 1) * (u.hidden ? 1.2 : 1) * (state.mapEvent?.id === 'flood' && u.T.crawl ? .5 : 1) * dt;
       const r = u.radius;
       const wp = playing && !u.clear && !target.remote ? navStep(z.position.x, z.position.z) : null;
       if (T.stalk && !wp && d > 5) {
@@ -2378,6 +2455,7 @@ function updateEffects(dt) {
 function update(dt) {
   state.clock += dt;
   for (let k = scheduled.length - 1; k >= 0; k--) if (state.clock >= scheduled[k].at) { const s = scheduled.splice(k, 1)[0]; s.fn(); }
+  if (state.mapEvent && state.clock >= state.mapEvent.until) endMapEvent();
   if (state.timeLimit && !state.cleared && state.mode === 'playing' && state.clock >= state.timeLimit) {
     state.cleared = true; state.between = true; state.queue = [];
     player.invulnUntil = state.clock + 10;
@@ -2591,7 +2669,7 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave, event: live.event || undefined, map: world.map.id, weapon: WEAPONS[player.slots[0]].id, time: Math.round(state.clock) });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave, event: live.event || undefined, map: world.map.id, weapon: WEAPONS[player.slots[0]].id, time: Math.round(state.clock), mut: live.mutScore > 1 ? live.mutScore : undefined });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }
@@ -3045,7 +3123,7 @@ const api = {
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
   offerPerks, nova, deathGuards, gameOver, deployOpts: () => ({}),
 };
-Object.assign(api, { MUTATIONS, rosterWeights, applyMod, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
+Object.assign(api, { MUTATIONS, rosterWeights, applyMod, BOSS_VARIANTS, VARIANT_WAVE, HELMET_HP, startMapEvent, endMapEvent, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
 if ($('#cm-league')) $('#menu .records').appendChild($('#cm-league'));
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };
