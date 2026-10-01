@@ -23,6 +23,10 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
 spawns, modifiers, perks, drops and zombie speed deterministic via `api.R()` (use `api.R()` for any new gameplay randomness).
 `opts.replay()` (optional) returns the options REDEPLOY uses to start the next run of the same mode.
+`opts.maxWave` ends the run with a victory once that wave is cleared (`CHALLENGE COMPLETE`, then `gameOver()`); `runSummary()` carries `maxWave` and `cleared`.
+The Daily Challenge uses it (`DAILY_WAVES` = 10): players under `ROOKIE_LEVEL` (10) play the same seed on Survivor and submit to `deadzone.daily.rookie`,
+everyone else plays Veteran on `deadzone.daily` (`dailyBracket`, `api.gameCenter.boards(type, run)` routes by the run's difficulty, `competitive.boardId()` picks the board the RANKS screen shows).
+`profile.competitive.daily.attempts` counts today's runs.
 `opts.startWave` (normal runs only; others always start at 1) starts at that wave with score 0 and a starting kit: full grenades and reserve ammo plus
 `min(10, ceil((startWave - 1) / 2))` perk picks. `runSummary()`, `run:start` and `saveRun` carry `startWave`; the first `wave:start` has `checkpoint: true`
 and starting-kit `perk` events have `kit: true`. `features/checkpoint.js` stores the highest wave cleared per difficulty (`profile.checkpoint.cleared`),

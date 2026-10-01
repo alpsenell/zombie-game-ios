@@ -897,7 +897,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -938,6 +938,7 @@ function startGame(opts = {}) {
   state.runOpts = opts;
   if (opts.slots) { player.slots = [...opts.slots]; player.weapon = player.slots[0]; }
   state.startWave = state.runType === 'normal' ? Math.max(1, Math.min(999, opts.startWave | 0)) : 1;
+  state.maxWave = Math.max(0, opts.maxWave | 0);
   state.wave = state.startWave - 1;
   const S = world.map.start;
   camera.position.set(S.x, 1.64, S.z);
@@ -1823,6 +1824,12 @@ function waveCleared() {
   message('SECTOR CLEAR', 'BONUS +' + bonus, 2);
   bus.emit('wave:clear', { wave: state.wave, bonus, hp: player.hp });
   sfx.clear(); haptic('MEDIUM');
+  if (state.maxWave && state.wave >= state.maxWave) {
+    state.cleared = true;
+    message('CHALLENGE COMPLETE', 'FINAL SCORE ' + state.score.toLocaleString(), 2.4);
+    schedule(1.8, gameOver);
+    return;
+  }
   schedule(2.2, offerPerks);
 }
 
@@ -1832,6 +1839,7 @@ function runSummary() {
     score: state.score, wave: state.wave, startWave: state.startWave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
+    maxWave: state.maxWave || 0, cleared: !!state.cleared,
   };
 }
 
@@ -1852,9 +1860,9 @@ function gameOver() {
     const run = state.startedAt, label = { daily: 'DAILY RANK #', ranked: 'WEEKLY RANK #' }[summary.type] || 'GLOBAL RANK #';
     gameCenter.submit(state.score, state.wave, encodeLoadout({ ...profile.loadout, primary: player.slots[0] }, levelInfo().level), summary).then(p => {
       if (state.startedAt !== run) return;
-      if (p && !p.rejected && gameCenter.boards(summary.type)[0] === LEADERBOARDS.score) { records.rank = p.rank; store.set('records', records); }
+      if (p && !p.rejected && gameCenter.boards(summary.type, summary)[0] === LEADERBOARDS.score) { records.rank = p.rank; store.set('records', records); }
       rankEl.textContent = p?.rejected ? 'SCORE NOT SUBMITTED — ' + p.rejected : p ? label + p.rank.toLocaleString() : 'SIGN IN TO GAME CENTER TO RANK GLOBALLY';
-      bus.emit('run:submitted', { type: summary.type, board: gameCenter.boards(summary.type)[0], result: p });
+      bus.emit('run:submitted', { type: summary.type, board: gameCenter.boards(summary.type, summary)[0], result: p });
     });
   }
   const secs = Math.round(state.clock);
@@ -2059,7 +2067,7 @@ function updateHud(dt) {
   ui.hpLag.style.transform = `scaleX(${player.lagHp / stats.maxHp})`;
   ui.lowhp.classList.toggle('on', hpPct < .3 && state.mode === 'playing');
   if (hpPct < .3 && state.clock - player.lastBeat > 1 && state.mode === 'playing') { player.lastBeat = state.clock; sfx.heartbeat(); }
-  setText(ui.waveNum, 'WAVE ' + Math.max(state.startWave || 1, state.wave));
+  setText(ui.waveNum, 'WAVE ' + Math.max(state.startWave || 1, state.wave) + (state.maxWave ? ' / ' + state.maxWave : ''));
   const left = state.waveTotal - state.waveDone;
   setText(ui.alive, state.wave < (state.startWave || 1) ? 'GET READY' : state.between ? 'SECTOR SECURE' : (state.mod ? MODS[state.mod].name + ' · ' : state.mutation ? MUTATIONS[state.mutation].name + ' · ' : '') + left + ' INFECTED LEFT');
   ui.waveFill.style.transform = `scaleX(${state.waveTotal ? 1 - state.waveDone / state.waveTotal : 0})`;
@@ -2516,7 +2524,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', weekly: 'deadzone.weekly' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2529,13 +2537,13 @@ const gameCenter = {
     if (!this.player) return null;
     try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  boards(type) { return type === 'daily' ? [LEADERBOARDS.daily] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
   guard: null,
   async submit(score, wave, context, run) {
     const rejected = run && this.guard?.(run);
     if (rejected) return { rejected };
     if (!this.player && !(await this.signIn())) return null;
-    const ids = this.boards(run?.type);
+    const ids = this.boards(run?.type, run);
     await Promise.allSettled(ids.map(id => this.call('submitScore', { leaderboardId: id, score: id === LEADERBOARDS.wave ? wave : score, context })));
     return this.rank(ids[0]);
   },
