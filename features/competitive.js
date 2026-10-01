@@ -2,7 +2,7 @@ import { mulberry32 } from '../core.js';
 import { seasonAt } from './season.js';
 import { eventAt } from './events.js';
 
-export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz' };
+export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract', event: 'deadzone.event', blitz: 'deadzone.blitz', squad: 'deadzone.daily.squad' };
 export const PLACEMENT_RUNS = 3;
 export const SEASON_REWARDS = { bronze: 500, silver: 1000, gold: 2000, platinum: 3500, diamond: 5000, legend: 8000 };
 export const BLITZ_SECONDS = 300, BLITZ_DIFFICULTY = 'veteran', BLITZ_ALIVE = 20;
@@ -10,7 +10,7 @@ export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFI
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
 const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime', extract: 'extract', blitz: 'blitz' };
-const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20', extract: 'EXTRACT', blitz: 'BLITZ', event: 'EVENT' };
+const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20', extract: 'EXTRACT', blitz: 'BLITZ', squad: 'SQUAD', event: 'EVENT' };
 export const EXTRACT_MAX_MULT = 2;
 const DAY = 864e5, WINDOW = 30;
 
@@ -61,7 +61,7 @@ export function settleWeek(c, thisWeek) {
   return { id: l.id, week: l.week, scrap: LEAGUE_REWARDS[l.id] || 0, move: prevRank < 0 ? 'new' : now > prevRank ? 'up' : now < prevRank ? 'down' : 'same', from: prevRank < 0 ? null : prev.id, current: l.week === lastWeek };
 }
 export function weekStart(t = Date.now()) { const d = Math.floor(t / DAY); return (d - (d + 3) % 7) * DAY; }
-export function nextReset(board, t = Date.now()) { return board === 'daily' ? (Math.floor(t / DAY) + 1) * DAY : weekStart(t) + 7 * DAY; }
+export function nextReset(board, t = Date.now()) { return board === 'daily' || board === 'squad' ? (Math.floor(t / DAY) + 1) * DAY : weekStart(t) + 7 * DAY; }
 export function timeLeft(ms) {
   const m = Math.max(0, Math.floor(ms / 6e4)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
   return d ? d + 'D ' + h + 'H' : h ? h + 'H ' + (m % 60) + 'M' : Math.max(1, m) + 'M';
@@ -401,10 +401,11 @@ export function init(api) {
     sprint: null,
     extract: r => r.type === 'extract',
     blitz: r => r.type === 'blitz',
+    squad: r => r.type === 'coop' && r.squadDaily === daily().date,
     event: r => !!r.event && r.date >= eventAt().start,
   };
   const sprintRows = () => (comp().sprint || []).map(x => ({ title: (api.DIFFICULTIES[x.diff]?.name || 'SURVIVOR') + ' · ' + sprintTime(x.cs), sub: new Date(x.date).toLocaleDateString(), score: x.cs, code: x.code }));
-  for (const b of ['daily', 'weekly', 'alltime', 'extract', 'blitz', 'sprint', 'event']) {
+  for (const b of ['daily', 'weekly', 'alltime', 'extract', 'blitz', 'sprint', 'squad', 'event']) {
     const btn = el('button', '', BOARD_NAME[b]);
     btn.dataset.board = b;
     btn.onclick = () => { selectBoard(b); api.renderBoard(); };
@@ -425,6 +426,7 @@ export function init(api) {
       : b === 'sprint' ? 'FASTEST TIME TO CLEAR WAVE ' + SPRINT_WAVE + ' · FROM WAVE 1 · LOWER IS BETTER'
       : b === 'extract' ? 'EXTRACTION RUNS · BANKED SCORES · NEVER RESETS'
       : b === 'blitz' ? BLITZ_SECONDS / 60 + '-MINUTE SCORE ATTACK · VETERAN · ALL WEAPONS · NEVER RESETS'
+      : b === 'squad' ? "SQUAD DAILY · CO-OP RUNS OF TODAY'S DAILY · ONE SCORE PER SQUAD · RESETS IN " + resetIn('squad')
       : b === 'event' ? eventAt().name + ' EVENT · NORMAL DEPLOYS · TOP 10% WINS THE ANIMATED SKIN · ' + (eventAt().live ? 'ENDS IN ' + timeLeft(eventAt().end - Date.now()) : 'NO EVENT LIVE')
       : 'EVERY RUN · ALL WEAPONS · NEVER RESETS';
   }

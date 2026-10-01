@@ -19,6 +19,7 @@ import * as market from './market.js';
 import * as blitz from './blitz.js';
 import * as resume from './resume.js';
 import * as dossier from './dossier.js';
+import * as squads from './squads.js';
 
 export const FEATURES = [
   cloudsave,
@@ -42,4 +43,5 @@ export const FEATURES = [
   blitz,
   resume,
   dossier,
+  squads,
 ];

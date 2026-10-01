@@ -120,6 +120,17 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Squads
+`features/squads.js` adds squad bonds, the Squad Daily and quick-join. Bonds: every co-op run with the same mates (`squadKey`: Game Center
+ids, or names in local play) counts in `profile.squads[key] = { runs, names, best, last }`; crossing `BONDS` (3, 10, 25 runs) pays a title
+(`squad:` requirement, `profile.squadBest`), announces it (`squad:bond` `{ key, runs, tier, names }`) and the game-over screen and the run
+card carry a squad banner. Squad Daily: the host toggles 📅 SQUAD DAILY in the lobby (`actions.daily`, carried in the `hi` message and the
+`go` message); the run then uses the Daily seed, difficulty, loadout, map and 10-wave cap (`startGame` options `squadDaily: date`, `squad`,
+`squadIds`) and every member submits the shared score to `deadzone.daily.squad` (SQUAD tab on the RANKS screen). Quick-join: a 👥 FIND A
+SQUAD button on the solo game-over screen opens the lobby and starts Game Center matchmaking (`api.coop.quick()`). Co-op weekly missions
+(`coopruns`, `coopwave`, `revives`) use `run.squad` and the `coop:revive` event `{ me, byMe, name, by }` emitted by `coop.js`.
+`api.squads = { BONDS, key, track, bannerFor, best }`.
+
 ## Dossier
 `features/dossier.js` is the stats screen (`#ds-open` on the title screen, `api.dossier.open(tab)`): OVERVIEW (records, career totals,
 league, season best, Sprint 20, Blitz, event skins), MAPS (best wave per map and per difficulty from `profile.maps[id] = { runs, bestWave,

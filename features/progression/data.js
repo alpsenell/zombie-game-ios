@@ -50,6 +50,9 @@ export const TEMPLATES = [
   { id: 'sheads', ev: 'kill', season: [150, 250, 400], w: 1, fn: add(e => e.head), text: n => n0(n) + ' HEADSHOTS THIS WEEK' },
   { id: 'selite', ev: 'kill', season: [15, 25, 40], w: 1, fn: add(e => e.elite), avail: c => c.tier >= 1, text: n => 'KILL ' + n + ' ELITES THIS WEEK' },
   { id: 'swaves', ev: 'wave:clear', season: [60, 90, 120], w: 1, fn: add(() => true), text: n => 'CLEAR ' + n + ' WAVES THIS WEEK' },
+  { id: 'coopruns', ev: 'run:end', weekly: [2, 3, 4], w: 1.2, fn: add(e => e.type === 'coop' && e.kills > 0), avail: c => c.hasCoop, text: n => 'PLAY ' + n + ' CO-OP RUNS' },
+  { id: 'coopwave', ev: 'wave:clear', weekly: [8, 10, 12], w: 1.3, fn: (e, m, run) => (run.type === 'coop' && (run.squad || 0) >= 2 ? Math.max(m.p, e.wave) : m.p), avail: c => c.hasCoop, text: n => 'CLEAR WAVE ' + n + ' IN CO-OP' },
+  { id: 'revives', ev: 'coop:revive', weekly: [3, 5, 8], w: 1.3, fn: add(e => e.byMe), avail: c => c.hasCoop, text: n => 'REVIVE ' + n + ' TEAMMATES' },
   { id: 'event', ev: 'wave:clear', daily: [6, 9, 12], w: 1.3, extra: true, fn: (e, m, run) => (run.event ? Math.max(m.p, e.wave) : m.p), arg: c => c.event, text: (n, a) => 'CLEAR WAVE ' + n + ' IN A ' + (EVENTS.find(e => e.id === a)?.name || 'WEEKEND EVENT') + ' RUN' },
 ];
 export const eventDay = key => { const ev = eventAt(Date.parse(key + 'T12:00:00Z')); return ev.live ? ev.id : null; };

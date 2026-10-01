@@ -32,6 +32,7 @@ function init(api) {
       tier: bestWave >= 15 ? 2 : bestWave >= 8 ? 1 : 0, bestWave, weaponName, maps: api.MAPS,
       owned: WEAPONS.filter(w => api.weaponOwned(w)),
       hasDaily: FEATURES.some(f => f.id !== 'progression' && /daily|competitive/i.test(f.id)),
+      hasCoop: FEATURES.some(f => f.id === 'coop'),
     };
   }
   function achStats() {
@@ -117,6 +118,7 @@ function init(api) {
     for (const period of ['daily', 'weekly', 'season']) for (const m of P[period]?.list || []) {
       const t = D.template(m.t);
       if (m.done || !t || t.ev !== ev) continue;
+      if (ev === 'coop:revive' && !rc.squad) continue;
       m.p = Math.min(m.n, t.fn(e, m, rc));
       if (m.p < m.n) continue;
       m.done = true;
@@ -443,7 +445,7 @@ function init(api) {
     return count;
   }
 
-  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', map: e?.map || api.currentMap, event: ladderRun(e?.type), missions: [], ach: [], mastery: {}, levels: {} }; }
+  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', map: e?.map || api.currentMap, event: ladderRun(e?.type), squad: e?.opts?.squad || 0, missions: [], ach: [], mastery: {}, levels: {} }; }
   bus.on('run:start', e => { closeStreak(); refreshMissions(); run = newRun(e); });
   bus.on('kill', e => {
     const s = P.stats;
@@ -460,6 +462,7 @@ function init(api) {
   bus.on('wave:start', e => { if (e.checkpoint) return; P.stats.bestWave = Math.max(P.stats.bestWave, e.wave); track('wave:start', e); checkAch(); });
   bus.on('wave:clear', e => { if (run?.difficultyId === 'nightmare') P.stats.nightmare = Math.max(P.stats.nightmare, e.wave); track('wave:clear', e); checkAch(); });
   bus.on('perk', e => { if (!e.kit) track('perk', e); });
+  bus.on('coop:revive', e => { track('coop:revive', e); checkAch(); });
   bus.on('mission:complete', e => track('mission:complete', e));
   bus.on('purchase', () => checkAch());
   bus.on('run:end', e => {

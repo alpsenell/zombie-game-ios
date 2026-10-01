@@ -20,6 +20,7 @@ const CSS = `
 .coop-players .tag.ready{background:#6dffa022;color:var(--green)}
 .coop-players .tag.host{background:#ffc34d22;color:var(--amber)}
 .coop-invite{margin:0 0 10px;padding:7px 10px;border-radius:10px;background:#ff3a2a14;border:1px solid #ff3a2a55;color:#ffb0a8;font:800 10px var(--ui);letter-spacing:1.2px}
+.coop-daily.on{border-color:#ffc34d;color:#ffc34d;background:#ffc34d1a}
 .coop-status{min-height:16px;margin:6px 0 12px;font:800 11px var(--ui);letter-spacing:1.5px;color:var(--amber)}
 .coop-status.err{color:#ff8a7a}
 #coop-tags{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -124,9 +125,10 @@ export function createLobby(api, act) {
   room.append(head, list);
   const status = el('div', 'coop-status');
   const actions = el('div', 'row');
+  const daily = btn('📅 SQUAD DAILY', 'ghost coop-daily hidden', () => act.daily());
   const main = btn('READY', 'cta', () => act.main());
   const back = btn('BACK', 'ghost', () => act.back());
-  actions.append(main, back);
+  actions.append(daily, main, back);
   panel.append(pick, room, status, actions);
   root.appendChild(panel);
   document.body.appendChild(root);
@@ -142,7 +144,7 @@ export function createLobby(api, act) {
     status(text, err) { status.textContent = text || ''; status.classList.toggle('err', !!err); },
     showPick() {
       pick.classList.remove('hidden'); room.classList.add('hidden');
-      main.classList.add('hidden'); back.textContent = 'BACK';
+      main.classList.add('hidden'); back.textContent = 'BACK'; daily.classList.add('hidden');
     },
     render(v) {
       pick.classList.add('hidden'); room.classList.remove('hidden');
@@ -159,6 +161,9 @@ export function createLobby(api, act) {
         list.appendChild(li);
       }
       for (let i = v.players.length; i < 4; i++) list.appendChild(el('li', 'empty', v.waiting ? 'WAITING…' : 'OPEN'));
+      daily.classList.toggle('hidden', !v.host);
+      daily.textContent = v.daily ? '📅 SQUAD DAILY · ON' : '📅 SQUAD DAILY';
+      daily.classList.toggle('on', !!v.daily);
       main.classList.toggle('hidden', !v.mainText);
       main.textContent = v.mainText || '';
       main.disabled = !!v.mainDisabled;

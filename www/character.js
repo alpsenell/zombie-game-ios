@@ -55,7 +55,7 @@ export const WEAPON_SKINS = [
   { name: 'PHANTOM', base: 0x2a1a3a, metal: 0x4a2a6a, dark: 0x0a0410, glow: 0xb48cff, req: 'market:phantom', like: 7 },
 ];
 
-export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND'];
+export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND', 'SQUADMATE', 'BROTHERS IN ARMS', 'LAST SQUAD STANDING'];
 
 export const SUITS = [
   null,
@@ -102,7 +102,8 @@ export const SLOTS = [
   { id: 'gun', label: 'WEAPON SKIN', bits: 4, items: WEAPON_SKINS.map(s => ({ name: s.name, swatch: s.base, cost: s.cost, req: s.req, season: s.season, like: s.like })) },
   { id: 'title', label: 'TITLE', bits: 4, items: [
     { req: '' }, { req: 'level:3' }, { cost: 300 }, { req: 'heads:100' }, { req: 'heads:500' }, { req: 'boss:abomination' }, { req: 'boss:butcher' }, { req: 'boss:plague' },
-    { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' }]
+    { req: 'boss:goliath' }, { req: 'nightmare:10' }, { req: 'kills:5000' }, { req: 'wave:30' }, { req: 'veteran:15' }, { req: 'level:25' }, { req: 'level:40' }, { req: 'wave:50' },
+    { req: 'squad:3', like: 1 }, { req: 'squad:10', like: 12 }, { req: 'squad:25', like: 15 }]
     .map((it, i) => ({ ...it, name: TITLES[i] })) },
   { id: 'primary', label: 'PRIMARY', bits: 4, hidden: true, items: WEAPONS.map(w => ({ name: w.name })) },
   { id: 'suit', label: 'EXCLUSIVE', bits: 3, items: SUITS.map(x => x ? { name: x.name, premium: x.premium, season: x.season, req: x.season ? 'season:' + x.season : x.req, desc: x.desc, swatch: x.accent, like: x.like } : { name: 'NONE' }) },
