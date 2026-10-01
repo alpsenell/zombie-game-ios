@@ -114,6 +114,7 @@ const P = page => page.evaluate(() => JSON.parse(JSON.stringify(window.__game.ap
     btn?.click();
     const afterT = s.daily.list.map(m => m.t);
     const second = pg.reroll('daily', 0);
+    api.levels.state.paid = 99;
     const scrap0 = api.profile.scrap;
     window.__now += DAY;
     pg.refreshMissions();
