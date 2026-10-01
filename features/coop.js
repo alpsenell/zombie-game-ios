@@ -6,7 +6,7 @@ export const RECRUIT = { wave: 5, scrap: 500 };
 export const config = { perkTimeout: 20, perkGrace: 2, bleed: 20, reviveTime: 3, reviveRange: 2, snapHz: 10, stateHz: 15, hitHz: 20, interp: .12, joinTimeout: 3000 };
 
 const HOST_ONLY = new Set(['go', 's', 'z+', 'z-', 'sp', 'k+', 'w', 'wc', 'hu', 'rv', 'out', 'end', 'busy', 'full']);
-const PICKUPS = ['health', 'ammo', 'grenade'];
+const PICKUPS = ['health', 'ammo', 'grenade', 'scrap'];
 const now = () => performance.now();
 const c100 = v => Math.round(v * 100);
 

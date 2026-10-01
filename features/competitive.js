@@ -1,14 +1,15 @@
 import { mulberry32 } from '../core.js';
 import { seasonAt } from './season.js';
+import { eventAt } from './events.js';
 
-export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract' };
+export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract', event: 'deadzone.event' };
 export const PLACEMENT_RUNS = 3;
 export const SEASON_REWARDS = { bronze: 500, silver: 1000, gold: 2000, platinum: 3500, diamond: 5000, legend: 8000 };
 export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFICULTY = 'survivor';
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
 const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime', extract: 'extract' };
-const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20', extract: 'EXTRACT' };
+const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20', extract: 'EXTRACT', event: 'EVENT' };
 export const EXTRACT_MAX_MULT = 2;
 const DAY = 864e5, WINDOW = 30;
 
@@ -394,9 +395,10 @@ export function init(api) {
     alltime: null,
     sprint: null,
     extract: r => r.type === 'extract',
+    event: r => !!r.event && r.date >= eventAt().start,
   };
   const sprintRows = () => (comp().sprint || []).map(x => ({ title: (api.DIFFICULTIES[x.diff]?.name || 'SURVIVOR') + ' · ' + sprintTime(x.cs), sub: new Date(x.date).toLocaleDateString(), score: x.cs, code: x.code }));
-  for (const b of ['daily', 'weekly', 'alltime', 'extract', 'sprint']) {
+  for (const b of ['daily', 'weekly', 'alltime', 'extract', 'sprint', 'event']) {
     const btn = el('button', '', BOARD_NAME[b]);
     btn.dataset.board = b;
     btn.onclick = () => { selectBoard(b); api.renderBoard(); };
@@ -410,12 +412,13 @@ export function init(api) {
     api.boardView.format = b === 'sprint' ? sprintTime : null;
     api.boardView.local = b === 'sprint' ? sprintRows : null;
     api.boardView.empty = b === 'sprint' ? 'No sprint yet — clear wave ' + SPRINT_WAVE + ' from wave 1 in a normal or ranked run.' : null;
-    for (const btn of seg.children) btn.classList.toggle('on', btn.dataset.board === b);
+    for (const btn of seg.children) { btn.classList.toggle('on', btn.dataset.board === b); if (btn.dataset.board === 'event') btn.classList.toggle('hidden', !eventAt().live); }
     const l = currentLeague();
     boardNote.textContent = b === 'daily' ? 'DAILY CHALLENGE RUNS · RESETS IN ' + resetIn('daily')
       : b === 'weekly' ? (l ? leagueOf(l).name + ' LEAGUE · ' : '') + 'RANKED RUNS · NO PREMIUM WEAPONS · RESETS IN ' + resetIn('weekly')
       : b === 'sprint' ? 'FASTEST TIME TO CLEAR WAVE ' + SPRINT_WAVE + ' · FROM WAVE 1 · LOWER IS BETTER'
       : b === 'extract' ? 'EXTRACTION RUNS · BANKED SCORES · NEVER RESETS'
+      : b === 'event' ? eventAt().name + ' EVENT · NORMAL DEPLOYS · TOP 10% WINS THE ANIMATED SKIN · ' + (eventAt().live ? 'ENDS IN ' + timeLeft(eventAt().end - Date.now()) : 'NO EVENT LIVE')
       : 'EVERY RUN · ALL WEAPONS · NEVER RESETS';
   }
   function openBoard(b) {
@@ -424,7 +427,7 @@ export function init(api) {
   }
   selectBoard('alltime');
   bus.on('screen', ({ id }) => {
-    if (id === 'board') selectBoard(boardSel);
+    if (id === 'board') selectBoard(boardSel === 'event' && !eventAt().live ? 'alltime' : boardSel);
     if (id === 'menu') renderMenu();
   });
 

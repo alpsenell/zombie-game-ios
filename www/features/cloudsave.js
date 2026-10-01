@@ -7,6 +7,16 @@ const num = v => (Number.isFinite(+v) ? +v : 0);
 const maxMap = (a = {}, b = {}) => { const out = { ...a }; for (const k in b) out[k] = Math.max(num(out[k]), num(b[k])); return out; };
 const union = (a = {}, b = {}) => ({ ...b, ...a });
 const unionList = (a = [], b = []) => [...new Set([...a, ...b])];
+const normGoals = w => (w == null ? null : typeof w === 'number' ? { skin: w } : w);
+function mergeEvents(a = {}, b = {}) {
+  const won = {}, ladder = {};
+  for (const id of new Set([...Object.keys(a.won || {}), ...Object.keys(b.won || {})])) { const x = normGoals(a.won?.[id]), y = normGoals(b.won?.[id]); won[id] = x && y ? { ...y, ...x } : x || y; }
+  for (const id of new Set([...Object.keys(a.ladder || {}), ...Object.keys(b.ladder || {})])) {
+    const x = a.ladder?.[id] || {}, y = b.ladder?.[id] || {}, best = (x.score || 0) >= (y.score || 0) ? x : y;
+    ladder[id] = { ...y, ...x, score: Math.max(x.score || 0, y.score || 0), rank: best.rank || x.rank || y.rank || 0, total: best.total || x.total || y.total || 0 };
+  }
+  return { ...b, ...a, won, ladder };
+}
 const later = (a, b) => (a == null ? b : b == null ? a : a >= b ? a : b);
 
 export const isPristine = p => !isObj(p) || (!num(p.runs) && !num(p.xp) && !num(p.kills) && !Object.keys(p.owned || {}).length && !Object.keys(p.arsenal?.owned || {}).length);
@@ -80,7 +90,7 @@ export function mergeProfile(local, cloud) {
   }
   a.season = mergeSeason(a.season, b.season);
   a.competitive = mergeCompetitive(a.competitive, b.competitive);
-  if (isObj(a.events) || isObj(b.events)) a.events = { ...b.events, ...a.events, won: union(a.events?.won, b.events?.won) };
+  if (isObj(a.events) || isObj(b.events)) a.events = mergeEvents(a.events, b.events);
   if (isObj(a.comeback) || isObj(b.comeback)) { const c = num(b.comeback?.last) > num(a.comeback?.last) ? b.comeback : a.comeback; a.comeback = { ...c, count: Math.max(num(a.comeback?.count), num(b.comeback?.count)) }; }
   if (isObj(a.checkpoint) || isObj(b.checkpoint)) a.checkpoint = { ...b.checkpoint, ...a.checkpoint, cleared: maxMap(a.checkpoint?.cleared, b.checkpoint?.cleared), pick: a.checkpoint?.pick || b.checkpoint?.pick || {} };
   if (isObj(a.levels) || isObj(b.levels)) a.levels = { ...b.levels, ...a.levels, paid: Math.max(num(a.levels?.paid), num(b.levels?.paid)) };

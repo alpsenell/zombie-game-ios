@@ -1,5 +1,5 @@
 import { LEAGUES, LEAGUE_REWARDS, utcDay, weekStart } from './competitive.js';
-import { eventAt } from './events.js';
+import { eventAt, goalsOf } from './events.js';
 import { streakReward } from './progression/data.js';
 
 export const id = 'notify';
@@ -79,7 +79,7 @@ export function init(api) {
       streak: st ? { count: st.count, last: st.last, shields: st.shields || 0 } : null,
       daily: c.daily || null,
       league: c.league && c.league.week === week ? { id: c.league.id } : null,
-      event: { ...ev, won: !!profile.events?.won?.[ev.id], skin: skin?.name },
+      event: { ...ev, won: !!goalsOf(profile, ev.id).skin, skin: skin?.name },
       lastPlay: Date.now(), bestWave: profile.bestWave || 0,
     };
   }

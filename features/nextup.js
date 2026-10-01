@@ -4,7 +4,7 @@ import { LEAGUES, leagueRank } from './competitive.js';
 export const id = 'nextup';
 export const SHEET = 6;
 const BOSS_WAVE = { abomination: 5, butcher: 10, plague: 15, goliath: 20 };
-const SKIP = new Set(['event', 'recruit', 'season', 'seasonskin']);
+const SKIP = new Set(['event', 'eventtop', 'recruit', 'season', 'seasonskin']);
 
 export function progress(api, req) {
   const [k, v] = String(req || '').split(':'), n = +v, p = api.profile;

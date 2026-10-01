@@ -44,7 +44,7 @@ const P = page => page.evaluate(() => JSON.parse(JSON.stringify(window.__game.ap
   await b.close();
   const a = await open(), la = await lists(a);
   check(la.daily.key === '2026-09-26' && la.weekly.key === '2026-W39', 'period keys from UTC date / ISO week', [la.daily.key, la.weekly.key]);
-  check(la.daily.list.length === 3 && la.weekly.list.length === 3, '3 daily + 3 weekly missions');
+  check(la.daily.list.length === 4 && la.daily.list[3].t === 'event' && la.weekly.list.length === 3, '3 daily + the event-day mission + 3 weekly missions');
   check(JSON.stringify(la) === JSON.stringify(lb), 'same date + profile → identical missions');
   const scan = await a.evaluate(({ T0, DAY }) => {
     const { api } = window.__game, D = api.progression.data;
