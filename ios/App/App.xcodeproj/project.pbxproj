@@ -22,6 +22,7 @@
 		A1D0C0082F10000100DEAD01 /* AchievementsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */; };
 		A1D0C00A2F10000100DEAD01 /* SharePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */; };
 		A1D0C00C2F10000100DEAD01 /* MatchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */; };
+		A1D0C0112F10000100DEAD01 /* CloudSavePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0122F10000100DEAD01 /* CloudSavePlugin.swift */; };
 		A1D0C00F2F10000100DEAD01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -44,6 +45,7 @@
 		A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementsPlugin.swift; sourceTree = "<group>"; };
 		A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlugin.swift; sourceTree = "<group>"; };
 		A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatchPlugin.swift; sourceTree = "<group>"; };
+		A1D0C0122F10000100DEAD01 /* CloudSavePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSavePlugin.swift; sourceTree = "<group>"; };
 		A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1D0C0102F10000100DEAD01 /* Products.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Products.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -87,6 +89,7 @@
 				A1D0C0092F10000100DEAD01 /* AchievementsPlugin.swift */,
 				A1D0C00B2F10000100DEAD01 /* SharePlugin.swift */,
 				A1D0C00D2F10000100DEAD01 /* MatchPlugin.swift */,
+				A1D0C0122F10000100DEAD01 /* CloudSavePlugin.swift */,
 				A1D0C0052F10000100DEAD01 /* App.entitlements */,
 				A1D0C00E2F10000100DEAD01 /* PrivacyInfo.xcprivacy */,
 				A1D0C0102F10000100DEAD01 /* Products.storekit */,
@@ -192,6 +195,7 @@
 				A1D0C0082F10000100DEAD01 /* AchievementsPlugin.swift in Sources */,
 				A1D0C00A2F10000100DEAD01 /* SharePlugin.swift in Sources */,
 				A1D0C00C2F10000100DEAD01 /* MatchPlugin.swift in Sources */,
+				A1D0C0112F10000100DEAD01 /* CloudSavePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
