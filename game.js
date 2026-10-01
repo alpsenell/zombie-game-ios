@@ -843,7 +843,8 @@ function levelInfo(xp = profile.xp) {
 }
 function myCode() { profile.loadout.primary = loadoutWeapons()[0]; return encodeLoadout(profile.loadout, levelInfo().level); }
 const REQS = {};
-const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '' };
+const live = { count: 1, elite: 0, headScore: 1, scrap: 1, xp: 1, label: '', event: false, alive: 0, noAssist: false, eliteHeadOnly: false, scrapBag: 0 };
+const SCRAP_BAG = 50;
 function reqMet(req) {
   if (!req) return true;
   const [k, v] = req.split(':'), n = +v;
@@ -897,7 +898,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -1040,7 +1041,7 @@ function spawnTick(dt) {
   if (state.between || !state.queue?.length) return;
   state.spawnGap -= dt;
   const alive = zombies.filter(z => !z.userData.dead).length;
-  if (state.spawnGap > 0 || alive >= Math.min(5 + state.wave, 16)) return;
+  if (state.spawnGap > 0 || alive >= Math.min(5 + state.wave, live.alive || 16)) return;
   const { kind, elite } = state.queue.shift();
   const T = ZT[kind];
   const p = findSpawn(T.boss ? 20 : 16);
@@ -1130,7 +1131,8 @@ function killZombie(z, head, noScore) {
       perkOnKill(z);
       ui.combo.classList.add('pop'); setTimeout(() => ui.combo.classList.remove('pop'), 120);
       const drops = T.boss ? 4 : R() < T.drop * stats.luck * diff().drops * (u.elite ? 2 : 1) ? 1 : 0;
-      for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : null);
+      const eliteKind = live.eliteHeadOnly && u.elite && !T.boss ? (head ? 'health' : R() < .8 ? 'ammo' : 'grenade') : null;
+      for (let i = 0; i < drops; i++) dropPickup(z.position.x + (Math.random() - .5) * 2, z.position.z + (Math.random() - .5) * 2, T.boss ? ['health', 'ammo', 'grenade', 'ammo'][i] : eliteKind);
       if (T.boss) { state.bossKinds.push(u.kind); message(T.name + ' DOWN', '+' + pts.toLocaleString(), 2.2); look.shake = .5; }
     }
   }
@@ -1712,6 +1714,7 @@ const PICKUP_KINDS = {
   health: { color: 0x6dff8a, label: '+HEALTH' },
   ammo: { color: 0xffc34d, label: '+AMMO' },
   grenade: { color: 0xff7a4d, label: '+GRENADE' },
+  scrap: { color: 0xffc34d, label: '+' + SCRAP_BAG + ' SCRAP' },
 };
 function dropPickup(x, z, kind) {
   if (!kind) {
@@ -1728,6 +1731,10 @@ function dropPickup(x, z, kind) {
   } else if (kind === 'ammo') {
     mesh(new THREE.BoxGeometry(.55, .28, .34), mat(0x4a5230, { roughness: .8 }), 0, 0, 0, inner);
     for (let i = 0; i < 5; i++) mesh(new THREE.CylinderGeometry(.025, .025, .16, 6), mat(0xd8a640, { metalness: .8, roughness: .3 }), -.18 + i * .09, .22, 0, inner);
+  } else if (kind === 'scrap') {
+    mesh(new THREE.SphereGeometry(.26, 10, 8), mat(0x6a4a1a, { roughness: .9 }), 0, 0, 0, inner).scale.y = .8;
+    mesh(new THREE.CylinderGeometry(.08, .12, .12, 8), mat(0x3a2a10, { roughness: .9 }), 0, .24, 0, inner);
+    for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(.1, .06, .1), mat(0xd8a640, { metalness: .8, roughness: .3 }), Math.cos(i * 1.6) * .18, .14, Math.sin(i * 1.6) * .18, inner);
   } else {
     mesh(new THREE.SphereGeometry(.16, 12, 10), nadeMat, 0, 0, 0, inner);
     mesh(new THREE.CylinderGeometry(.05, .05, .1, 8), mat(0x777777, { metalness: .8 }), 0, .17, 0, inner);
@@ -1737,17 +1744,28 @@ function dropPickup(x, z, kind) {
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: K.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.scale.setScalar(1.3); g.add(glow);
   g.position.set(x, .5, z);
-  g.userData = { kind, t: 25, inner };
+  g.userData = { kind, t: kind === 'scrap' ? 10 : 25, inner };
   scene.add(g);
   pickups.push(g);
   state.net?.dropped(g);
 }
 
+function dropBag() {
+  for (let i = 0; i < 8; i++) {
+    const a = R() * Math.PI * 2, d = 5 + R() * 4, x = camera.position.x + Math.cos(a) * d, z = camera.position.z + Math.sin(a) * d;
+    if (blocked(x, z, .5)) continue;
+    dropPickup(x, z, 'scrap');
+    toast('SCRAP BAG DROPPED', 1.2);
+    return true;
+  }
+  return false;
+}
 function collect(p) {
   const k = p.userData.kind;
   if (k === 'health') player.hp = Math.min(stats.maxHp, player.hp + 35);
   if (k === 'ammo') player.slots.forEach(i => (player.reserve[i] = Math.min(WEAPONS[i].maxReserve, player.reserve[i] + magSize(i) * (WEAPONS[i].pickup ?? 1))));
   if (k === 'grenade') player.nades = Math.min(stats.nadeMax, player.nades + 1);
+  if (k === 'scrap') state.bonusScrap = (state.bonusScrap || 0) + SCRAP_BAG;
   floater(p.position.x, 1.3, p.position.z, PICKUP_KINDS[k].label, 'pick');
   sfx.pickup(); haptic('LIGHT');
 }
@@ -1839,7 +1857,7 @@ function runSummary() {
     score: state.score, wave: state.wave, startWave: state.startWave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
-    maxWave: state.maxWave || 0, cleared: !!state.cleared, extracted: state.extracted || 0,
+    maxWave: state.maxWave || 0, cleared: !!state.cleared, extracted: state.extracted || 0, event: !!live.event, bonusScrap: state.bonusScrap || 0,
   };
 }
 
@@ -1891,7 +1909,8 @@ function grantRewards() {
   const before = unlockedSet(), lvlBefore = levelInfo().level;
   const today = new Date().toDateString(), daily = profile.lastDaily !== today && state.score > 0;
   const played = state.wave - state.startWave + 1;
-  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune * live.scrap);
+  const bags = state.bonusScrap || 0;
+  const scrap = Math.round((state.score / 150 + played * 6 + state.bossKinds.length * 60) * (daily ? 2 : 1) * stats.fortune * live.scrap) + bags;
   const xp = Math.round((state.score / 10 + played * 50) * live.xp);
   profile.scrap += scrap;
   profile.xp += xp;
@@ -1910,6 +1929,7 @@ function grantRewards() {
   profile.fresh = [...new Set([...profile.fresh, ...fresh])];
   saveProfile();
   chip('+' + scrap.toLocaleString() + ' 🔩 SCRAP' + (daily ? ' (DAILY x2)' : '') + (live.scrap > 1 ? ' (' + live.label + ' x' + live.scrap + ')' : ''), 'gold');
+  if (bags) chip('+' + bags.toLocaleString() + ' 🔩 FROM SCRAP BAGS', 'gold');
   chip('+' + xp.toLocaleString() + ' XP' + (live.xp > 1 ? ' (' + live.label + ' x' + live.xp + ')' : ''));
   if (lvlAfter > lvlBefore) chip('LEVEL UP · ' + lvlAfter, 'hot');
   if (fresh.length === 1) {
@@ -2142,12 +2162,12 @@ function updatePlayer(dt) {
   aimTarget = null;
   camera.updateMatrixWorld();
   raycaster.setFromCamera(center, camera); raycaster.far = w.range;
-  const live = zombies.filter(z => !z.userData.dead && z.userData.rise < .5);
-  const h = raycaster.intersectObjects([...live, ...solids], true)[0];
+  const upright = zombies.filter(z => !z.userData.dead && z.userData.rise < .5);
+  const h = raycaster.intersectObjects([...upright, ...solids], true)[0];
   if (h?.object.userData.zroot) aimTarget = h.object.userData.zroot;
 
   look.assist = 1;
-  if (settings.aimAssist) {
+  if (settings.aimAssist && !live.noAssist) {
     const t = assistTarget();
     if (t) {
       look.assist = .45 + .55 * t.score;
@@ -2181,6 +2201,10 @@ function updatePlayer(dt) {
     if (d < 3.5 * stats.magnet) { p.position.x += dx / d * dt * 6 * stats.magnet; p.position.z += dz / d * dt * 6 * stats.magnet; }
     if (d < 1.1 && !state.net?.downed) { collect(p); state.net?.collected(p); scene.remove(p); pickups.splice(k, 1); }
     else if (u.t <= 0) { scene.remove(p); pickups.splice(k, 1); }
+  }
+  if (live.scrapBag && !state.between && (!state.net || state.net.host)) {
+    state.bagT -= dt;
+    if (state.bagT <= 0) { state.bagT = dropBag() ? live.scrapBag : 1; }
   }
 
   for (let k = grenades.length - 1; k >= 0; k--) {
@@ -2524,7 +2548,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', weeklyVeteran: 'deadzone.weekly.veteran', weeklySurvivor: 'deadzone.weekly.survivor', extract: 'deadzone.extract', event: 'deadzone.event' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2537,7 +2561,7 @@ const gameCenter = {
     if (!this.player) return null;
     try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.weeklySurvivor : run?.difficultyId === 'veteran' ? LEADERBOARDS.weeklyVeteran : LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.weeklySurvivor : run?.difficultyId === 'veteran' ? LEADERBOARDS.weeklyVeteran : LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : run?.event ? [LEADERBOARDS.score, LEADERBOARDS.wave, LEADERBOARDS.event] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
   guard: null,
   async submit(score, wave, context, run) {
     const rejected = run && this.guard?.(run);
@@ -2552,7 +2576,7 @@ const gameCenter = {
 function saveRun() {
   if (!state.score) return;
   const runs = store.get('runs', []);
-  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave });
+  runs.push({ score: state.score, wave: state.wave, kills: state.kills, diff: state.runDifficulty || settings.difficulty, date: Date.now(), code: myCode(), type: state.runType || 'normal', seed: state.seed, start: state.startWave, event: live.event || undefined });
   runs.sort((a, b) => b.score - a.score);
   store.set('runs', runs.slice(0, 25));
 }

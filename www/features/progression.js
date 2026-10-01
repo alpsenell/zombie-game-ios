@@ -1,6 +1,7 @@
 import { FEATURES } from './index.js';
 import { CSS } from './progression/style.js';
 import * as D from './progression/data.js';
+import { ladderRun } from './events.js';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const native = {
@@ -441,7 +442,7 @@ function init(api) {
     return count;
   }
 
-  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', map: e?.map || api.currentMap, missions: [], ach: [], mastery: {}, levels: {} }; }
+  function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', map: e?.map || api.currentMap, event: ladderRun(e?.type), missions: [], ach: [], mastery: {}, levels: {} }; }
   bus.on('run:start', e => { closeStreak(); refreshMissions(); run = newRun(e); });
   bus.on('kill', e => {
     const s = P.stats;

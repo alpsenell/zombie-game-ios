@@ -1,4 +1,5 @@
 import { mulberry32, hashSeed } from '../../core.js';
+import { EVENTS, eventAt } from '../events.js';
 
 export const DAY = 86400000;
 export const dayNum = (t = Date.now()) => Math.floor(t / DAY);
@@ -49,7 +50,9 @@ export const TEMPLATES = [
   { id: 'sheads', ev: 'kill', season: [150, 250, 400], w: 1, fn: add(e => e.head), text: n => n0(n) + ' HEADSHOTS THIS WEEK' },
   { id: 'selite', ev: 'kill', season: [15, 25, 40], w: 1, fn: add(e => e.elite), avail: c => c.tier >= 1, text: n => 'KILL ' + n + ' ELITES THIS WEEK' },
   { id: 'swaves', ev: 'wave:clear', season: [60, 90, 120], w: 1, fn: add(() => true), text: n => 'CLEAR ' + n + ' WAVES THIS WEEK' },
+  { id: 'event', ev: 'wave:clear', daily: [6, 9, 12], w: 1.3, extra: true, fn: (e, m, run) => (run.event ? Math.max(m.p, e.wave) : m.p), arg: c => c.event, text: (n, a) => 'CLEAR WAVE ' + n + ' IN A ' + (EVENTS.find(e => e.id === a)?.name || 'WEEKEND EVENT') + ' RUN' },
 ];
+export const eventDay = key => { const ev = eventAt(Date.parse(key + 'T12:00:00Z')); return ev.live ? ev.id : null; };
 export const SEASON_CHALLENGE = { scrap: 300, xp: 1000, seasonXp: 1500 };
 export const template = id => TEMPLATES.find(t => t.id === id);
 
@@ -64,11 +67,13 @@ function build(t, period, key, slot, ctx, rnd, rr = 0) {
   return { ...base, scrap: period === 'daily' ? round(100 * k, 5) : round(600 * k, 10), xp: period === 'daily' ? round(400 * k, 50) : round(2500 * k, 50) };
 }
 function pool(period, ctx, exclude = []) {
-  return TEMPLATES.filter(t => t[period] && (!t.avail || t.avail(ctx)) && !exclude.includes(t.id));
+  return TEMPLATES.filter(t => t[period] && !t.extra && (!t.avail || t.avail(ctx)) && !exclude.includes(t.id));
 }
 export function generate(period, key, ctx, count = 3) {
   const rnd = mulberry32(hashSeed(period + ':' + key)), list = pool(period, ctx), out = [];
   while (out.length < count && list.length) out.push(build(list.splice((rnd() * list.length) | 0, 1)[0], period, key, out.length, ctx, rnd));
+  const event = period === 'daily' ? eventDay(key) : null;
+  if (event) out.push(build(template('event'), period, key, out.length, { ...ctx, event }, rnd));
   return out;
 }
 export function reroll(period, key, list, slot, ctx, count) {

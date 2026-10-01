@@ -43,6 +43,10 @@ export const WEAPON_SKINS = [
   { name: 'BULLSEYE', base: 0xe8e4d8, metal: 0xc0302a, dark: 0x2a0a08, stripes: ['#e8e4d8', '#c0302a', '#e8e4d8'], req: 'event:headhunter', like: 4 },
   { name: 'HORDEBREAKER', base: 0x3a4a1a, metal: 0x5a6a2a, dark: 0x0e140a, glow: 0x9aff3a, camo: ['#3a4a1a', '#1e2a0e', '#6a7a2a'], req: 'event:hordenight', like: 10 },
   { name: 'ABYSSAL', base: 0x0a2a30, metal: 0xc08a2a, dark: 0x041418, glow: 0x3ae0d0, metallic: true, req: 'seasonskin:2', season: 2, like: 8 },
+  { name: 'ECLIPSE PRIME', base: 0x1a0204, metal: 0x6a1010, dark: 0x000000, metallic: true, glow: 0xff1a1a, anim: 'cycle', req: 'eventtop:bloodmoon', like: 12 },
+  { name: 'JACKPOT PRIME', base: 0xe0b020, metal: 0x2a8a3a, dark: 0x5a4008, metallic: true, glow: 0xffd040, anim: 'pulse', stripes: ['#e0b020', '#c08a10', '#f0d060'], req: 'eventtop:scraprush', like: 14 },
+  { name: 'BULLSEYE PRIME', base: 0xe8e4d8, metal: 0xc0302a, dark: 0x2a0a08, metallic: true, glow: 0xff3a2a, anim: 'pulse', stripes: ['#e8e4d8', '#c0302a', '#e8e4d8'], req: 'eventtop:headhunter', like: 4 },
+  { name: 'HORDEBREAKER PRIME', base: 0x3a4a1a, metal: 0x5a6a2a, dark: 0x0e140a, metallic: true, glow: 0x9aff3a, anim: 'cycle', camo: ['#3a4a1a', '#1e2a0e', '#6a7a2a'], req: 'eventtop:hordenight', like: 10 },
 ];
 
 export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND'];
