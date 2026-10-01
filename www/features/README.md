@@ -17,7 +17,7 @@ Each feature lives in `features/<name>.js`, exports `{ id, init(api) }`, and is 
 - `mission:complete` `{ id, period: 'daily' | 'weekly', xp, scrap }` — a mission reward was claimed (progression)
 - `run:submitted` `{ type, board, result }` — after a Game Center submit; `result` is `{ rank, score, total, ... }`, `{ rejected: reason }` or `null`
 - `rival:passed` `{ name, rank, score, count, board }` (competitive)
-- `streak:claim` `{ count, total }` — the daily streak reward was claimed (progression)
+- `streak:claim` `{ count, total }` — the daily streak reward was claimed (progression) · `streak:repair` `{ count, cost }` — a broken streak was bought back
 
 ## Runs
 `api.startGame({ type, seed, difficulty, slots })` — `type` is `normal | daily | ranked | coop`; `seed` makes wave composition,
@@ -70,6 +70,13 @@ Slots in `SLOTS` and encoded `EXTRA_SLOTS` are bit-packed into the 64-bit Game C
 bit range (`2 ** bits`) must declare `like`, the index of a lower item they encode as, so other players see the closest look while the
 owner sees the real one. Suits can reuse another suit's geometry with `parts` plus colour overrides (`iron`, `cloth`, `fur`, `hood`).
 Season rewards: premium tier 1 is the season suit (claimed automatically on purchase), tier 20 the season weapon skin (`req: 'seasonskin:n'`).
+
+## Streak
+`streakVisit(s, today, now)` in `features/progression/data.js` counts one visit per UTC day. Reaching a multiple of `SHIELD_EVERY` (7) days earns a
+streak shield (`s.shields`, at most `SHIELD_MAX`); a missed day is covered by a shield automatically (`s.shielded`), otherwise the streak breaks and
+`s.repair = { was, day, until, cost }` offers to buy it back for `repairCost(was)` scrap until `until` (24 h). `repairOffer(s, now)` returns the live
+offer with the restored `count`; `repairStreak(s, now)` applies it. The modal shows shields held, the next shield day and the RESTORE button;
+`api.progression.repairStreak()` performs the purchase.
 
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.

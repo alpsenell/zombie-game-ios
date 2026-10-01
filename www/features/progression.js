@@ -358,7 +358,7 @@ function init(api) {
   function streakCheck() {
     if (api.activeScreen !== api.ui.menu) return;
     const S = P.streak, today = D.dayNum();
-    if (D.streakVisit(S, today)) { checkAch(); save(); }
+    if (D.streakVisit(S, today, Date.now())) { checkAch(); save(); }
     updateBadges();
     if (S.shown !== today) { S.shown = today; save(); setTimeout(() => api.queueModal(done => { if (api.activeScreen !== api.ui.menu) return done(); openStreak(); modalDone = done; }), 450); }
   }
@@ -370,7 +370,9 @@ function init(api) {
     modal = el('div', 'pg-modal');
     const card = el('div', 'pg-card'), h = el('h3', '', 'DAY ');
     h.append(el('em', '', String(S.count)), document.createTextNode(' STREAK'));
-    const sub = S.broken ? el('small', 'warn', 'YOU MISSED A DAY — STREAK RESET TO DAY 1 (WAS ' + S.broken + ')')
+    const offer = D.repairOffer(S, Date.now());
+    const sub = S.shielded ? el('small', 'shield', '🛡 SHIELD USED — YOU MISSED ' + (S.shielded > 1 ? S.shielded + ' DAYS' : 'A DAY') + ' BUT YOUR STREAK HELD')
+      : S.broken ? el('small', 'warn', 'YOU MISSED A DAY — STREAK RESET TO DAY 1 (WAS ' + S.broken + ')')
       : el('small', '', claimed ? 'COME BACK TOMORROW FOR DAY ' + (S.count + 1) : S.count === 1 ? 'PLAY EVERY DAY TO GROW YOUR STREAK' : 'PLAYED ' + S.count + ' DAYS IN A ROW');
     const cal = el('div', 'pg-cal');
     for (let d = start; d < start + 7; d++) {
@@ -383,8 +385,16 @@ function init(api) {
     const extra = el('div', 'pg-extra'), next = D.nextMilestone(S.count);
     const line = (label, value) => { const d = el('div', '', label); d.appendChild(el('b', '', value)); extra.appendChild(d); };
     if (next) line('DAY ' + next.day + ' BONUS ', '+' + next.bonus.toLocaleString() + ' 🔩');
+    if (S.shieldEarned === today) line('🛡 SHIELD EARNED ', 'COVERS ONE MISSED DAY');
+    else line('🛡 STREAK SHIELDS ', S.shields ? '×' + S.shields : 'NONE' + (S.shields < D.SHIELD_MAX ? ' · DAY ' + D.nextShieldDay(S.count) : ''));
     if (profile.lastDaily !== new Date().toDateString()) line('FIRST RUN TODAY EARNS ', 'x2 SCRAP');
     const row = el('div', 'row'), reward = D.streakReward(S.count);
+    if (offer) {
+      const fix = el('button', 'ghost pg-repair', 'RESTORE DAY ' + offer.count + ' STREAK · 🔩 ' + offer.cost.toLocaleString());
+      fix.appendChild(el('small', '', 'OFFER ENDS IN ' + D.timeLeft(offer.until - Date.now()) + ' · YOU HAVE 🔩 ' + profile.scrap.toLocaleString()));
+      fix.onclick = () => repairStreak(fix);
+      extra.appendChild(fix);
+    }
     if (claimed) { const ok = el('button', 'cta', 'OK'); ok.onclick = closeStreak; row.appendChild(ok); }
     else {
       const b = el('button', 'cta gold', 'CLAIM +' + reward.total.toLocaleString() + ' 🔩');
@@ -411,6 +421,23 @@ function init(api) {
     updateBadges();
     setTimeout(closeStreak, 900);
     return r.total;
+  }
+  function repairStreak(anchor) {
+    const S = P.streak, offer = D.repairOffer(S, Date.now());
+    if (!offer) return 0;
+    if (profile.scrap < offer.cost) { if (anchor) pop(anchor, 'NEED ' + (offer.cost - profile.scrap).toLocaleString() + ' MORE 🔩'); api.haptic('LIGHT'); return 0; }
+    profile.scrap -= offer.cost;
+    const count = D.repairStreak(S, Date.now());
+    if (!count) { profile.scrap += offer.cost; return 0; }
+    save();
+    api.refreshProfileUI();
+    checkAch();
+    updateBadges();
+    bus.emit('streak:repair', { count, cost: offer.cost });
+    api.haptic('HEAVY'); api.sfx.init(); api.sfx.perk();
+    notify('STREAK RESTORED', 'DAY ' + count + ' · -' + offer.cost.toLocaleString() + ' 🔩', 'mission');
+    openStreak();
+    return count;
   }
 
   function newRun(e) { return { difficultyId: e?.difficultyId || api.settings.difficulty, type: e?.type || 'normal', missions: [], ach: [], mastery: {}, levels: {} }; }
@@ -454,7 +481,7 @@ function init(api) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else streakCheck(); });
 
   api.progression = {
-    state: P, data: D, claim, reroll, refreshMissions, openMissions, openStreak, claimStreak, streakCheck, syncNative,
+    state: P, data: D, claim, reroll, refreshMissions, openMissions, openStreak, claimStreak, repairStreak, streakCheck, syncNative,
     missions: () => [...(P.daily?.list || []), ...(P.weekly?.list || [])],
     mastery: id => D.masteryInfo(P.mastery[id]),
     prestige, prestigeOf: id => P.prestige[id] || 0,
