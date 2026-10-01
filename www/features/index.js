@@ -24,6 +24,7 @@ import * as mutators from './mutators.js';
 import * as mapevents from './mapevents.js';
 import * as featured from './featured.js';
 import * as ghost from './ghost.js';
+import * as friends from './friends.js';
 
 export const FEATURES = [
   cloudsave,
@@ -52,4 +53,5 @@ export const FEATURES = [
   mapevents,
   featured,
   ghost,
+  friends,
 ];
