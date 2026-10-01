@@ -33,7 +33,7 @@ export default {
     document.body.appendChild(el);
     api.registerScreen(el);
     const $ = s => el.querySelector(s), fg = $('.fg');
-    let used = false, timer = null, cost = 0, until = 0;
+    let used = false, timer = null, cost = 0, until = 0, token = false;
 
     const stop = () => { clearInterval(timer); timer = null; };
     const decline = () => {
@@ -46,6 +46,7 @@ export default {
       if (api.state.mode !== 'revive' || api.profile.scrap < cost) return;
       stop();
       api.profile.scrap -= cost;
+      if (token) api.market?.useRevive?.();
       api.saveProfile();
       api.refreshProfileUI();
       api.player.hp = api.player.lagHp = api.stats.maxHp * .5;
@@ -55,7 +56,7 @@ export default {
       api.message('REVIVED', 'BACK IN THE FIGHT', 1.8);
       api.sfx.perk();
       api.haptic('HEAVY');
-      api.bus.emit('revive', { cost, wave: api.state.wave });
+      api.bus.emit('revive', { cost, wave: api.state.wave, token });
     };
     const tick = () => {
       const left = Math.max(0, until - performance.now());
@@ -69,11 +70,12 @@ export default {
     api.deathGuards.push(() => {
       const s = api.state;
       if (used || s.runType === 'daily' || s.runType === 'ranked') return false;
-      cost = reviveCost(s.wave);
+      token = !!api.market?.hasRevive?.();
+      cost = token ? 0 : reviveCost(s.wave);
       if (api.profile.scrap < cost) return false;
       used = true;
       s.mode = 'revive';
-      $('#rv-yes').textContent = 'REVIVE — 🔩 ' + cost.toLocaleString();
+      $('#rv-yes').textContent = token ? 'REVIVE — FREE · REVIVE TOKEN' : 'REVIVE — 🔩 ' + cost.toLocaleString();
       $('#rv-bal').textContent = 'YOU HAVE 🔩 ' + api.profile.scrap.toLocaleString();
       until = performance.now() + DURATION;
       api.hint('');

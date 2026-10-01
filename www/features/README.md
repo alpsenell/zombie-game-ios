@@ -120,6 +120,18 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Black Market
+`features/market.js` is the scrap sink. `stock(dayKey, profile, SLOTS)` seeds three items from the day key: a discounted cosmetic
+(`discountPrice`, 40% off an unowned scrap cosmetic costing `MIN_DISCOUNT_COST`+), an exclusive weapon skin (`req: 'market:<id>'` in
+`character.js`, only ever sold here, `EXCLUSIVE_COST`) and one consumable from `CONSUMABLES` (streak shield → `progression.streak.shields`,
+revive token → `profile.market.revives`, used by `features/revive.js`, mission reroll → `profile.market.rerolls`, used by `progression.js`).
+The day's picks and `sold` flags live in `profile.market`. The supply crate (`CRATE_COST`) draws from `cratePool` with no duplicates;
+`openCrate` forces a weapon skin every `PITY_EVERY` crates (`pity` counter) and pays a shard once the pool is empty; `SHARDS_PER_SKIN`
+shards redeem the day's exclusive. In-run perk reroll: a REROLL button on the perk screen (`#perk-reroll`) costs 100 × wave scrap, once
+per wave, normal and extraction runs only, and re-seeds `offerPerks` through `state.perkRerolls` (`state.perkKit` hides it during starting
+kits). Events: `market:buy` `{ item, cost }`, `market:crate` `{ kind, slot, i, name, shards }`, `perk:reroll` `{ wave, cost }`; every
+purchase also emits `purchase` `{ kind: 'scrap', item, cost }`. `api.market = { state, stock, buy, buyCrate, redeem, open, hasRevive, useRevive }`.
+
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
 - `api.live` holds per-run multipliers and twists `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label, event, alive, noAssist, eliteHeadOnly, scrapBag }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP, `event` is true only for a normal deploy during a live event).

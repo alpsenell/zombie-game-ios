@@ -898,7 +898,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12 });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0, bonusScrap: 0, bagT: 12, perkRerolls: 0, perkKit: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -1794,10 +1794,11 @@ function majorOffer(kit) {
 
 function offerPerks(kit = 0) {
   state.mode = 'perk';
+  state.perkKit = kit;
   const major = majorOffer(kit);
   ui.perkTitle.textContent = kit ? 'STARTING KIT' : 'WAVE ' + state.wave + ' CLEARED';
   ui.perkSub.textContent = kit ? 'UPGRADE ' + (state.kitTotal - kit + 1) + ' OF ' + state.kitTotal + ' · WAVE ' + state.startWave + ' CHECKPOINT' + (major ? ' · MAJOR' : '') : major ? 'MAJOR UPGRADE — CHOOSE WISELY' : 'CHOOSE AN UPGRADE';
-  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave + (kit ? ':' + kit : '')));
+  const r = state.seed == null ? R : mulberry32(hashSeed(state.seed + ':perks:' + state.wave + (kit ? ':' + kit : '') + (state.perkRerolls ? ':r' + state.perkRerolls : '')));
   const taken = p => state.perks.filter(n => n === p.name).length;
   const ok = p => (!p.when || p.when()) && (!p.max || taken(p) < p.max);
   const pool = PERKS.filter(p => (major ? p.rare || p.legendary : !p.rare && !p.legendary) && ok(p));
