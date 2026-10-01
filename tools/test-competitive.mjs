@@ -4,6 +4,7 @@ import { serve, launch, openGame } from './smoke.mjs';
 const SHOTS = process.env.SHOTS;
 
 function mockGameCenter() {
+  localStorage.setItem('deadzone.tutorial', 'true');
   const others = n => Array.from({ length: n }, (_, i) => ({ name: i === 198 ? '<img src=x onerror="window.__xss=1">' : i === 199 ? 'NightOwl' : 'PLAYER' + (i + 1), score: 200000 - i * 1000, context: 0 }));
   const boards = {
     'deadzone.highscore': { others: others(60), me: null },
@@ -245,11 +246,11 @@ try {
   await page.close();
 
   const b = await openGame(browser, url, {
-    init: () => localStorage.setItem('deadzone.runs', JSON.stringify([
+    init: () => (localStorage.setItem('deadzone.tutorial', 'true'), localStorage.setItem('deadzone.runs', JSON.stringify([
       { score: 5000, wave: 4, kills: 40, diff: 'survivor', date: Date.now(), type: 'normal' },
       { score: 3000, wave: 3, kills: 30, diff: 'survivor', date: Date.now() },
       { score: 9000, wave: 5, kills: 60, diff: 'veteran', date: Date.now(), type: 'ranked', seed: null },
-    ])),
+    ]))),
   });
   await b.page.click('#start');
   await b.page.waitForFunction(() => window.__game.api.competitive.rival.ready);

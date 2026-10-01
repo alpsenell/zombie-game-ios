@@ -13,6 +13,7 @@ import * as comeback from './comeback.js';
 import * as notify from './notify.js';
 import * as levels from './levels.js';
 import * as nextup from './nextup.js';
+import * as firstdeploy from './firstdeploy.js';
 
 export const FEATURES = [
   cloudsave,
@@ -30,4 +31,5 @@ export const FEATURES = [
   notify,
   levels,
   nextup,
+  firstdeploy,
 ];

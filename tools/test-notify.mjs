@@ -16,7 +16,7 @@ function mock({ status = 'notDetermined', native = true, profile = null } = {}) 
     if (!sessionStorage.getItem('seeded')) {
       sessionStorage.setItem('seeded', '1');
       localStorage.clear();
-      ${profile ? `localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(profile))});` : ''}
+      localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(profile || { runs: 1 }))});
       localStorage.setItem('deadzone.tutorial', 'true');
     }
     window.__status = ${JSON.stringify(status)};

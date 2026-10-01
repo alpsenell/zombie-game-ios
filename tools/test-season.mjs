@@ -15,6 +15,7 @@ function mock({ now = NOW, owned = [], share = true, profile } = {}) {
     const T = ${now}, t0 = performance.now();
     Date.now = () => T + (performance.now() - t0);
     ${profile ? `localStorage.setItem('deadzone.profile', ${JSON.stringify(JSON.stringify(profile))});` : ''}
+    localStorage.setItem('deadzone.tutorial', 'true');
     const owned = new Set(${JSON.stringify(owned)});
     window.__calls = [];
     window.__shared = [];

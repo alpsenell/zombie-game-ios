@@ -93,6 +93,16 @@ season requirements have their own surfaces and are skipped). Goals sort by comp
 shows READY and opens the Armory, a cosmetic opens the Locker. Refreshes on every return to the menu, `run:end`, `purchase` and `level:reward`.
 `api.nextup = { goals, progress, open, close, render }`.
 
+## First deploy
+`features/firstdeploy.js` turns a fresh install's first DEPLOY into a training run (`type: 'tutorial'`, Recruit, fixed seed, Street): three short
+fixed waves (`WAVES`, applied by overriding `state.queue` on `wave:start`), contextual hints (reload, grenade, supply drop, radar, low health) and a
+victory after wave 3 that ends the run with TRAINING COMPLETE and unlocks the MP7 as primary. A training run pays scrap and XP but sets no records,
+saves no run and submits nothing (`game.js` guards on `runType === 'tutorial'`). SKIP TRAINING is always available; the first normal run to reach
+wave 3 still grants the MP7 once (`profile.tutorial.reward`). The menu is staged for new profiles (`profile.tutorial.staged`): until wave 5 only
+DEPLOY, ARMORY, LOCKER, the streak and NEXT UP show; wave 5 reveals the Daily, missions and events; wave 10 reveals ranked, co-op and the season.
+Profiles that predate the feature (any run, any best wave, or the old `deadzone.tutorial` flag) are marked done and unstaged. The streak popup now
+waits for the first run (`profile.runs > 0`). Events: `tutorial:skip`, `tutorial:reward` `{ weapon }`. `api.firstdeploy = { pending, stage, applyStage, renderMenu, tutorialOpts, waveList, state }`.
+
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
 - `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).
