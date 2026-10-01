@@ -10,6 +10,7 @@ function mockGameCenter() {
     'deadzone.highscore': { others: others(60), me: null },
     'deadzone.bestwave': { others: [], me: null },
     'deadzone.daily': { others: others(40), me: null },
+    'deadzone.daily.rookie': { others: others(40), me: null },
     'deadzone.weekly': { others: others(200), me: null },
   };
   const calls = [];
@@ -93,7 +94,7 @@ try {
   assert.deepEqual(det.a, det.b);
   assert.notDeepEqual(det.a, det.c);
   assert.equal(det.d.seed, det.expectSeed);
-  assert.equal(det.d.difficulty, 'veteran');
+  assert.equal(det.d.difficulty, 'survivor');
   assert.ok(!det.premium && det.distinct);
   ok('daily seed determinism (waves 1-3 identical, non-premium loadout)');
 
@@ -108,14 +109,14 @@ try {
   await page.click('#cm-go');
   const dailyStart = await page.evaluate(() => { const { api } = window.__game, d = api.competitive.dailyChallenge(); return { type: api.state.runType, seed: api.state.seed, diff: api.state.runDifficulty, slots: api.player.slots, want: d.slots }; });
   assert.equal(dailyStart.type, 'daily');
-  assert.equal(dailyStart.diff, 'veteran');
+  assert.equal(dailyStart.diff, 'survivor');
   assert.deepEqual(dailyStart.slots, dailyStart.want);
   await page.waitForFunction(() => window.__game.api.competitive.rival.ready);
   await play(page, 30 * 25);
   await shot(page, 'hud-daily-844');
   await resetCalls(page);
   await endRun(page);
-  assert.deepEqual(await submits(page), ['deadzone.daily']);
+  assert.deepEqual(await submits(page), ['deadzone.daily.rookie']);
   assert.match(await page.textContent('#over-rank'), /DAILY RANK #\d/);
   ok('daily run submits only to deadzone.daily');
 

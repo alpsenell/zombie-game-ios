@@ -1,7 +1,7 @@
 import { mulberry32 } from '../core.js';
 
-export const BOARDS = { daily: 'deadzone.daily', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20' };
-export const SPRINT_WAVE = 20;
+export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20' };
+export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFICULTY = 'survivor';
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
 const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime' };
@@ -49,13 +49,14 @@ export function timeLeft(ms) {
   return d ? d + 'D ' + h + 'H' : h ? h + 'H ' + (m % 60) + 'M' : Math.max(1, m) + 'M';
 }
 
-export function dailyChallenge(api, date = utcDay()) {
-  const seed = api.hashSeed('daily-' + date), r = mulberry32(seed ^ 0x5bd1e995);
+export const dailyBracket = level => (level < ROOKIE_LEVEL ? 'rookie' : 'veteran');
+export function dailyChallenge(api, date = utcDay(), level = api.levelInfo().level) {
+  const seed = api.hashSeed('daily-' + date), r = mulberry32(seed ^ 0x5bd1e995), bracket = dailyBracket(level);
   const pool = api.WEAPONS.filter(w => !w.premium);
   const a = pool[(r() * pool.length) | 0], rest = pool.filter(w => w !== a), b = rest[(r() * rest.length) | 0];
   const maps = Array.isArray(api.MAPS) && api.MAPS.length ? api.MAPS : null;
   const map = maps ? maps[(r() * maps.length) | 0] : null;
-  return { date, seed, difficulty: DAILY_DIFFICULTY, slots: [api.weaponIndex(a.id), api.weaponIndex(b.id)], map };
+  return { date, seed, bracket, difficulty: bracket === 'rookie' ? ROOKIE_DIFFICULTY : DAILY_DIFFICULTY, slots: [api.weaponIndex(a.id), api.weaponIndex(b.id)], map, waves: DAILY_WAVES };
 }
 
 export function rankedLoadout(api) {
@@ -85,8 +86,9 @@ export function plausible(run, api, now = Date.now()) {
   }
   if (run.type === 'daily') {
     const today = dailyChallenge(api, utcDay(now));
-    if (run.difficultyId !== DAILY_DIFFICULTY || (run.slots || []).join() !== today.slots.join()) return 'NOT THE DAILY LOADOUT';
+    if (![DAILY_DIFFICULTY, ROOKIE_DIFFICULTY].includes(run.difficultyId) || (run.slots || []).join() !== today.slots.join()) return 'NOT THE DAILY LOADOUT';
     if (run.seed !== today.seed) return 'DAILY CHALLENGE ALREADY RESET';
+    if (run.wave > DAILY_WAVES) return 'THE DAILY IS ' + DAILY_WAVES + ' WAVES';
   }
   return null;
 }
@@ -155,11 +157,12 @@ export function init(api) {
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const fmt = n => Math.round(n).toLocaleString();
-  const resetIn = board => { const t = comp().resets[BOARDS[board]]; return timeLeft((t && t > Date.now() ? t : nextReset(board)) - Date.now()); };
+  const boardId = b => (b === 'daily' && dailyBracket(api.levelInfo().level) === 'rookie' ? BOARDS.dailyRookie : BOARDS[b]);
+  const resetIn = board => { const t = comp().resets[boardId(board)]; return timeLeft((t && t > Date.now() ? t : nextReset(board)) - Date.now()); };
   const signedIn = async () => gc.available() && (gc.player || await gc.signIn());
   const loadBoard = async (board, opts = {}) => {
-    const r = await gc.call('loadScores', { leaderboardId: BOARDS[board], ...opts });
-    if (r?.nextStart) comp().resets[BOARDS[board]] = r.nextStart;
+    const r = await gc.call('loadScores', { leaderboardId: boardId(board), ...opts });
+    if (r?.nextStart) comp().resets[boardId(board)] = r.nextStart;
     return r;
   };
   const weekKey = () => utcDay(weekStart());
@@ -218,7 +221,7 @@ export function init(api) {
   }
 
   const daily = () => dailyChallenge(api);
-  const dailyOpts = () => { const d = daily(); return { type: 'daily', seed: d.seed, difficulty: d.difficulty, slots: d.slots, ...(d.map ? { map: d.map.id } : {}), replay: dailyOpts }; };
+  const dailyOpts = () => { const d = daily(); return { type: 'daily', seed: d.seed, difficulty: d.difficulty, slots: d.slots, maxWave: d.waves, ...(d.map ? { map: d.map.id } : {}), replay: dailyOpts }; };
   const rankedOpts = () => ({ type: 'ranked', difficulty: api.settings.difficulty, slots: rankedLoadout(api).slots, replay: rankedOpts });
   const slotNames = slots => slots.map(i => api.WEAPONS[i].name).join(' + ');
 
@@ -231,7 +234,7 @@ export function init(api) {
   let leagueBtn = null;
   modes.append(dailyBtn, rankedBtn);
   function renderMenu() {
-    dailySmall.textContent = api.DIFFICULTIES[DAILY_DIFFICULTY].name + ' · NEW IN ' + resetIn('daily');
+    dailySmall.textContent = DAILY_WAVES + ' WAVES · ' + api.DIFFICULTIES[daily().difficulty].name + ' · NEW IN ' + resetIn('daily');
     const nb = badge(currentLeague(), 'button');
     nb.id = 'cm-league';
     nb.setAttribute('aria-label', 'League');
@@ -267,19 +270,21 @@ export function init(api) {
     const d = daily(), c = comp(), mine = c.daily?.date === d.date ? c.daily : null, token = ++sheetToken;
     sheetMode = 'daily';
     title.textContent = 'DAILY CHALLENGE';
-    sub.textContent = new Date(d.date + 'T00:00:00Z').toUTCString().slice(0, 11).toUpperCase() + ' · SAME RUN FOR EVERY SURVIVOR';
+    const rookie = d.bracket === 'rookie';
+    sub.textContent = new Date(d.date + 'T00:00:00Z').toUTCString().slice(0, 11).toUpperCase() + (rookie ? ' · ROOKIE BRACKET' : ' · SAME RUN FOR EVERY SURVIVOR');
     setCells([
       ['loadout', 'ASSIGNED LOADOUT', slotNames(d.slots)],
-      ['diff', 'DIFFICULTY', api.DIFFICULTIES[d.difficulty].name + ' · x' + api.DIFFICULTIES[d.difficulty].score],
+      ['diff', 'DIFFICULTY', api.DIFFICULTIES[d.difficulty].name + (rookie ? ' · ROOKIE' : ' · x' + api.DIFFICULTIES[d.difficulty].score)],
+      ['format', 'FORMAT', d.waves + ' WAVES'],
       ...(d.map ? [['map', 'MAP', String(d.map.name || d.map.id).toUpperCase()]] : []),
       ['reset', 'RESETS IN', resetIn('daily')],
-      ['rewards', 'REWARDS', 'SCRAP + XP'],
       ['best', 'BEST TODAY', mine?.best ? fmt(mine.best) : '—'],
       ['rank', 'YOUR RANK', mine?.rank ? '#' + fmt(mine.rank) + ' / ' + fmt(mine.total) : gc.available() ? '…' : 'iOS APP'],
+      ['tries', 'ATTEMPTS TODAY', String(mine?.attempts || 0)],
     ]);
     note.textContent = '';
     ladder.replaceChildren();
-    rules.textContent = 'SAME SEED, HORDE, PERKS AND GUNS FOR EVERYONE. NO PREMIUM WEAPONS. RETRY AS OFTEN AS YOU LIKE — YOUR BEST SCORE COUNTS. NEW CHALLENGE AT 00:00 UTC.';
+    rules.textContent = d.waves + ' WAVES. SAME SEED, HORDE, PERKS AND GUNS FOR EVERYONE. NO PREMIUM WEAPONS. CLEAR WAVE ' + d.waves + ' TO BANK YOUR SCORE — A DEATH COUNTS TOO. RETRY AS OFTEN AS YOU LIKE; YOUR BEST SCORE COUNTS. NEW CHALLENGE AT 00:00 UTC.' + (rookie ? ' ROOKIE BRACKET: UNDER LEVEL ' + ROOKIE_LEVEL + ' YOU PLAY ON SURVIVOR AND RANK AGAINST OTHER ROOKIES.' : '');
     go.textContent = 'START DAILY';
     go.onclick = () => api.startGame(dailyOpts());
     api.showScreen(sheet);
@@ -356,7 +361,7 @@ export function init(api) {
   boardPanel.querySelector('h2').after(seg, boardNote);
   function selectBoard(b) {
     boardSel = b;
-    api.boardView.id = BOARDS[b];
+    api.boardView.id = boardId(b);
     api.boardView.filter = filters[b];
     api.boardView.format = b === 'sprint' ? sprintTime : null;
     api.boardView.local = b === 'sprint' ? sprintRows : null;
@@ -501,8 +506,11 @@ export function init(api) {
     const l = currentLeague(), parts = [];
     if (run.type === 'daily') {
       const d = comp().daily;
+      if (run.cleared) parts.push('WAVE ' + (run.maxWave || DAILY_WAVES) + ' CLEARED');
       parts.push('DAILY BEST ' + fmt(d?.best || run.score));
       if (d?.rank) parts.push('#' + fmt(d.rank) + ' / ' + fmt(d.total));
+      if (d?.attempts) parts.push('ATTEMPT ' + d.attempts);
+      if (run.difficultyId === ROOKIE_DIFFICULTY) parts.push('ROOKIE BRACKET');
     } else if (run.type === 'ranked') {
       if (l) parts.push(...[pctText(l)].filter(Boolean), 'WEEKLY #' + fmt(l.rank) + ' / ' + fmt(l.total));
       else parts.push(gc.available() ? 'WEEKLY BEST ' + fmt(comp().weekly?.best || run.score) : 'LEAGUES USE GAME CENTER');
@@ -519,9 +527,11 @@ export function init(api) {
     lastRun = run;
     const c = comp();
     if (run.type === 'daily' && run.seed === daily().seed) {
-      if (c.daily?.date !== daily().date) c.daily = { date: daily().date, best: 0 };
+      if (c.daily?.date !== daily().date) c.daily = { date: daily().date, best: 0, attempts: 0 };
       c.daily.best = Math.max(c.daily.best || 0, run.score);
+      c.daily.attempts = (c.daily.attempts || 0) + 1;
     }
+    if (run.type === 'daily' && run.cleared) setTimeout(() => { const h = $('#over h2'); if (h) h.textContent = 'DAILY COMPLETE'; }, 0);
     if (run.type === 'ranked') {
       if (c.weekly?.week !== weekKey()) c.weekly = { week: weekKey(), best: 0 };
       c.weekly.best = Math.max(c.weekly.best || 0, run.score);
@@ -539,5 +549,5 @@ export function init(api) {
   bus.on('app:ready', () => { payWeek(); if (gc.available()) refreshLeague().then(payWeek); });
   bus.on('screen', ({ id }) => { if (id === 'menu') payWeek(); });
 
-  api.competitive = { BOARDS, LEAGUES, leagueFor, dailyChallenge: () => daily(), rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague, payWeek, heldRank, sprintTime };
+  api.competitive = { BOARDS, LEAGUES, leagueFor, dailyChallenge: () => daily(), dailyBracket: () => dailyBracket(api.levelInfo().level), boardId, rankedLoadout: () => rankedLoadout(api), plausible: run => plausible(run, api), rival: rv, openDaily, openRanked, openBoard, refreshLeague, payWeek, heldRank, sprintTime };
 }
