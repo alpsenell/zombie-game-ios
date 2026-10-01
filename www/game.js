@@ -954,7 +954,8 @@ function startGame(opts = {}) {
   applyLoadoutToGuns();
   selectWeapon(player.slots[0], true);
   ui.swap.classList.toggle('hidden', player.slots[0] === player.slots[1]);
-  if (state.startWave > 1) {
+  if (opts.resume) {}
+  else if (state.startWave > 1) {
     state.kitTotal = Math.min(10, Math.ceil((state.startWave - 1) / 2));
     state.kitMajors = Math.min(state.kitTotal, Math.floor((state.startWave - 1) / MAJOR_EVERY));
     player.nades = stats.nadeMax;
@@ -3044,7 +3045,7 @@ const api = {
   MAPS: MAPS.map(({ id, name, desc }) => ({ id, name, desc })), get currentMap() { return world.map.id; }, loadMap: selectMap,
   offerPerks, nova, deathGuards, gameOver, deployOpts: () => ({}),
 };
-Object.assign(api, { MUTATIONS, rosterWeights, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
+Object.assign(api, { MUTATIONS, rosterWeights, applyMod, netHooks: { animateZombie, killZombie, ignite, chill, thaw, iceMat, spit, tracer, sparks, slamRing, SLAM_R, waveComposition, waveCleared, gameOver, screamFx } });
 for (const f of FEATURES) { try { f.init(api); } catch (e) { console.error('feature init failed', f.id, e); } }
 if ($('#cm-league')) $('#menu .records').appendChild($('#cm-league'));
 if (new URLSearchParams(location.search).has('debug')) window.__game = { api, update, scene, shells, singularities, projectiles, hazards, setFiring: v => (firing = v), gameOver, renderer, NAV, findSpawn, updateNav, navCell, obstacles, solids, world, fires };
