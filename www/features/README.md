@@ -120,6 +120,15 @@ multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks th
 allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
 Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
 
+## Resume
+`features/resume.js` snapshots a normal or extraction run (`snapshotOf(api)`: run options, `state` counters, wave queue, perks by name,
+player health/ammo, camera, live zombies with health, pickups) to `store('resume')` whenever the page is hidden, the pause menu opens or
+the page unloads, and offers RESUME RUN on the next launch for `RESUME_WINDOW` (10 min). Restoring calls `startGame` with `resume: true`
+(which skips the first wave and starting-kit schedule), re-applies the perks in order, rebuilds the zombies and pickups and emits
+`run:resume` `{ wave, score, type, age }` plus a `wave:start` with `resumed: true`. The snapshot is cleared on `run:end`, on a new run,
+on QUIT and when it expires. Daily, ranked, Blitz, co-op and training runs are never snapshotted.
+`api.resume = { snapshot, save, restore, pending, clear, RESUME_WINDOW }`.
+
 ## Blitz and Sprint 20
 `features/blitz.js` adds two short formats to the mode row. BLITZ (`type: 'blitz'`, `api.blitz.opts()`) is a `BLITZ_SECONDS` (300 s)
 score attack on `BLITZ_DIFFICULTY` (Veteran) with every weapon: `startGame` options `timeLimit`, `autoWave` and `aliveCap` make the engine
