@@ -98,14 +98,15 @@ function init(api) {
     }
     return false;
   }
-  const rerollFree = () => P.reroll !== D.dayKey();
+  const rerollTokens = () => profile.market?.rerolls || 0;
+  const rerollFree = () => P.reroll !== D.dayKey() || rerollTokens() > 0;
   function reroll(period, idx) {
     const cur = P[period], m = cur?.list[idx];
     if (!m || m.done || !rerollFree()) return null;
     const next = D.reroll(period, cur.key, cur.list, idx, ctx(), ++P.rerolls);
     if (!next) return null;
     cur.list[idx] = next;
-    P.reroll = D.dayKey();
+    if (P.reroll === D.dayKey()) profile.market.rerolls--; else P.reroll = D.dayKey();
     save();
     api.haptic('LIGHT');
     if (api.activeScreen === screen) render();
@@ -248,7 +249,7 @@ function init(api) {
       return;
     }
     subPart('NEW ' + (tab === 'season' ? 'CHALLENGES' : tab.toUpperCase() + ' MISSIONS') + ' IN ', D.timeLeft(D.resetAt(tab) - Date.now()));
-    if (tab === 'season') subPart('⚡ ' + D.SEASON_CHALLENGE.seasonXp.toLocaleString() + ' SEASON XP EACH'); else subPart(rerollFree() ? '1 FREE REROLL TODAY' : 'REROLL USED TODAY');
+    if (tab === 'season') subPart('⚡ ' + D.SEASON_CHALLENGE.seasonXp.toLocaleString() + ' SEASON XP EACH'); else subPart(P.reroll !== D.dayKey() ? '1 FREE REROLL TODAY' + (rerollTokens() ? ' · ' + rerollTokens() + ' TOKEN' + (rerollTokens() > 1 ? 'S' : '') : '') : rerollTokens() ? rerollTokens() + ' REROLL TOKEN' + (rerollTokens() > 1 ? 'S' : '') : 'REROLL USED TODAY');
     const c = ctx();
     P[tab].list.forEach((m, idx) => {
       const row = el('div', 'pg-m' + (m.claimed ? ' claimed' : m.done ? ' done' : '')), mid = el('div');

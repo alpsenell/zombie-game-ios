@@ -17,6 +17,10 @@ function mergeEvents(a = {}, b = {}) {
   }
   return { ...b, ...a, won, ladder };
 }
+function mergeMarket(a = {}, b = {}) {
+  const base = (a.day || '') >= (b.day || '') ? a : b, sameDay = !!a.day && a.day === b.day;
+  return { ...b, ...a, day: base.day || '', stock: base.stock || null, sold: sameDay ? union(a.sold, b.sold) : base.sold || {}, crates: Math.max(num(a.crates), num(b.crates)), pity: Math.max(num(a.pity), num(b.pity)), shards: Math.max(num(a.shards), num(b.shards)), revives: Math.max(num(a.revives), num(b.revives)), rerolls: Math.max(num(a.rerolls), num(b.rerolls)), seen: later(a.seen, b.seen) };
+}
 const later = (a, b) => (a == null ? b : b == null ? a : a >= b ? a : b);
 
 export const isPristine = p => !isObj(p) || (!num(p.runs) && !num(p.xp) && !num(p.kills) && !Object.keys(p.owned || {}).length && !Object.keys(p.arsenal?.owned || {}).length);
@@ -93,6 +97,7 @@ export function mergeProfile(local, cloud) {
   if (isObj(a.events) || isObj(b.events)) a.events = mergeEvents(a.events, b.events);
   if (isObj(a.comeback) || isObj(b.comeback)) { const c = num(b.comeback?.last) > num(a.comeback?.last) ? b.comeback : a.comeback; a.comeback = { ...c, count: Math.max(num(a.comeback?.count), num(b.comeback?.count)) }; }
   if (isObj(a.checkpoint) || isObj(b.checkpoint)) a.checkpoint = { ...b.checkpoint, ...a.checkpoint, cleared: maxMap(a.checkpoint?.cleared, b.checkpoint?.cleared), pick: a.checkpoint?.pick || b.checkpoint?.pick || {} };
+  if (isObj(a.market) || isObj(b.market)) a.market = mergeMarket(a.market, b.market);
   if (isObj(a.levels) || isObj(b.levels)) a.levels = { ...b.levels, ...a.levels, paid: Math.max(num(a.levels?.paid), num(b.levels?.paid)) };
   for (const k in b) if (!(k in a)) a[k] = b[k];
   return a;

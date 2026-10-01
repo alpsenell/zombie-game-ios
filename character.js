@@ -47,6 +47,12 @@ export const WEAPON_SKINS = [
   { name: 'JACKPOT PRIME', base: 0xe0b020, metal: 0x2a8a3a, dark: 0x5a4008, metallic: true, glow: 0xffd040, anim: 'pulse', stripes: ['#e0b020', '#c08a10', '#f0d060'], req: 'eventtop:scraprush', like: 14 },
   { name: 'BULLSEYE PRIME', base: 0xe8e4d8, metal: 0xc0302a, dark: 0x2a0a08, metallic: true, glow: 0xff3a2a, anim: 'pulse', stripes: ['#e8e4d8', '#c0302a', '#e8e4d8'], req: 'eventtop:headhunter', like: 4 },
   { name: 'HORDEBREAKER PRIME', base: 0x3a4a1a, metal: 0x5a6a2a, dark: 0x0e140a, metallic: true, glow: 0x9aff3a, anim: 'cycle', camo: ['#3a4a1a', '#1e2a0e', '#6a7a2a'], req: 'eventtop:hordenight', like: 10 },
+  { name: 'ONYX', base: 0x0a0a0c, metal: 0x1a1a20, dark: 0x030304, metallic: true, req: 'market:onyx', like: 6 },
+  { name: 'COPPERHEAD', base: 0x8a4a1a, metal: 0xc87a3a, dark: 0x3a1a08, metallic: true, stripes: ['#8a4a1a', '#3a1a08', '#c87a3a'], req: 'market:copperhead', like: 1 },
+  { name: 'GLACIER', base: 0xcfe8f0, metal: 0xe8f8ff, dark: 0x5a7a8a, glow: 0x9fe8ff, req: 'market:glacier', like: 9 },
+  { name: 'VIPER', base: 0x1a3a14, metal: 0x3a6a2a, dark: 0x0a1408, glow: 0x7dff3a, stripes: ['#1a3a14', '#7dff3a', '#1a3a14'], req: 'market:viper', like: 3 },
+  { name: 'SUNSET', base: 0xd84a2a, metal: 0xf0a040, dark: 0x4a1a0a, camo: ['#d84a2a', '#f0a040', '#8a2a5a'], req: 'market:sunset', like: 11 },
+  { name: 'PHANTOM', base: 0x2a1a3a, metal: 0x4a2a6a, dark: 0x0a0410, glow: 0xb48cff, req: 'market:phantom', like: 7 },
 ];
 
 export const TITLES = ['ROOKIE', 'SURVIVOR', 'SCAVENGER', 'SHARPSHOOTER', 'HEADHUNTER', 'BRUISER BANE', "BUTCHER'S BANE", 'PLAGUE DOCTOR', 'GIANT SLAYER', 'NIGHTMARE WALKER', 'HORDE BREAKER', 'UNKILLABLE', 'VETERAN', 'WARLORD', 'LEGEND', 'LAST STAND'];
