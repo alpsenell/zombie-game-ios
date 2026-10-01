@@ -1,11 +1,12 @@
 import { mulberry32 } from '../core.js';
 
-export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20' };
+export const BOARDS = { daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', alltime: 'deadzone.highscore', sprint: 'deadzone.sprint20', extract: 'deadzone.extract' };
 export const SPRINT_WAVE = 20, DAILY_WAVES = 10, ROOKIE_LEVEL = 10, ROOKIE_DIFFICULTY = 'survivor';
 export const LEAGUE_REWARDS = { bronze: 200, silver: 400, gold: 800, platinum: 1500, diamond: 2500, legend: 4000 };
 export const DAILY_DIFFICULTY = 'veteran';
-const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime' };
-const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20' };
+const BOARD_OF = { daily: 'daily', ranked: 'weekly', normal: 'alltime', extract: 'extract' };
+const BOARD_NAME = { daily: 'DAILY', weekly: 'WEEKLY', alltime: 'ALL-TIME', sprint: 'SPRINT 20', extract: 'EXTRACT' };
+export const EXTRACT_MAX_MULT = 2;
 const DAY = 864e5, WINDOW = 30;
 
 export const LEAGUES = [
@@ -80,7 +81,7 @@ export function plausible(run, api, now = Date.now()) {
   if (run.time < (played - 1) * 2 || run.kills > run.time * 25 + 30) return 'RUN TOO FAST';
   const bosses = Math.min(run.bosses?.length || 0, Math.floor(run.wave / 5) - Math.floor((start - 1) / 5) + 1);
   const cap = (125 * (run.wave * (run.wave + 1) - start * (start - 1)) + run.kills * 7100 * D.score + bosses * 94000 * D.score) * 1.5 + 1000;
-  if (run.score > cap) return 'SCORE TOO HIGH FOR THIS RUN';
+  if (run.score > cap * (run.type === 'extract' ? EXTRACT_MAX_MULT : 1)) return 'SCORE TOO HIGH FOR THIS RUN';
   if (run.type === 'daily' || run.type === 'ranked') {
     if ((run.slots || []).some(i => api.WEAPONS[i]?.premium)) return 'PREMIUM WEAPON IN A FAIR-PLAY RUN';
   }
@@ -350,9 +351,10 @@ export function init(api) {
     weekly: r => r.type === 'ranked' && r.date >= weekStart(),
     alltime: null,
     sprint: null,
+    extract: r => r.type === 'extract',
   };
   const sprintRows = () => (comp().sprint || []).map(x => ({ title: (api.DIFFICULTIES[x.diff]?.name || 'SURVIVOR') + ' · ' + sprintTime(x.cs), sub: new Date(x.date).toLocaleDateString(), score: x.cs, code: x.code }));
-  for (const b of ['daily', 'weekly', 'alltime', 'sprint']) {
+  for (const b of ['daily', 'weekly', 'alltime', 'extract', 'sprint']) {
     const btn = el('button', '', BOARD_NAME[b]);
     btn.dataset.board = b;
     btn.onclick = () => { selectBoard(b); api.renderBoard(); };
@@ -371,6 +373,7 @@ export function init(api) {
     boardNote.textContent = b === 'daily' ? 'DAILY CHALLENGE RUNS · RESETS IN ' + resetIn('daily')
       : b === 'weekly' ? (l ? leagueOf(l).name + ' LEAGUE · ' : '') + 'RANKED RUNS · NO PREMIUM WEAPONS · RESETS IN ' + resetIn('weekly')
       : b === 'sprint' ? 'FASTEST TIME TO CLEAR WAVE ' + SPRINT_WAVE + ' · FROM WAVE 1 · LOWER IS BETTER'
+      : b === 'extract' ? 'EXTRACTION RUNS · BANKED SCORES · NEVER RESETS'
       : 'EVERY RUN · ALL WEAPONS · NEVER RESETS';
   }
   function openBoard(b) {

@@ -107,6 +107,14 @@ DEPLOY, ARMORY, LOCKER, the streak and NEXT UP show; wave 5 reveals the Daily, m
 Profiles that predate the feature (any run, any best wave, or the old `deadzone.tutorial` flag) are marked done and unstaged. The streak popup now
 waits for the first run (`profile.runs > 0`). Events: `tutorial:skip`, `tutorial:reward` `{ weapon }`. `api.firstdeploy = { pending, stage, applyStage, renderMenu, tutorialOpts, waveList, state }`.
 
+## Extraction
+`features/extract.js` adds the EXTRACTION mode (`type: 'extract'`, any weapons, always from wave 1). After every `EXTRACT_EVERY` (10) cleared
+waves the run pauses (`state.mode = 'extract'`, which also holds the scheduled perk offer) and offers EXTRACT NOW or HOLD THE LINE. Extracting
+multiplies the score by `multAt(wave)` (×1.25 / ×1.5 / ×1.75 / ×2), marks the run `cleared` with `extracted = wave`, grants a scrap crate of
+`crateAt(wave)` and ends the run with EXTRACTED; dying submits the raw score. Scores go to `deadzone.extract` (RANKS tab EXTRACT); `plausible()`
+allows up to `EXTRACT_MAX_MULT` × the normal cap for this type. The HUD shows the next extraction point and multiplier. Hidden at menu stage 0.
+Events: `extract:offer` `{ wave, mult }`, `extract:hold`, `extract:go` `{ wave, mult, raw, banked, crate }`. `api.extract = { opts, open, multAt, crateAt, nextPoint }`.
+
 ## Live ops
 - `api.reqs[kind] = { met(v), text(v) }` adds unlock requirements (`req: 'kind:v'`). Used by `league:`, `prestige:`, `event:`, `recruit:`.
 - `api.live` holds per-run multipliers `{ count, elite, headScore, scrap, xp, seasonXp, comebackXp, label }`; `features/events.js` sets them on `run:start` (daily runs are never boosted, ranked only gets scrap/xp/season XP).

@@ -897,7 +897,7 @@ function resetRun() {
     ammo: WEAPONS.map(w => w.mag), reserve: WEAPONS.map(w => w.reserve) });
   Object.assign(state, { wave: 0, score: 0, kills: 0, heads: 0, shots: 0, hits: 0, combo: 0, bestCombo: 0, lastKill: -9, spawnLeft: 0, waveTotal: 0,
     waveDone: 0, clock: 0, between: true, boss: null, moved: false, looked: false, mod: null, startedAt: Date.now(), bossKinds: [], seen: new Set(), queue: [], difficulty: settings.difficulty, mutation: null,
-    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false });
+    warpT: 0, killTimes: [], perks: [], startWave: 1, kitTotal: 0, kitMajors: 0, maxWave: 0, cleared: false, extracted: 0 });
   scheduled.length = 0;
   applyMod(null);
   for (const p of projectiles) scene.remove(p.mesh);
@@ -1839,7 +1839,7 @@ function runSummary() {
     score: state.score, wave: state.wave, startWave: state.startWave, kills: state.kills, heads: state.heads, shots: state.shots, hits: state.hits,
     accuracy: state.shots ? state.hits / state.shots : 0, bestCombo: state.bestCombo, time: state.clock,
     bosses: [...state.bossKinds], slots: [...player.slots], weapon: WEAPONS[player.slots[0]].id, map: world.map.id, perks: [...state.perks],
-    maxWave: state.maxWave || 0, cleared: !!state.cleared,
+    maxWave: state.maxWave || 0, cleared: !!state.cleared, extracted: state.extracted || 0,
   };
 }
 
@@ -2524,7 +2524,7 @@ $('#quit').onclick = toMenu;
 let settingsReturn = null;
 document.querySelectorAll('[data-open="settings"]').forEach(b => (b.onclick = () => { settingsReturn = activeScreen; syncSettingsUI(); showScreen(ui.settings); }));
 
-const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly' };
+const LEADERBOARDS = { score: 'deadzone.highscore', wave: 'deadzone.bestwave', daily: 'deadzone.daily', dailyRookie: 'deadzone.daily.rookie', weekly: 'deadzone.weekly', extract: 'deadzone.extract' };
 const gameCenter = {
   player: null,
   available() { const cap = window.Capacitor; return !!(cap?.nativePromise && cap.PluginHeaders?.some(h => h.name === 'GameCenter')); },
@@ -2537,7 +2537,7 @@ const gameCenter = {
     if (!this.player) return null;
     try { const r = await this.call('loadScores', { leaderboardId, count: 1 }); return r.player ? { ...r.player, total: r.total } : null; } catch { return null; }
   },
-  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
+  boards(type, run) { return type === 'daily' ? [run?.difficultyId === 'survivor' ? LEADERBOARDS.dailyRookie : LEADERBOARDS.daily] : type === 'extract' ? [LEADERBOARDS.extract] : type === 'ranked' ? [LEADERBOARDS.weekly, LEADERBOARDS.score, LEADERBOARDS.wave] : [LEADERBOARDS.score, LEADERBOARDS.wave]; },
   guard: null,
   async submit(score, wave, context, run) {
     const rejected = run && this.guard?.(run);

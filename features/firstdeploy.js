@@ -6,11 +6,11 @@ export const WAVES = [
   [['walker', 6], ['crawler', 2], ['runner', 2]],
 ];
 export const HIDE = {
-  0: ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip', 'missions'],
+  0: ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip', '#ex-open', 'missions'],
   1: ['#cm-ranked', '#coop-open', '#cm-league', '#sp-open'],
   2: [],
 };
-const ALL = ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip'];
+const ALL = ['#cm-daily', '#cm-ranked', '#coop-open', '#cm-league', '#sp-open', '#ev-chip', '#ex-open'];
 export const stageFor = profile => (profile.bestWave >= STAGES[1] ? 2 : profile.bestWave >= STAGES[0] ? 1 : 0);
 export const waveList = w => (WAVES[w - 1] || WAVES[WAVES.length - 1]).flatMap(([kind, n]) => Array.from({ length: n }, () => ({ kind, elite: false })));
 
