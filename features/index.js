@@ -14,6 +14,7 @@ import * as notify from './notify.js';
 import * as levels from './levels.js';
 import * as nextup from './nextup.js';
 import * as firstdeploy from './firstdeploy.js';
+import * as extract from './extract.js';
 
 export const FEATURES = [
   cloudsave,
@@ -32,4 +33,5 @@ export const FEATURES = [
   levels,
   nextup,
   firstdeploy,
+  extract,
 ];
