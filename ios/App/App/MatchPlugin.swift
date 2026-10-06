@@ -48,7 +48,7 @@ public class MatchPlugin: CAPPlugin, CAPBridgedPlugin, GKMatchmakerViewControlle
             request.minPlayers = minPlayers
             request.maxPlayers = maxPlayers
             request.defaultNumberOfPlayers = minPlayers
-            request.inviteMessage = "Hold the line with me in Last Stand: Deadzone"
+            request.inviteMessage = "Hold the line with me in Horde Breakers"
             guard let controller = GKMatchmakerViewController(matchRequest: request) else {
                 call.reject("Matchmaking is unavailable")
                 return

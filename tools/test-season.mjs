@@ -214,7 +214,7 @@ const allErrors = [];
   await page.click('#rc-share');
   const method = await shared;
   const d = await dl;
-  ok(method === 'web' || (method === 'download' && d && d.suggestedFilename() === 'deadzone-run.png'), 'browser fallback shares or downloads the PNG (' + method + ')');
+  ok(method === 'web' || (method === 'download' && d && d.suggestedFilename() === 'horde-breakers-run.png'), 'browser fallback shares or downloads the PNG (' + method + ')');
   allErrors.push(...errors);
   await page.close();
 }

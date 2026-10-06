@@ -48,10 +48,10 @@ export async function drawCard(cv, d) {
   cx.textAlign = 'center'; cx.textBaseline = 'alphabetic';
   cx.fillStyle = '#eef6f1'; cx.shadowColor = '#000'; cx.shadowBlur = 24; cx.shadowOffsetY = 6;
   cx.font = `900 124px ${DISPLAY}`;
-  spaced(cx, 'LAST STAND', W / 2, 150, 4);
+  spaced(cx, 'HORDE', W / 2, 150, 4);
   cx.shadowBlur = 0; cx.shadowOffsetY = 0;
   cx.fillStyle = '#e5483a'; cx.font = `900 44px ${DISPLAY}`;
-  spaced(cx, 'DEADZONE', W / 2, 206, 26);
+  spaced(cx, 'BREAKERS', W / 2, 206, 26);
 
   const px = 500, py = 240, pr = px / 2, pcx = W / 2, pcy = py + pr;
   cx.save();
@@ -112,7 +112,7 @@ export async function drawCard(cv, d) {
   spaced(cx, 'CAN YOU OUTLAST ME?', W / 2, y === 1206 ? 1250 : y + 30, 3);
   cx.font = `800 20px ${UI}`; cx.fillStyle = '#9aa9ab';
   cx.textAlign = 'left'; spaced(cx, d.date, 60, 1322, 2);
-  cx.textAlign = 'right'; spaced(cx, 'LAST STAND: DEADZONE · iOS', W - 60, 1322, 2);
+  cx.textAlign = 'right'; spaced(cx, 'HORDE BREAKERS · iOS', W - 60, 1322, 2);
   return cv;
 }
 
@@ -162,7 +162,7 @@ export function init(api) {
   function download(blob) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'deadzone-run.png';
+    a.download = 'horde-breakers-run.png';
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -172,7 +172,7 @@ export function init(api) {
     if (!last) return;
     btn.disabled = true;
     note.textContent = '';
-    const text = 'I survived to wave ' + last.wave + ' with ' + last.score.toLocaleString() + ' points in Last Stand: Deadzone. Can you outlast me?';
+    const text = 'I survived to wave ' + last.wave + ' with ' + last.score.toLocaleString() + ' points in Horde Breakers. Can you outlast me?';
     let method = null;
     try {
       const cv = await render();
@@ -182,7 +182,7 @@ export function init(api) {
         if (r?.completed !== false) method = 'native';
       } else {
         const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
-        const file = typeof File === 'function' ? new File([blob], 'deadzone-run.png', { type: 'image/png' }) : null;
+        const file = typeof File === 'function' ? new File([blob], 'horde-breakers-run.png', { type: 'image/png' }) : null;
         if (file && navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text }); method = 'web'; }
         else { download(blob); method = 'download'; note.textContent = 'RUN CARD SAVED'; }
       }
