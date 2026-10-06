@@ -39,9 +39,9 @@ The local iOS project is generated from `index.html` through Capacitor. The game
    | `deadzone.ach.heads_100` | Headhunter | 20 | 100 headshot kills |
    | `deadzone.ach.heads_1000` | Deadeye | 60 | 1,000 headshot kills |
    | `deadzone.ach.wave_10` | Hold the Line | 20 | Reach wave 10 |
-   | `deadzone.ach.wave_20` | Last Stand | 40 | Reach wave 20 |
+   | `deadzone.ach.wave_20` | Breaking Point | 40 | Reach wave 20 |
    | `deadzone.ach.wave_30` | Unbreakable | 60 | Reach wave 30 |
-   | `deadzone.ach.wave_50` | Deadzone Legend | 100 | Reach wave 50 |
+   | `deadzone.ach.wave_50` | Horde Legend | 100 | Reach wave 50 |
    | `deadzone.ach.boss_abomination` | Abomination Slain | 30 | Defeat the Abomination |
    | `deadzone.ach.boss_butcher` | Butchered | 30 | Defeat the Butcher |
    | `deadzone.ach.boss_plague` | Regicide | 30 | Defeat the Plague King |
@@ -109,7 +109,7 @@ The game starts immediately from the title screen. Optional MUTATORS next to DEP
 
 ## Store listing localisation / In-App Events
 
-1. **Localised listing.** In App Store Connect add the localisations en-US (primary), es-MX, pt-BR, de-DE, tr and ja. For each one paste `subtitle`, `promotionalText`, `description`, `keywords` and `whatsNew` from `appstore-assets/metadata/<locale>.json` (the name stays "Last Stand: Deadzone"). Run `node tools/store-shots.mjs --check` first; it fails if any field is over Apple's limits.
+1. **Localised listing.** In App Store Connect add the localisations en-US (primary), es-MX, pt-BR, de-DE, tr and ja. For each one paste `subtitle`, `promotionalText`, `description`, `keywords` and `whatsNew` from `appstore-assets/metadata/<locale>.json` (the name stays "Horde Breakers"). Run `node tools/store-shots.mjs --check` first; it fails if any field is over Apple's limits.
 2. **Marketing screenshots.** Upload `appstore-assets/screenshots/marketing/<locale>/01…05.png` to that localisation's 6.9" iPhone screenshot set, in order (co-op first). Regenerate with `npm run prepare:web && node tools/store-shots.mjs` after UI changes.
 3. **In-App Events.** Create the events in `appstore-assets/metadata/in-app-events.md` under **Distribution → In-App Events** (Season 1: Black Harvest a week before the season starts, Ranked Weekly, and the weekend event that is next up), translate their descriptions for the same locales, and submit them for review with or after the app version. At most 10 events can be approved/scheduled at a time.
 

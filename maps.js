@@ -602,7 +602,7 @@ function overpass(c, B) {
   mesh(box(42.4, .3, .3), legMat, 0, 5.3, 17);
   const signTex = signTexture(c, 1024, 160, (cx, w, h) => {
     cx.fillStyle = '#0e1210'; cx.fillRect(0, 0, w, h);
-    for (const [x0, t1, t2] of [[8, 'DEADZONE', 'EXIT 13 ↗'], [w / 2 + 8, 'I-95 NORTH', 'CLOSED — TURN BACK']]) {
+    for (const [x0, t1, t2] of [[8, 'QUARANTINE', 'EXIT 13 ↗'], [w / 2 + 8, 'I-95 NORTH', 'CLOSED — TURN BACK']]) {
       cx.fillStyle = '#1f5a36'; cx.fillRect(x0, 8, w / 2 - 16, h - 16);
       cx.strokeStyle = '#e8f0e0'; cx.lineWidth = 4; cx.strokeRect(x0 + 8, 16, w / 2 - 32, h - 32);
       cx.fillStyle = '#eef4ea'; cx.font = '900 54px Impact, sans-serif'; cx.fillText(t1, x0 + (w / 2 - 16) / 2, 60);

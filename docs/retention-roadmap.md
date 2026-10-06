@@ -1,4 +1,4 @@
-# Last Stand: Deadzone — retention and competitive roadmap
+# Horde Breakers — retention and competitive roadmap
 
 Date: 1 Oct 2026 · Build analysed: `main` at `b630cb9` (Season 1 launch build)
 

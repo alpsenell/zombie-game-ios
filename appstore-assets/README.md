@@ -28,7 +28,7 @@ One 1320×2868 screenshot per In-App Purchase, named after the product ID, showi
 
 ### metadata/
 
-One JSON file per App Store locale — `en-US`, `es-MX`, `pt-BR`, `de-DE`, `tr`, `ja` — with the store listing text: `name` (always "Last Stand: Deadzone"), `subtitle`, `promotionalText`, `description`, `keywords`, `whatsNew`, plus `screenshotCaptions` (5 captions, one per marketing screenshot, ≤ 40 chars). Paste each field into App Store Connect → the app version → the matching localisation. Keywords are comma-separated with no spaces and never repeat words from the app name. `node tools/store-shots.mjs --check` validates every file against Apple's limits (name/subtitle 30, promotional text 170, description and What's New 4000, keywords 100) and prints a table.
+One JSON file per App Store locale — `en-US`, `es-MX`, `pt-BR`, `de-DE`, `tr`, `ja` — with the store listing text: `name` (always "Horde Breakers"), `subtitle`, `promotionalText`, `description`, `keywords`, `whatsNew`, plus `screenshotCaptions` (5 captions, one per marketing screenshot, ≤ 40 chars). Paste each field into App Store Connect → the app version → the matching localisation. Keywords are comma-separated with no spaces and never repeat words from the app name. `node tools/store-shots.mjs --check` validates every file against Apple's limits (name/subtitle 30, promotional text 170, description and What's New 4000, keywords 100) and prints a table.
 
 `metadata/in-app-events.md` has en-US drafts for the App Store In-App Events (Season 1: Black Harvest, Ranked Weekly and the four weekend events) with name/short/long description, badge and duration.
 
