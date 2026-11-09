@@ -28,21 +28,22 @@ One 1320×2868 screenshot per In-App Purchase, named after the product ID, showi
 
 ### metadata/
 
-One JSON file per App Store locale — `en-US`, `es-MX`, `pt-BR`, `de-DE`, `tr`, `ja` — with the store listing text: `name` (always "Horde Breakers"), `subtitle`, `promotionalText`, `description`, `keywords`, `whatsNew`, plus `screenshotCaptions` (5 captions, one per marketing screenshot, ≤ 40 chars). Paste each field into App Store Connect → the app version → the matching localisation. Keywords are comma-separated with no spaces and never repeat words from the app name. `node tools/store-shots.mjs --check` validates every file against Apple's limits (name/subtitle 30, promotional text 170, description and What's New 4000, keywords 100) and prints a table.
+One JSON file per App Store locale — `en-US`, `es-MX`, `pt-BR`, `de-DE`, `tr`, `ja` — with the store listing text: `name` (always "Horde Breakers"), `subtitle`, `promotionalText`, `description`, `keywords`, `whatsNew`, plus `screenshotCaptions` (6 captions, one per marketing screenshot, ≤ 40 chars). Paste each field into App Store Connect → the app version → the matching localisation. Keywords are comma-separated with no spaces and never repeat words from the app name. `node tools/store-shots.mjs --check` validates every file against Apple's limits (name/subtitle 30, promotional text 170, description and What's New 4000, keywords 100) and prints a table.
 
 `metadata/in-app-events.md` has en-US drafts for the App Store In-App Events (Season 1: Black Harvest, Ranked Weekly and the four weekend events) with name/short/long description, badge and duration.
 
 ### screenshots/marketing/
 
-`screenshots/marketing/<locale>/01-coop.png … 05-season.png`, 1320×2868 (iPhone 6.9" portrait), for every locale above:
+`screenshots/marketing/<locale>/01-extract.png … 06-season.png`, 1320×2868 (iPhone 6.9" portrait), for every locale above. The first two lead with what sets the game apart (Extraction and map events):
 
 | File | Screen |
 |---|---|
-| `01-coop.png` | Online co-op run on Street, squadmate BRAVO in view with the horde ahead |
-| `02-daily.png` | Daily Challenge sheet with rank and best score |
-| `03-action.png` | Wave 12 on Dead Mall, zombies closing in, firing |
-| `04-locker.png` | Locker, ★ EXCLUSIVE outfit tab with an outfit try-on |
-| `05-season.png` | Season 1: Black Harvest pass track |
+| `01-extract.png` | Extraction run on the Military Base, wave 20 cleared: the EXTRACT NOW / HOLD THE LINE choice |
+| `02-collapse.png` | Overpass, wave 14: the PILE-UP COLLAPSE map event drops a wreck in front of the player with the horde behind it |
+| `03-coop.png` | Online co-op run on Street, squadmate BRAVO in view with the horde ahead |
+| `04-daily.png` | Daily Challenge sheet with rank and best score |
+| `05-action.png` | Wave 12 on Dead Mall, zombies closing in, firing |
+| `06-season.png` | Season Pass track |
 
 Each image is a localised caption over a dark red gradient with the in-game screen below it in a rounded frame. Only the captions are localised; the game UI is English-only. Game Center and StoreKit are mocked (player "VIPER", made-up rivals, prices taken from `ios/App/App/Products.storekit` and shown in USD in every locale), and the profile is seeded to level 13.
 
