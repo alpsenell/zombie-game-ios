@@ -10,11 +10,12 @@ const locales = readdirSync(metaDir).filter(f => f.endsWith('.json')).map(f => f
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const SHOTS = [
-  { file: '01-coop', take: coopShot },
-  { file: '02-daily', take: dailyShot },
-  { file: '03-action', take: actionShot },
-  { file: '04-locker', take: lockerShot },
-  { file: '05-season', take: seasonShot },
+  { file: '01-extract', take: extractShot },
+  { file: '02-collapse', take: collapseShot },
+  { file: '03-coop', take: coopShot },
+  { file: '04-daily', take: dailyShot },
+  { file: '05-action', take: actionShot },
+  { file: '06-season', take: seasonShot },
 ];
 
 const storekit = readFileSync(new URL('../ios/App/App/Products.storekit', import.meta.url), 'utf8');
@@ -141,6 +142,54 @@ async function actionShot(browser, url) {
   } finally { await ctx.close(); }
 }
 
+async function extractShot(browser, url) {
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: DSF, hasTouch: true, isMobile: true });
+  try {
+    const { page: p } = await page(ctx, url);
+    await p.evaluate(() => { window.__game.api.startGame({ type: 'extract', map: 'base' }); });
+    await sleep(800);
+    await p.evaluate(() => { const { api } = window.__game; for (const z of [...api.zombies]) if (!z.userData.dead) api.damageZombie(z, 1e7, null, false, null); });
+    await spawnAhead(p, [['brute', 9, -1.5], ['walker', 11, 2], ['runner', 13, -3], ['walker', 15, .5], ['spitter', 17, 3]]);
+    await run(p, .2);
+    await p.evaluate(() => { const { api } = window.__game; api.state.wave = 20; api.state.score = 96480; });
+    await run(p, .05);
+    await p.evaluate(() => window.__game.api.extract.show(20));
+    await sleep(900);
+    return await p.screenshot();
+  } finally { await ctx.close(); }
+}
+
+async function collapseShot(browser, url) {
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: DSF, hasTouch: true, isMobile: true });
+  try {
+    const { page: p } = await page(ctx, url);
+    await p.evaluate(() => { const { api } = window.__game; api.startGame({ map: 'overpass' }); api.stats.armor = .02; });
+    await sleep(800);
+    await run(p, 3);
+    await p.evaluate(() => {
+      const { api } = window.__game, c = api.camera.position, yaw = api.look.yaw;
+      for (const z of api.zombies) if (!z.userData.dead) { z.position.x = c.x + Math.sin(yaw) * 45; z.position.z = c.z + Math.cos(yaw) * 45; }
+    });
+    const ev = await p.evaluate(() => {
+      const g = window.__game, { api } = g, rnd = Math.random, forced = [.5, .4, .55, .4, .45, .45];
+      api.state.wave = 14; api.state.score = 61740;
+      Math.random = () => (forced.length ? forced.shift() : rnd());
+      let id;
+      try { id = api.mapEvents.fire(14)?.id; } finally { Math.random = rnd; }
+      const box = g.scene.children.filter(o => o.type === 'Group' && o.children[0]?.geometry?.parameters?.depth === 5).pop();
+      if (box) { const c = api.camera.position; api.look.yaw = Math.atan2(c.x - box.position.x, c.z - box.position.z) - .12; }
+      return id || null;
+    });
+    if (ev !== 'collapse') throw new Error('collapse did not fire: ' + ev);
+    await spawnAhead(p, [['walker', 12, -3.4], ['runner', 13.5, 2.8], ['brute', 15, -1.2], ['walker', 17, 3.6], ['walker', 18, -4], ['spitter', 20, .6]]);
+    await p.evaluate(() => { window.__game.api.look.pitch = -.06; });
+    await run(p, .1);
+    await p.evaluate(() => window.__game.api.message('MAP EVENT', 'PILE-UP COLLAPSE · THE HORDE REROUTES', 30));
+    await sleep(700);
+    return await p.screenshot();
+  } finally { await ctx.close(); }
+}
+
 async function lockerShot(browser, url) {
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: DSF, hasTouch: true, isMobile: true });
   try {
@@ -221,7 +270,9 @@ try {
       try {
         await comp.setContent(frameHTML(locale, caption, s.img), { waitUntil: 'load' });
         await comp.evaluate(() => document.fonts.ready);
-        writeFileSync(dir + s.file + '.png', await comp.screenshot({ type: 'png' }));
+        let png;
+        for (let i = 0; i < 4 && !png; i++) png = await comp.screenshot({ type: 'png' }).catch(e => (i === 3 ? Promise.reject(e) : sleep(500).then(() => null)));
+        writeFileSync(dir + s.file + '.png', png);
         console.log(`wrote ${locale}/${s.file}.png`);
       } catch (e) { console.log(`FAILED ${locale}/${s.file}: ${e.message.split('\n')[0]}`); }
     }
